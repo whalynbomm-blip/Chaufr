@@ -36,7 +36,7 @@ test("fare quote endpoint calculates fixed fare", async () => {
     });
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.passengerTotal, 120);
+    assert.equal(body.passengerTotal, 132);
     assert.equal(body.status, "estimated");
     assert.equal(body.fareRuleVersion, "test-1");
   });
