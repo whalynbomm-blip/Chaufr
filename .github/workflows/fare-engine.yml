@@ -1,0 +1,25 @@
+name: Fare engine tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - ".github/workflows/fare-engine.yml"
+  pull_request:
+    paths:
+      - "services/api/**"
+      - ".github/workflows/fare-engine.yml"
+  workflow_dispatch:
+
+jobs:
+  test-fare-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run fare engine tests
+        working-directory: services/api
+        run: npm test
