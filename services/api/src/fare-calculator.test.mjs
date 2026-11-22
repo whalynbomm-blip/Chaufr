@@ -11,18 +11,13 @@ const config = {
   operatingCostPerKm: 2,
   platformCommissionRate: 0.1,
   minimumFare: 20,
-  vehicleCategories: ["standard"],
+  fuelPricePerLitre: 25,
+  vehicleCategories: ["standard", "comfort", "xl"],
+  vehicleFuelConsumptionLitresPer100Km: { standard: 8, comfort: 9, xl: 11 },
 };
 
-test("calculates a transparent quote and reconciles driver earnings plus commission", () => {
-  const quote = calculateFare({
-    distanceKm: 10,
-    durationMinutes: 20,
-    fuelPricePerLitre: 25,
-    fuelConsumptionLitresPer100Km: 8,
-    vehicleCategory: "standard",
-  }, config);
-
+test("calculates a transparent quote using server-side fuel assumptions", () => {
+  const quote = calculateFare({ distanceKm: 10, durationMinutes: 20, vehicleCategory: "standard" }, config);
   assert.equal(quote.currency, "ZAR");
   assert.equal(quote.fareRuleVersion, "test-1");
   assert.equal(quote.breakdown.fuelCost, 20);
@@ -30,33 +25,28 @@ test("calculates a transparent quote and reconciles driver earnings plus commiss
   assert.equal(quote.passengerTotal, 132);
 });
 
+test("uses the configured consumption for the selected vehicle", () => {
+  const standard = calculateFare({ distanceKm: 10, durationMinutes: 20, vehicleCategory: "standard" }, config);
+  const xl = calculateFare({ distanceKm: 10, durationMinutes: 20, vehicleCategory: "xl" }, config);
+  assert.equal(xl.breakdown.fuelCost, 27.5);
+  assert.ok(xl.passengerTotal > standard.passengerTotal);
+});
+
 test("applies the configured minimum fare", () => {
-  const quote = calculateFare({
-    distanceKm: 0,
-    durationMinutes: 0,
-    fuelPricePerLitre: 25,
-    fuelConsumptionLitresPer100Km: 8,
-    vehicleCategory: "standard",
-  }, { ...config, minimumFare: 30 });
+  const quote = calculateFare({ distanceKm: 0, durationMinutes: 0, vehicleCategory: "standard" }, { ...config, minimumFare: 30 });
   assert.equal(quote.passengerTotal, 30);
 });
 
 test("rejects negative or non-finite trip inputs", () => {
-  assert.throws(() => calculateFare({
-    distanceKm: -1,
-    durationMinutes: 10,
-    fuelPricePerLitre: 25,
-    fuelConsumptionLitresPer100Km: 8,
-    vehicleCategory: "standard",
-  }, config), /distanceKm/);
+  assert.throws(() => calculateFare({ distanceKm: -1, durationMinutes: 10, vehicleCategory: "standard" }, config), /distanceKm/);
 });
 
 test("rejects disabled vehicle categories", () => {
-  assert.throws(() => calculateFare({
-    distanceKm: 1,
-    durationMinutes: 1,
-    fuelPricePerLitre: 25,
-    fuelConsumptionLitresPer100Km: 8,
-    vehicleCategory: "luxury",
-  }, config), /not enabled/);
+  assert.throws(() => calculateFare({ distanceKm: 1, durationMinutes: 1, vehicleCategory: "luxury" }, config), /not enabled/);
+});
+
+test("rejects missing server-side fuel assumptions", () => {
+  assert.throws(() => calculateFare({ distanceKm: 1, durationMinutes: 1, vehicleCategory: "standard" }, {
+    ...config, vehicleFuelConsumptionLitresPer100Km: {},
+  }), /fuel consumption/);
 });
