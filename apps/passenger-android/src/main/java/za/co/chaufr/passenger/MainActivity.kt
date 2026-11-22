@@ -212,7 +212,7 @@ private fun PassengerHome() {
                                         }
                                     }
                                 }
-                            }
+                            },
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ChaufrBlue)
@@ -262,7 +262,7 @@ private fun PassengerHome() {
                             }
                             Spacer(Modifier.height(13.dp))
                             Text(
-                                "This is a sample calculation using development rates and an assumed route. It is not a live quote or a booking price.",
+                                if (fare.source == "LIVE API") "Server-calculated estimate using sample route measurements. Booking and driver matching are not connected yet." else "This is a sample calculation using development rates and an assumed route. It is not a live quote or a booking price.",
                                 color = ChaufrMuted, fontSize = 11.sp, lineHeight = 16.sp
                             )
                         }
