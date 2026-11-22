@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { createAppServer } from "./http.mjs";
 
 const config = {
-  version: "test-1", currency: "ZAR", baseFare: 10, perKmRate: 5,
+  version: "http-test-1", currency: "ZAR", baseFare: 10, perKmRate: 5,
   perMinuteRate: 1, operatingCostPerKm: 2, platformCommissionRate: 0.1,
-  minimumFare: 20, vehicleCategories: ["standard"],
+  minimumFare: 20, fuelPricePerLitre: 25, vehicleCategories: ["standard"],
+  vehicleFuelConsumptionLitresPer100Km: { standard: 8 },
 };
 
 async function withServer(run) {
@@ -16,7 +17,7 @@ async function withServer(run) {
   finally { await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())); }
 }
 
-test("health endpoint returns service status", async () => {
+test("health endpoint reports service status", async () => {
   await withServer(async (base) => {
     const response = await fetch(`${base}/health`);
     assert.equal(response.status, 200);
@@ -24,30 +25,31 @@ test("health endpoint returns service status", async () => {
   });
 });
 
-test("fare quote endpoint calculates fixed fare", async () => {
+test("fare quote ignores client attempts to override fuel assumptions", async () => {
   await withServer(async (base) => {
     const response = await fetch(`${base}/v1/fare-quotes`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        distanceKm: 10, durationMinutes: 20, fuelPricePerLitre: 25,
-        fuelConsumptionLitresPer100Km: 8, vehicleCategory: "standard",
+        distanceKm: 10, durationMinutes: 20, vehicleCategory: "standard",
+        fuelPricePerLitre: 0, fuelConsumptionLitresPer100Km: 0,
+        platformCommissionRate: 0,
       }),
     });
-    const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.passengerTotal, 132);
-    assert.equal(body.status, "estimated");
-    assert.equal(body.fareRuleVersion, "test-1");
+    const quote = await response.json();
+    assert.equal(quote.breakdown.fuelCost, 20);
+    assert.equal(quote.passengerTotal, 132);
+    assert.equal(quote.fareRuleVersion, "http-test-1");
   });
 });
 
-test("fare quote endpoint rejects invalid input", async () => {
+test("fare quote rejects invalid route measurements", async () => {
   await withServer(async (base) => {
     const response = await fetch(`${base}/v1/fare-quotes`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ distanceKm: -3 }),
+      body: JSON.stringify({ distanceKm: -2, durationMinutes: 10, vehicleCategory: "standard" }),
     });
     assert.equal(response.status, 400);
   });
