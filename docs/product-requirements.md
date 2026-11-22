@@ -1,0 +1,45 @@
+# Product requirements
+
+## Passenger Android app
+- Register, sign in and manage a passenger profile.
+- Set pickup and destination and review the proposed route.
+- Receive a fixed upfront quote before requesting a trip.
+- View fare breakdown and trip status.
+- Cancel subject to configurable policy.
+- View trip history, receipts and support details.
+
+## Driver Android app
+- Register and submit driver, vehicle and required verification information.
+- See verification status and account restrictions.
+- Set availability and receive trip offers.
+- Accept or decline within the configured response window.
+- View pickup, destination, route handoff and trip status.
+- Complete trips and see gross fare, platform commission and net driver earnings.
+- Review earnings and trip history.
+
+## Owner dashboard
+- Strongly protected owner login and role-based access.
+- Manage drivers, passengers, vehicles and verification statuses.
+- Monitor active and historical trips.
+- Configure service areas, vehicle categories, fare rules and commission.
+- View financial summaries and export operational reports.
+- Audit sensitive changes and administrative actions.
+
+## Fare engine
+The fare engine returns a fixed quote based on:
+- route distance and estimated travel time;
+- vehicle category and fuel consumption;
+- configured fuel price;
+- operating-cost allowance;
+- driver earnings component;
+- platform commission and minimum fare.
+
+Every quote stores its calculation inputs, configuration version, breakdown and expiry. The quote is authoritative only when produced by the backend.
+
+## Decisions still required before launch
+- Initial operating cities and service-area boundaries.
+- Vehicle categories and eligible vehicle requirements.
+- Exact fare coefficients, minimum fares and commission.
+- Maps/routing, SMS/push notification and payment providers.
+- Driver payout process and customer support process.
+- Legal, insurance, privacy and transport compliance review for South Africa.
