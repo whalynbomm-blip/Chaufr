@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private val ChaufrNavy = Color(0xFF101C2C)
 private val ChaufrBlue = Color(0xFF2878F0)
@@ -68,6 +70,8 @@ class MainActivity : ComponentActivity() {
 
 private data class FarePreview(
     val total: Double,
+    val baseFare: Double = 10.0,
+    val source: String = "DEMO",
     val driverEarnings: Double,
     val commission: Double,
     val distanceCharge: Double,
@@ -83,6 +87,8 @@ private fun PassengerHome() {
     var vehicle by remember { mutableStateOf("Standard") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Surface(modifier = Modifier.fillMaxSize(), color = ChaufrBackground) {
         Column(
@@ -160,39 +166,58 @@ private fun PassengerHome() {
                                 } else if (pickup.trim().equals(destination.trim(), ignoreCase = true)) {
                                     message = "Pickup and destination must be different."
                                     preview = null
-                                } else {
-                                    // Demonstration-only route assumptions. Live routing and server pricing are not connected yet.
-                                    val distanceKm = 8.5
-                                    val durationMinutes = 22.0
-                                    val fuelPrice = 24.50
-                                    val consumption = when (vehicle) {
-                                        "Comfort" -> 9.0
-                                        "XL" -> 11.0
-                                        else -> 8.0
-                                    }
-                                    val distanceCharge = distanceKm * 5.0
-                                    val timeCharge = durationMinutes * 1.0
-                                    val fuelCost = distanceKm * consumption / 100.0 * fuelPrice
-                                    val operatingCost = distanceKm * 2.0
-                                    val driverSubtotal = 10.0 + distanceCharge + timeCharge + fuelCost + operatingCost
-                                    val commission = driverSubtotal * 0.10
-                                    preview = FarePreview(
-                                        total = maxOf(driverSubtotal + commission, 20.0),
-                                        driverEarnings = driverSubtotal,
-                                        commission = commission,
-                                        distanceCharge = distanceCharge,
-                                        timeCharge = timeCharge,
-                                        fuelCost = fuelCost,
-                                        operatingCost = operatingCost
-                                    )
+                                } else if (!loading) {
+                                    loading = true
                                     message = ""
+                                    scope.launch {
+                                        try {
+                                            val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+                                            if (apiUrl.isNotBlank()) {
+                                                val root = ChaufrApi.requestFareQuote(apiUrl, 8.5, 22.0, vehicle.lowercase())
+                                                val breakdown = root.getJSONObject("breakdown")
+                                                preview = FarePreview(
+                                                    total = root.getDouble("passengerTotal"),
+                                                    baseFare = breakdown.getDouble("baseFare"),
+                                                    source = "LIVE API",
+                                                    driverEarnings = breakdown.getDouble("driverEarnings"),
+                                                    commission = breakdown.getDouble("platformCommission"),
+                                                    distanceCharge = breakdown.getDouble("distanceCharge"),
+                                                    timeCharge = breakdown.getDouble("timeCharge"),
+                                                    fuelCost = breakdown.getDouble("fuelCost"),
+                                                    operatingCost = breakdown.getDouble("operatingCost")
+                                                )
+                                            } else {
+                                                val distanceKm = 8.5
+                                                val durationMinutes = 22.0
+                                                val fuelPrice = 24.50
+                                                val consumption = when (vehicle) { "Comfort" -> 9.0; "XL" -> 11.0; else -> 8.0 }
+                                                val distanceCharge = distanceKm * 5.0
+                                                val timeCharge = durationMinutes
+                                                val fuelCost = distanceKm * consumption / 100.0 * fuelPrice
+                                                val operatingCost = distanceKm * 2.0
+                                                val driverSubtotal = 10.0 + distanceCharge + timeCharge + fuelCost + operatingCost
+                                                val commission = driverSubtotal * 0.10
+                                                preview = FarePreview(
+                                                    total = maxOf(driverSubtotal + commission, 20.0),
+                                                    driverEarnings = driverSubtotal, commission = commission,
+                                                    distanceCharge = distanceCharge, timeCharge = timeCharge,
+                                                    fuelCost = fuelCost, operatingCost = operatingCost
+                                                )
+                                            }
+                                        } catch (error: Exception) {
+                                            message = "Unable to get a fare. Check your connection and try again."
+                                            preview = null
+                                        } finally {
+                                            loading = false
+                                        }
+                                    }
                                 }
-                            },
+                            }
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ChaufrBlue)
                         ) {
-                            Text("Preview fixed fare", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(if (loading) "Getting fare..." else "Preview fixed fare", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                         if (message.isNotEmpty()) {
                             Spacer(Modifier.height(9.dp))
@@ -212,7 +237,7 @@ private fun PassengerHome() {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("YOUR FARE PREVIEW", color = ChaufrMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 Spacer(Modifier.weight(1f))
-                                Text("DEMO", color = ChaufrGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                Text(fare.source, color = ChaufrGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                             Spacer(Modifier.height(7.dp))
                             Text(money(fare.total), color = ChaufrNavy, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
@@ -220,7 +245,7 @@ private fun PassengerHome() {
                             Spacer(Modifier.height(15.dp))
                             Divider(color = Color(0xFFE8ECF2))
                             Spacer(Modifier.height(12.dp))
-                            FareLine("Base fare", 10.0)
+                            FareLine("Base fare", fare.baseFare)
                             FareLine("Distance charge", fare.distanceCharge)
                             FareLine("Time charge", fare.timeCharge)
                             FareLine("Fuel estimate", fare.fuelCost)
