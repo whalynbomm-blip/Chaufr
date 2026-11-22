@@ -1,0 +1,13 @@
+{
+  "name": "@chaufr/fare-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic fixed-fare calculation core for Chaufr",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
