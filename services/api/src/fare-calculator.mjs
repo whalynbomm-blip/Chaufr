@@ -1,19 +1,12 @@
 /**
  * Deterministic fare calculation core.
  *
- * Monetary values use the currency's minor unit precision (2 decimal places).
- * The API layer must load fareConfig from trusted server-side storage; never
- * accept client-supplied fare rules as authoritative.
+ * Route measurements are supplied by the routing service. All monetary rates,
+ * fuel price and vehicle consumption assumptions are loaded by the API from
+ * trusted server-side configuration, never from the passenger's device.
  */
-export function calculateFare({ distanceKm, durationMinutes, fuelPricePerLitre, fuelConsumptionLitresPer100Km, vehicleCategory }, fareConfig) {
-  const numericInputs = {
-    distanceKm,
-    durationMinutes,
-    fuelPricePerLitre,
-    fuelConsumptionLitresPer100Km,
-  };
-
-  for (const [name, value] of Object.entries(numericInputs)) {
+export function calculateFare({ distanceKm, durationMinutes, vehicleCategory }, fareConfig) {
+  for (const [name, value] of Object.entries({ distanceKm, durationMinutes })) {
     if (!Number.isFinite(value) || value < 0) {
       throw new TypeError(`${name} must be a finite non-negative number`);
     }
@@ -26,12 +19,8 @@ export function calculateFare({ distanceKm, durationMinutes, fuelPricePerLitre, 
   }
 
   const requiredRates = [
-    "baseFare",
-    "perKmRate",
-    "perMinuteRate",
-    "operatingCostPerKm",
-    "platformCommissionRate",
-    "minimumFare",
+    "baseFare", "perKmRate", "perMinuteRate", "operatingCostPerKm",
+    "platformCommissionRate", "minimumFare", "fuelPricePerLitre",
   ];
   for (const key of requiredRates) {
     if (!Number.isFinite(fareConfig[key]) || fareConfig[key] < 0) {
@@ -45,12 +34,16 @@ export function calculateFare({ distanceKm, durationMinutes, fuelPricePerLitre, 
     throw new RangeError("vehicleCategory is not enabled in this fare configuration");
   }
 
-  const fuelLitres = distanceKm * fuelConsumptionLitresPer100Km / 100;
-  const fuelCost = fuelLitres * fuelPricePerLitre;
+  const consumption = fareConfig.vehicleFuelConsumptionLitresPer100Km?.[vehicleCategory];
+  if (!Number.isFinite(consumption) || consumption < 0) {
+    throw new TypeError(`No valid fuel consumption configured for ${vehicleCategory}`);
+  }
+
+  const fuelLitres = distanceKm * consumption / 100;
+  const fuelCost = fuelLitres * fareConfig.fuelPricePerLitre;
   const distanceCharge = distanceKm * fareConfig.perKmRate;
   const timeCharge = durationMinutes * fareConfig.perMinuteRate;
   const operatingCost = distanceKm * fareConfig.operatingCostPerKm;
-
   const driverSubtotal = fareConfig.baseFare + distanceCharge + timeCharge + fuelCost + operatingCost;
   const commission = driverSubtotal * fareConfig.platformCommissionRate;
   const beforeMinimum = driverSubtotal + commission;
