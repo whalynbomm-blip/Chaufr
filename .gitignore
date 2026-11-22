@@ -1,0 +1,1 @@
+**/build/\n**/.gradle/\n**/node_modules/\n**/dist/\n.env\n.env.*\n!.env.example\n*.jks\n*.keystore\nlocal.properties\n.DS_Store\n
