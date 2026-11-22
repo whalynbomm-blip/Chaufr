@@ -30,8 +30,8 @@ const readJson = async (request, maxBytes = 32_768) => {
   }
 };
 
-const publicFareConfig = () => ({
-  version: process.env.FARE_RULE_VERSION ?? "development-1",
+export const developmentFareConfig = () => ({
+  version: process.env.FARE_RULE_VERSION ?? "development-2",
   currency: process.env.FARE_CURRENCY ?? "ZAR",
   baseFare: Number(process.env.FARE_BASE ?? 10),
   perKmRate: Number(process.env.FARE_PER_KM ?? 5),
@@ -39,10 +39,16 @@ const publicFareConfig = () => ({
   operatingCostPerKm: Number(process.env.FARE_OPERATING_PER_KM ?? 2),
   platformCommissionRate: Number(process.env.FARE_COMMISSION_RATE ?? 0.1),
   minimumFare: Number(process.env.FARE_MINIMUM ?? 20),
+  fuelPricePerLitre: Number(process.env.FARE_FUEL_PRICE_PER_LITRE ?? 24.5),
   vehicleCategories: ["standard", "comfort", "xl"],
+  vehicleFuelConsumptionLitresPer100Km: {
+    standard: Number(process.env.FARE_FUEL_STANDARD_L100KM ?? 8),
+    comfort: Number(process.env.FARE_FUEL_COMFORT_L100KM ?? 9),
+    xl: Number(process.env.FARE_FUEL_XL_L100KM ?? 11),
+  },
 });
 
-export function createAppServer({ fareConfig = publicFareConfig() } = {}) {
+export function createAppServer({ fareConfig = developmentFareConfig() } = {}) {
   return createServer(async (request, response) => {
     const requestId = randomUUID();
     try {
@@ -53,7 +59,7 @@ export function createAppServer({ fareConfig = publicFareConfig() } = {}) {
       if (request.method === "GET" && url.pathname === "/v1") {
         return json(response, 200, {
           service: "chaufr-api",
-          version: "0.1.0",
+          version: "0.2.0",
           endpoints: ["GET /health", "GET /v1", "POST /v1/fare-quotes"],
         });
       }
@@ -62,8 +68,6 @@ export function createAppServer({ fareConfig = publicFareConfig() } = {}) {
         const quote = calculateFare({
           distanceKm: body.distanceKm,
           durationMinutes: body.durationMinutes,
-          fuelPricePerLitre: body.fuelPricePerLitre,
-          fuelConsumptionLitresPer100Km: body.fuelConsumptionLitresPer100Km,
           vehicleCategory: body.vehicleCategory,
         }, fareConfig);
         return json(response, 200, {
