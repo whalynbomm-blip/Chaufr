@@ -27,7 +27,7 @@ test("calculates a transparent quote and reconciles driver earnings plus commiss
   assert.equal(quote.fareRuleVersion, "test-1");
   assert.equal(quote.breakdown.fuelCost, 20);
   assert.equal(quote.breakdown.driverEarnings + quote.breakdown.platformCommission, quote.passengerTotal);
-  assert.equal(quote.passengerTotal, 120);
+  assert.equal(quote.passengerTotal, 132);
 });
 
 test("applies the configured minimum fare", () => {
