@@ -281,8 +281,18 @@ private fun PassengerHome() {
                                 Text(fare.source, color = ChaufrGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                             Spacer(Modifier.height(7.dp))
-                            Text(money(fare.total), color = ChaufrNavy, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(money(if (redeemReward) 0.0 else fare.total), color = ChaufrNavy, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
                             Text("$vehicle · ${String.format(Locale("en", "ZA"), "%.1f", fare.distanceKm)} km · ${fare.durationMinutes.toInt()} min", color = ChaufrMuted, fontSize = 12.sp)
+                            if (fare.durationMinutes in 5.0..20.0 && rewardsTickets >= 9) {
+                                Spacer(Modifier.height(10.dp))
+                                FilterChip(
+                                    selected = redeemReward,
+                                    onClick = { redeemReward = !redeemReward },
+                                    label = { Text(if (redeemReward) "9 tickets applied · free ride" else "Use 9 tickets for a free ride") }
+                                )
+                            } else if (fare.durationMinutes in 5.0..20.0) {
+                                Text("Chaufr Rewards: $rewardsTickets / 9 tickets · ${9 - rewardsTickets} more for a free ride", color = ChaufrGreen, fontSize = 11.sp)
+                            }
                             Spacer(Modifier.height(15.dp))
                             Divider(color = Color(0xFFE8ECF2))
                             Spacer(Modifier.height(12.dp))
@@ -291,15 +301,13 @@ private fun PassengerHome() {
                             FareLine("Time charge", fare.timeCharge)
                             FareLine("Fuel estimate", fare.fuelCost)
                             FareLine("Operating cost", fare.operatingCost)
-                            FareLine("Driver earnings", fare.driverEarnings, emphasized = true)
-                            FareLine("Platform commission", fare.commission)
-                            Spacer(Modifier.height(11.dp))
+                                                        Spacer(Modifier.height(11.dp))
                             Divider(color = Color(0xFFE8ECF2))
                             Spacer(Modifier.height(10.dp))
                             Row {
                                 Text("Passenger total", fontWeight = FontWeight.Bold, color = ChaufrNavy)
                                 Spacer(Modifier.weight(1f))
-                                Text(money(fare.total), fontWeight = FontWeight.ExtraBold, color = ChaufrBlue)
+                                Text(money(if (redeemReward) 0.0 else fare.total), fontWeight = FontWeight.ExtraBold, color = ChaufrBlue)
                             }
                             Spacer(Modifier.height(13.dp))
                             Spacer(Modifier.height(14.dp))
@@ -319,9 +327,11 @@ private fun PassengerHome() {
                                                 pickupPoint ?: throw IllegalStateException("Choose a pickup point on the map."),
                                                 destinationPoint ?: throw IllegalStateException("Choose a destination point on the map."),
                                                 vehicle.lowercase(),
-                                                routeQuoteToken ?: throw IllegalStateException("Calculate the fare again before requesting this ride.")
+                                                routeQuoteToken ?: throw IllegalStateException("Calculate the fare again before requesting this ride."),
+                                                redeemReward
                                             )
-                                            bookingMessage = "Ride request submitted. Automatic driver matching and live notifications are still being connected."
+                                            if (redeemReward) rewardsTickets = (rewardsTickets - 9).coerceAtLeast(0)
+                                            bookingMessage = if (redeemReward) "Free ride reward applied. 9 tickets reserved; your driver still receives normal earnings." else "Ride request submitted. You earn 1 reward ticket after the trip is completed."
                                         } catch (error: Exception) {
                                             bookingMessage = error.message ?: "Unable to submit your ride request."
                                         } finally {
