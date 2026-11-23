@@ -31,7 +31,7 @@ Standard uses multiplier 1.00, Comfort 1.15 and XL 1.30 by default. The fare is 
 
 ## Commission and driver earnings
 
-The initial 12% platform commission is included in the passenger's displayed fare, not added as a surprise surcharge. Driver expected earnings are the remaining 88%; the platform commission is 12% of the passenger fare. The exact commission accounting is returned by the central engine for internal trip settlement and must not be exposed as aggregate company revenue in driver-facing screens.
+The initial 12% platform commission is included in the passenger's displayed fare, not added as a surprise surcharge. Driver expected earnings are the remaining 88%; the platform commission is 12% of the passenger fare. The amount is stored with the trip but is marked earned only when the assigned driver completes the trip. Driver-facing responses show expected/actual driver earnings, never platform commission or aggregate company revenue. Payment collection and driver payout settlement are not yet connected.
 
 ## Fare acceptance
 
