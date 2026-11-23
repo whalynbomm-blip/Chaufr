@@ -57,6 +57,12 @@ function calculateScheduledFare(trip, fareConfig, consumption) {
     throw new TypeError("A valid duration fare band is required");
   }
 
+  if (band.approved === false) {
+    const error = new Error("Pricing for this journey duration has not yet been approved by Chaufr");
+    error.status = 503;
+    throw error;
+  }
+
   const trafficLevel = trip.trafficLevel ?? "normal";
   const trafficAdjustments = fareConfig.trafficAdjustmentsByDuration?.[
     durationMinutes <= 15 ? "short" : durationMinutes <= 25 ? "medium" : "long"
