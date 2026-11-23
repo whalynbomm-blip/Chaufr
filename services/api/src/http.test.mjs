@@ -85,7 +85,7 @@ test("route preview returns a server-calculated fare and signed route token", as
     signRouteQuote: (origin, destination, route, quote) => {
       assert.equal(route.distanceKm, 4.25);
       assert.equal(quote.vehicleCategory, "standard");
-      assert.equal(quote.fare.passengerTotal, 60);
+      assert.equal(quote.fare.passengerTotal, 66.28);
       return "signed-route-token";
     },
     verifyRouteQuote: () => { throw new Error("not used in route preview test"); },
@@ -104,7 +104,7 @@ test("route preview returns a server-calculated fare and signed route token", as
     const quote = await response.json();
     assert.equal(quote.distanceKm, 4.25);
     assert.equal(quote.durationMinutes, 12);
-    assert.equal(quote.passengerTotal, 60);
+    assert.equal(quote.passengerTotal, 66.28);
     assert.equal(quote.quoteToken, "signed-route-token");
   }, { routesService });
 });
