@@ -3,7 +3,7 @@ import { AuthError } from "./auth-service.mjs";
 
 const SA_DATE_SQL = "(now() AT TIME ZONE 'Africa/Johannesburg')::date";
 const activationRequired = () => new AuthError(
-  "Pay the R30 daily Chaufr activation fee before going online or accessing trip requests",
+  "Pay the daily Chaufr activation fee before going online or accessing trip requests",
   403,
 );
 function requireRole(user, role) {
@@ -41,7 +41,7 @@ export function createTripService(pool, fareConfig) {
       const activation = result.rows[0] ?? null;
       return {
         operatingDate: activation?.operating_date ?? null,
-        amount: 30,
+        amount: fareConfig.dailyActivationFee ?? 30,
         currency: "ZAR",
         status: activation?.status ?? "unpaid",
         isPaid: activation?.status === "paid",
@@ -56,14 +56,14 @@ export function createTripService(pool, fareConfig) {
       const { driverUserId, operatingDate, amount, currency = "ZAR", provider, providerReference } = input ?? {};
       if (typeof driverUserId !== "string" || !driverUserId) throw new TypeError("driverUserId is required");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(operatingDate ?? "")) throw new TypeError("operatingDate must be YYYY-MM-DD");
-      if (amount !== 30 || currency !== "ZAR") throw new AuthError("Daily activation payment must be exactly R30.00", 400);
+      if (amount !== (fareConfig.dailyActivationFee ?? 30) || currency !== "ZAR") throw new AuthError("Daily activation payment amount does not match the current owner-configured fee", 400);
       if (typeof provider !== "string" || !provider.trim() || typeof providerReference !== "string" || !providerReference.trim()) {
         throw new TypeError("Verified payment provider and reference are required");
       }
       const result = await pool.query(
         "INSERT INTO driver_daily_activations " +
         "(driver_user_id, operating_date, amount, currency, status, payment_provider, provider_reference, paid_at, non_refundable_at, updated_at) " +
-        "VALUES ($1, $2::date, 30.00, 'ZAR', 'paid', $3, $4, now(), now(), now()) " +
+        "VALUES ($1, $2::date, $5, 'ZAR', 'paid', $3, $4, now(), now(), now()) " +
         "ON CONFLICT (driver_user_id, operating_date) DO UPDATE SET " +
         "status = 'paid', payment_provider = EXCLUDED.payment_provider, " +
         "provider_reference = EXCLUDED.provider_reference, " +
@@ -72,7 +72,7 @@ export function createTripService(pool, fareConfig) {
         "WHERE driver_daily_activations.status <> 'paid' " +
         "OR driver_daily_activations.provider_reference = EXCLUDED.provider_reference " +
         "RETURNING id, operating_date, amount, currency, status, paid_at, non_refundable_at",
-        [driverUserId, operatingDate, provider.trim(), providerReference.trim()],
+        [driverUserId, operatingDate, provider.trim(), providerReference.trim(), fareConfig.dailyActivationFee ?? 30],
       );
       if (!result.rowCount) throw new AuthError("This operating day has already been activated with a different payment reference", 409);
       return result.rows[0];
