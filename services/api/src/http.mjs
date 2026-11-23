@@ -43,6 +43,7 @@ export const developmentFareConfig = () => ({
   perMinuteRate: Number(process.env.FARE_PER_MINUTE ?? 1),
   operatingCostPerKm: Number(process.env.FARE_OPERATING_PER_KM ?? 2),
   platformCommissionRate: Number(process.env.FARE_COMMISSION_RATE ?? 0.12),
+  dailyActivationFee: Number(process.env.DAILY_ACTIVATION_FEE ?? 30),
   minimumFare: Number(process.env.FARE_MINIMUM ?? 20),
   fuelPricePerLitre: Number(process.env.FARE_FUEL_PRICE_PER_LITRE ?? 24.5),
   vehicleCategories: ["standard", "comfort", "xl"],
@@ -52,14 +53,15 @@ export const developmentFareConfig = () => ({
     xl: Number(process.env.FARE_FUEL_XL_L100KM ?? 11),
   },
   durationFareBands: [
-    { maxMinutes: 7, startingFare: 40 },
-    { maxMinutes: 15, startingFare: 50 },
-    { maxMinutes: 22, startingFare: 85 },
-    { maxMinutes: 29, startingFare: 100 },
-    { maxMinutes: 39, startingFare: 150 },
-    { maxMinutes: 49, startingFare: 170 },
-    { maxMinutes: 59, startingFare: 200 },
-    { maxMinutes: Number.MAX_SAFE_INTEGER, startingFare: 250 },
+    { maxMinutes: 7, startingFare: 40, approved: true },
+    { maxMinutes: 15, startingFare: 50, approved: true },
+    // R85 is a placeholder only; no 16-22 minute fare has been approved by the owner.
+    { maxMinutes: 22, startingFare: 85, approved: false },
+    { maxMinutes: 29, startingFare: 100, approved: true },
+    { maxMinutes: 39, startingFare: 150, approved: true },
+    { maxMinutes: 49, startingFare: 170, approved: true },
+    { maxMinutes: 59, startingFare: 200, approved: true },
+    { maxMinutes: 1440, startingFare: 250, approved: true },
   ],
   trafficAdjustmentsByDuration: {
     short: { normal: 0, moderate: 10, heavy: 15, severe: 20 },
@@ -75,7 +77,7 @@ export const developmentFareConfig = () => ({
 
 export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
   const authService = database ? createAuthService(database) : null;
-  const driverService = database ? createDriverService(database) : null;
+  const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
   const tripService = database ? createTripService(database, fareConfig) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const authAttempts = new Map();
