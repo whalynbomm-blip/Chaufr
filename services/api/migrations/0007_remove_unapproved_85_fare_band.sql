@@ -7,7 +7,7 @@ SET config = jsonb_set(
   COALESCE(
     (
       SELECT jsonb_agg(band ORDER BY (band->>'maxMinutes')::integer)
-      FROM jsonb_array_elements(config->'durationFareBands') AS band
+      FROM jsonb_array_elements(config->'durationFareBands') AS items(band)
       WHERE (band->>'maxMinutes')::integer <> 22
     ),
     '[]'::jsonb
@@ -19,6 +19,6 @@ updated_at = now()
 WHERE jsonb_typeof(config->'durationFareBands') = 'array'
   AND EXISTS (
     SELECT 1
-    FROM jsonb_array_elements(config->'durationFareBands') AS band
+    FROM jsonb_array_elements(config->'durationFareBands') AS items(band)
     WHERE (band->>'maxMinutes')::integer = 22
   );
