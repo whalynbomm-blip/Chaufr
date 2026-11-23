@@ -30,7 +30,12 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       ...developmentFareConfig(),
       vehicleCategories: ["standard", "comfort", "xl"],
     };
-    const testRoutes = { computeRoute: async () => ({ distanceKm: 4, durationMinutes: 7, encodedPolyline: null, trafficAware: true }) };
+    const testRoute = { distanceKm: 4, durationMinutes: 7, encodedPolyline: null, trafficAware: true };
+    const testRoutes = {
+      computeRoute: async () => testRoute,
+      signRouteQuote: () => "test-route-quote",
+      verifyRouteQuote: (token) => { if (token !== "test-route-quote") throw Object.assign(new Error("Invalid route quote"), { status: 400 }); return testRoute; },
+    };
     const trips = createTripService(pool, fareConfig, testRoutes);
     const account = await auth.register({
       displayName: "Test Driver",
@@ -119,6 +124,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       body: JSON.stringify({
         pickupLabel: "Cape Town Station",
         destinationLabel: "V&A Waterfront",
+        routeQuoteToken: "test-route-quote",
         origin: { latitude: -33.9, longitude: 18.4 },
         destination: { latitude: -33.91, longitude: 18.42 },
         vehicleCategory: "standard",
