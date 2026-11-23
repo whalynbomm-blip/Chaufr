@@ -20,7 +20,7 @@ function encryptSensitiveValue(value, encodedKey) {
 const cleanText = (value, maxLength) =>
   typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 
-export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DATA_ENCRYPTION_KEY) {
+export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DATA_ENCRYPTION_KEY, fareConfig = { dailyActivationFee: 30 }) {
   if (!pool || typeof pool.connect !== "function") {
     throw new TypeError("A PostgreSQL pool is required");
   }
@@ -51,7 +51,7 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
       return {
         verificationStatus: profile.rows[0].verification_status,
         dailyActivation: {
-          amount: 30,
+          amount: fareConfig.dailyActivationFee ?? 30,
           currency: "ZAR",
           status: activation.rows[0]?.status ?? "unpaid",
           isPaid: activation.rows[0]?.status === "paid",
@@ -138,7 +138,7 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
           [user.id],
         );
         if (!activation.rowCount) {
-          throw new AuthError("Pay the R30 daily Chaufr activation fee before going online or accessing trip requests", 403);
+          throw new AuthError("Pay the R" + Number(fareConfig.dailyActivationFee ?? 30).toFixed(2) + " daily Chaufr activation fee before going online or accessing trip requests", 403);
         }
         if (profile.rows[0].verification_status !== "verified") {
           throw new AuthError("Your driver profile must be verified before going online", 403);
