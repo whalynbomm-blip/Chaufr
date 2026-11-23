@@ -5,6 +5,7 @@ import {
 const SESSION_DAYS = 30;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+[1-9]\d{7,14}$/;
+const dummyPasswordHashPromise = hashPassword("chaufr-invalid-login-dummy");
 
 export class AuthError extends Error {
   constructor(message, status = 400) {
@@ -47,6 +48,7 @@ export function createAuthService(pool) {
 
   return {
     async register(input = {}) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthError("Invalid registration details");
       const displayName = typeof input.displayName === "string" ? input.displayName.trim() : "";
       const email = typeof input.email === "string" && input.email.trim()
         ? input.email.trim().toLowerCase() : null;
@@ -97,6 +99,7 @@ export function createAuthService(pool) {
     },
 
     async login(input = {}) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthError("Invalid login details");
       const identifier = normalizeIdentifier(input.identifier);
       if (!identifier || typeof input.password !== "string") {
         throw new AuthError("Enter your email or phone number and password", 400);
