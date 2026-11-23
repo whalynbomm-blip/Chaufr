@@ -138,7 +138,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
             "GET /v1/driver/activation", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
-            "POST /v1/driver/trips/:tripId/complete", "POST /v1/trips",
+            "POST /v1/driver/trips/:tripId/complete", "GET /v1/passenger/rewards", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
           ],
           database: database ? "connected" : "not_configured",
@@ -245,6 +245,18 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           return json(response, 200, { ok: true });
         }
       }
+      if (request.method === "GET" && url.pathname === "/v1/passenger/rewards") {
+        if (!authService || !tripService) {
+          return json(response, 503, { error: "Passenger reward services are unavailable until the database is configured", requestId });
+        }
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
+        return json(response, 200, await tripService.getPassengerRewards(user));
+      }
+
       if (request.method === "POST" && url.pathname === "/v1/trips") {
         if (!authService || !tripService) {
           return json(response, 503, { error: "Trip services are unavailable until the database is configured", requestId });
