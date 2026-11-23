@@ -4,6 +4,8 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Keep the complete mark inside Android adaptive-icon safe zone. -->
+    <group android:scaleX="0.68" android:scaleY="0.68" android:pivotX="54" android:pivotY="54">
     <!-- Blue navigation route behind the pin -->
     <path
         android:fillColor="#00000000"
@@ -55,4 +57,5 @@
     <path
         android:fillColor="#06152F"
         android:pathData="M60,50 L67,50 L68,53 L61,53 Z" />
+    </group>
 </vector>
