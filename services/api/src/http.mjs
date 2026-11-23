@@ -33,13 +33,13 @@ const readJson = async (request, maxBytes = 32_768) => {
 };
 
 export const developmentFareConfig = () => ({
-  version: process.env.FARE_RULE_VERSION ?? "development-2",
+  version: process.env.FARE_RULE_VERSION ?? "development-3",
   currency: process.env.FARE_CURRENCY ?? "ZAR",
   baseFare: Number(process.env.FARE_BASE ?? 10),
-  perKmRate: Number(process.env.FARE_PER_KM ?? 5),
+  perKmRate: Number(process.env.FARE_PER_KM ?? 1),
   perMinuteRate: Number(process.env.FARE_PER_MINUTE ?? 1),
   operatingCostPerKm: Number(process.env.FARE_OPERATING_PER_KM ?? 2),
-  platformCommissionRate: Number(process.env.FARE_COMMISSION_RATE ?? 0.1),
+  platformCommissionRate: Number(process.env.FARE_COMMISSION_RATE ?? 0.12),
   minimumFare: Number(process.env.FARE_MINIMUM ?? 20),
   fuelPricePerLitre: Number(process.env.FARE_FUEL_PRICE_PER_LITRE ?? 24.5),
   vehicleCategories: ["standard", "comfort", "xl"],
@@ -47,6 +47,26 @@ export const developmentFareConfig = () => ({
     standard: Number(process.env.FARE_FUEL_STANDARD_L100KM ?? 8),
     comfort: Number(process.env.FARE_FUEL_COMFORT_L100KM ?? 9),
     xl: Number(process.env.FARE_FUEL_XL_L100KM ?? 11),
+  },
+  durationFareBands: [
+    { maxMinutes: 7, startingFare: 40 },
+    { maxMinutes: 15, startingFare: 50 },
+    { maxMinutes: 22, startingFare: 85 },
+    { maxMinutes: 29, startingFare: 100 },
+    { maxMinutes: 39, startingFare: 150 },
+    { maxMinutes: 49, startingFare: 170 },
+    { maxMinutes: 59, startingFare: 200 },
+    { maxMinutes: Number.MAX_SAFE_INTEGER, startingFare: 250 },
+  ],
+  trafficAdjustmentsByDuration: {
+    short: { normal: 0, moderate: 10, heavy: 15, severe: 20 },
+    medium: { normal: 0, moderate: 10, heavy: 15, severe: 25 },
+    long: { normal: 0, moderate: 10, heavy: 25, severe: 40 },
+  },
+  vehicleCategoryMultipliers: {
+    standard: Number(process.env.FARE_STANDARD_MULTIPLIER ?? 1),
+    comfort: Number(process.env.FARE_COMFORT_MULTIPLIER ?? 1.15),
+    xl: Number(process.env.FARE_XL_MULTIPLIER ?? 1.3),
   },
 });
 
