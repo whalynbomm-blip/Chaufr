@@ -77,6 +77,63 @@ export function createTripService(pool, fareConfig, routesService = null) {
       return result.rows[0];
     },
 
+    async releaseExpiredRewardReservations(queryable, passengerId) {
+      const expired = await queryable.query(
+        "SELECT r.trip_id, r.tickets_reserved FROM passenger_reward_redemptions r " +
+        "JOIN trips t ON t.id = r.trip_id WHERE r.passenger_user_id = $1 " +
+        "AND r.status = 'reserved' AND t.status IN ('requested', 'expired', 'cancelled') " +
+        "AND (t.status <> 'requested' OR t.quote_expires_at <= now()) FOR UPDATE OF r",
+        [passengerId],
+      );
+      for (const item of expired.rows) {
+        const changed = await queryable.query(
+          "UPDATE passenger_reward_redemptions SET status = 'released', updated_at = now() " +
+          "WHERE trip_id = $1 AND status = 'reserved' RETURNING tickets_reserved",
+          [item.trip_id],
+        );
+        if (!changed.rowCount) continue;
+        const tickets = Number(changed.rows[0].tickets_reserved);
+        await queryable.query(
+          "INSERT INTO passenger_reward_accounts (passenger_user_id, tickets_balance, updated_at) " +
+          "VALUES ($1, $2, now()) ON CONFLICT (passenger_user_id) DO UPDATE SET " +
+          "tickets_balance = passenger_reward_accounts.tickets_balance + EXCLUDED.tickets_balance, updated_at = now()",
+          [passengerId, tickets],
+        );
+        await queryable.query(
+          "INSERT INTO passenger_reward_ledger (passenger_user_id, trip_id, entry_type, tickets_delta) " +
+          "VALUES ($1, $2, 'released', $3) ON CONFLICT (trip_id, entry_type) DO NOTHING",
+          [passengerId, item.trip_id, tickets],
+        );
+      }
+    },
+
+    async getPassengerRewards(passenger) {
+      requireRole(passenger, "passenger");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await this.releaseExpiredRewardReservations(client, passenger.id);
+        const result = await client.query(
+          "SELECT tickets_balance, tickets_earned_total FROM passenger_reward_accounts WHERE passenger_user_id = $1",
+          [passenger.id],
+        );
+        await client.query("COMMIT");
+        return {
+          tickets: Number(result.rows[0]?.tickets_balance ?? 0),
+          ticketsEarnedTotal: Number(result.rows[0]?.tickets_earned_total ?? 0),
+          ticketsRequired: 9,
+          ticketsUntilFreeRide: Math.max(0, 9 - Number(result.rows[0]?.tickets_balance ?? 0)),
+          eligibleDurationMinutes: { minimum: 5, maximum: 20 },
+          rewardName: "Chaufr Rewards",
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
     async requestTrip(passenger, input = {}) {
       requireRole(passenger, "passenger");
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthError("Invalid trip details");
@@ -91,7 +148,10 @@ export function createTripService(pool, fareConfig, routesService = null) {
       const fare = verifiedQuote.fare;
       const distanceKm = route.distanceKm;
       const durationMinutes = route.durationMinutes;
-      // Route and complete fare are signed by the server and expire after five minutes.
+      const redeemReward = input.redeemReward === true;
+      if (redeemReward && (durationMinutes < 5 || durationMinutes > 20)) {
+        throw new AuthError("A free ride reward can only be used on a journey lasting 5 to 20 minutes", 400);
+      }
       const trafficLevel = "normal";
       const quoteExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
       const snapshot = {
@@ -108,31 +168,74 @@ export function createTripService(pool, fareConfig, routesService = null) {
         driverEarnings: fare.breakdown.driverEarnings,
         platformCommission: fare.breakdown.platformCommission,
         breakdown: fare.breakdown,
+        rewardRedemption: redeemReward,
       };
-      const result = await pool.query(
-        "INSERT INTO trips (passenger_user_id, status, pickup_label, destination_label, distance_km, " +
-        "duration_minutes, quoted_total, driver_earnings, platform_commission, quote_inputs, quote_expires_at, " +
-        "traffic_level, fare_snapshot, commission_rate) " +
-        "VALUES ($1, 'requested', $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12::jsonb, $13) " +
-        "RETURNING id, status, pickup_label, destination_label, distance_km, duration_minutes, quoted_total, quote_expires_at",
-        [passenger.id, pickupLabel, destinationLabel, distanceKm, durationMinutes,
-          fare.passengerTotal, fare.breakdown.driverEarnings, fare.breakdown.platformCommission,
-          JSON.stringify(snapshot), quoteExpiresAt, trafficLevel, JSON.stringify(snapshot),
-          fareConfig.platformCommissionRate],
-      );
-      const trip = result.rows[0];
-      return {
-        tripId: trip.id,
-        status: trip.status,
-        pickupLabel: trip.pickup_label,
-        destinationLabel: trip.destination_label,
-        distanceKm: Number(trip.distance_km),
-        durationMinutes: Number(trip.duration_minutes),
-        passengerTotal: Number(trip.quoted_total),
-        currency: fare.currency,
-        fareRuleVersion: fare.fareRuleVersion,
-        quoteExpiresAt: trip.quote_expires_at,
-      };
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await this.releaseExpiredRewardReservations(client, passenger.id);
+        if (redeemReward) {
+          await client.query(
+            "INSERT INTO passenger_reward_accounts (passenger_user_id) VALUES ($1) ON CONFLICT (passenger_user_id) DO NOTHING",
+            [passenger.id],
+          );
+          const balance = await client.query(
+            "SELECT tickets_balance FROM passenger_reward_accounts WHERE passenger_user_id = $1 FOR UPDATE",
+            [passenger.id],
+          );
+          if (Number(balance.rows[0]?.tickets_balance ?? 0) < 9) {
+            throw new AuthError("You need 9 reward tickets to redeem a free ride", 409);
+          }
+        }
+        const passengerPayable = redeemReward ? 0 : fare.passengerTotal;
+        const result = await client.query(
+          "INSERT INTO trips (passenger_user_id, status, pickup_label, destination_label, distance_km, " +
+          "duration_minutes, quoted_total, passenger_payable, driver_earnings, platform_commission, quote_inputs, quote_expires_at, " +
+          "traffic_level, fare_snapshot, commission_rate) " +
+          "VALUES ($1, 'requested', $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13::jsonb, $14) " +
+          "RETURNING id, status, pickup_label, destination_label, distance_km, duration_minutes, quoted_total, passenger_payable, quote_expires_at",
+          [passenger.id, pickupLabel, destinationLabel, distanceKm, durationMinutes,
+            fare.passengerTotal, passengerPayable, fare.breakdown.driverEarnings, fare.breakdown.platformCommission,
+            JSON.stringify(snapshot), quoteExpiresAt, trafficLevel, JSON.stringify(snapshot),
+            fareConfig.platformCommissionRate],
+        );
+        const trip = result.rows[0];
+        if (redeemReward) {
+          await client.query(
+            "UPDATE passenger_reward_accounts SET tickets_balance = tickets_balance - 9, updated_at = now() WHERE passenger_user_id = $1",
+            [passenger.id],
+          );
+          await client.query(
+            "INSERT INTO passenger_reward_ledger (passenger_user_id, trip_id, entry_type, tickets_delta) VALUES ($1, $2, 'redeemed', -9)",
+            [passenger.id, trip.id],
+          );
+          await client.query(
+            "INSERT INTO passenger_reward_redemptions (passenger_user_id, trip_id, tickets_reserved, fare_covered, status) VALUES ($1, $2, 9, $3, 'reserved')",
+            [passenger.id, trip.id, fare.passengerTotal],
+          );
+        }
+        await client.query("COMMIT");
+        return {
+          tripId: trip.id,
+          status: trip.status,
+          pickupLabel: trip.pickup_label,
+          destinationLabel: trip.destination_label,
+          distanceKm: Number(trip.distance_km),
+          durationMinutes: Number(trip.duration_minutes),
+          passengerTotal: Number(trip.passenger_payable),
+          regularFare: Number(trip.quoted_total),
+          rewardApplied: redeemReward,
+          rewardTicketsUsed: redeemReward ? 9 : 0,
+          currency: fare.currency,
+          fareRuleVersion: fare.fareRuleVersion,
+          quoteExpiresAt: trip.quote_expires_at,
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
     },
 
     async listAvailableTrips(driver) {
@@ -287,6 +390,25 @@ export function createTripService(pool, fareConfig, routesService = null) {
         await client.query(
           "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'completed')",
           [tripId, driver.id],
+        );
+        const passenger = await client.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
+        const passengerId = passenger.rows[0].passenger_user_id;
+        await client.query(
+          "INSERT INTO passenger_reward_accounts (passenger_user_id, tickets_balance, tickets_earned_total) " +
+          "VALUES ($1, 1, 1) ON CONFLICT (passenger_user_id) DO UPDATE SET " +
+          "tickets_balance = passenger_reward_accounts.tickets_balance + 1, " +
+          "tickets_earned_total = passenger_reward_accounts.tickets_earned_total + 1, updated_at = now()",
+          [passengerId],
+        );
+        await client.query(
+          "INSERT INTO passenger_reward_ledger (passenger_user_id, trip_id, entry_type, tickets_delta) " +
+          "VALUES ($1, $2, 'earned', 1) ON CONFLICT (trip_id, entry_type) DO NOTHING",
+          [passengerId, tripId],
+        );
+        await client.query(
+          "UPDATE passenger_reward_redemptions SET status = 'consumed', updated_at = now() " +
+          "WHERE trip_id = $1 AND status = 'reserved'",
+          [tripId],
         );
         await client.query("COMMIT");
         const trip = result.rows[0];
