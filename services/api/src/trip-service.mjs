@@ -84,7 +84,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
       const pickupLabel = cleanLabel(input.pickupLabel, "Pickup");
       const destinationLabel = cleanLabel(input.destinationLabel, "Destination");
       if (!routesService) throw new AuthError("Trusted route calculation is not configured", 503);
-      const route = await routesService.computeRoute(input.origin, input.destination);
+      const route = routesService.verifyRouteQuote(input.routeQuoteToken, input.origin, input.destination);
       const distanceKm = route.distanceKm;
       const durationMinutes = route.durationMinutes;
       const vehicleCategory = input.vehicleCategory;
