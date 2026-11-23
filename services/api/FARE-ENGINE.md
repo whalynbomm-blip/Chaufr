@@ -1,12 +1,42 @@
-# Fare engine notes
+# Central fare engine
 
-This first implementation is a deterministic calculation module with automated tests. It is not yet connected to a live API or production database.
+Chaufr uses one server-side fare calculation for passenger quotes and trip requests. Android clients submit route distance, duration and vehicle category; they cannot supply or override fuel prices, consumption assumptions, commission, traffic adjustments or fare bands.
 
-The formula separates the driver subtotal from platform commission:
-- Driver subtotal = base fare + distance charge + time charge + fuel cost + operating cost.
-- Platform commission = driver subtotal × configured commission rate.
-- Passenger total = the greater of the configured minimum fare and driver subtotal plus commission.
+## Starting fare bands
 
-Fuel cost is derived from distance × vehicle fuel consumption ÷ 100 × configured fuel price. The engine returns a breakdown and fare-rule version.
+These are the initial schedule values supplied by the owner. They are configurable development defaults, not a claim that live traffic or routing is connected yet.
 
-All rates are configuration inputs, not recommendations or live market prices. Production configuration must be approved and stored server-side. South African rand (ZAR) is the default currency, but no live fare values are enabled by this repository.
+| Journey duration | Starting fare |
+| --- | ---: |
+| Up to 7 minutes | R40 |
+| 8–15 minutes | R50 |
+| 16–22 minutes | R85 |
+| 23–29 minutes | R100 |
+| 30–39 minutes | R150 |
+| 40–49 minutes | R170 |
+| 50–59 minutes | R200 |
+| 60 minutes and longer | R250 |
+
+For journeys longer than 60 minutes, the R250 band is currently the starting floor; an additional long-trip increment still needs owner configuration.
+
+## Traffic adjustments
+
+The calculator supports four trusted traffic levels. For journeys up to 15 minutes, the adjustments are R0 / R10 / R15 / R20 (normal / moderate / heavy / severe), keeping the 10–15 minute range within the owner's R50–R70 starting range. For 16–25 minutes they are R0 / R10 / R15 / R25. For journeys longer than 25 minutes they are R0 / R10 / R25 / R40. The existing 30-minute illustration therefore calculates R150 / R160 / R175 / R190.
+
+The API currently uses the normal baseline because a live routing/traffic provider has not yet been connected. The calculator itself accepts a traffic level so the trusted routing integration can supply it later; the passenger app must never be allowed to choose its own traffic level.
+
+## Vehicle classes and route costs
+
+Standard uses multiplier 1.00, Comfort 1.15 and XL 1.30 by default. The fare is never below the configured duration/traffic/category starting fare, the minimum fare, or the server-side route cost floor. The route cost floor includes base cost, distance, fuel and operating costs using server-owned assumptions.
+
+## Commission and driver earnings
+
+The initial 12% platform commission is included in the passenger's displayed fare, not added as a surprise surcharge. Driver expected earnings are the remaining 88%; the platform commission is 12% of the passenger fare. The exact commission accounting is returned by the central engine for internal trip settlement and must not be exposed as aggregate company revenue in driver-facing screens.
+
+## Fare acceptance
+
+A requested trip must store a snapshot of the fare-rule version, route measurements, traffic level, vehicle class, passenger total and driver expected earnings. When a driver accepts, the fare snapshot is locked to that trip. Later traffic changes or owner fare-rule edits must not change an accepted trip's price. This acceptance workflow and the live traffic provider remain follow-up implementation work.
+
+## Configuration and status
+
+The schedule, traffic additions, category multipliers, fuel price, fuel consumption, distance rate, operating cost, commission and minimum fare are configured on the API server. No live routing provider, production payment provider, or production fare configuration is enabled by this repository yet.
