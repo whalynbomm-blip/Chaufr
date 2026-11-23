@@ -67,3 +67,25 @@ test("Google Routes handles provider failures without leaking provider response"
     { status: 400, message: "Google Routes could not calculate this journey" },
   );
 });
+
+
+test("signed route quotes preserve route measurements and expire", async () => {
+  const service = createGoogleRoutesService({
+    apiKey: "test-server-key",
+    signingSecret: "test-signing-secret",
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ routes: [{ distanceMeters: 5000, duration: "600s", polyline: { encodedPolyline: "abc" } }] }),
+    }),
+  });
+  const origin = { latitude: -33.9, longitude: 18.4 };
+  const destination = { latitude: -33.91, longitude: 18.42 };
+  const route = await service.computeRoute(origin, destination);
+  const token = service.signRouteQuote(origin, destination, route);
+  const verified = service.verifyRouteQuote(token, origin, destination);
+  assert.equal(verified.distanceKm, 5);
+  assert.equal(verified.durationMinutes, 10);
+  assert.equal(verified.encodedPolyline, "abc");
+  assert.throws(() => service.verifyRouteQuote(token + "tampered", origin, destination), { status: 400 });
+  assert.throws(() => service.verifyRouteQuote(token, origin, { latitude: -33.92, longitude: 18.43 }), { status: 400 });
+});
