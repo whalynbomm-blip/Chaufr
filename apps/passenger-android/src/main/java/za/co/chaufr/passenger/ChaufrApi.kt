@@ -83,7 +83,8 @@ object ChaufrApi {
         destinationLabel: String,
         origin: com.google.android.gms.maps.model.LatLng,
         destination: com.google.android.gms.maps.model.LatLng,
-        vehicleCategory: String
+        vehicleCategory: String,
+        routeQuoteToken: String
     ): JSONObject = requestJson(
         baseUrl, "POST", "/v1/trips",
         JSONObject()
@@ -91,7 +92,8 @@ object ChaufrApi {
             .put("destinationLabel", destinationLabel)
             .put("origin", JSONObject().put("latitude", origin.latitude).put("longitude", origin.longitude))
             .put("destination", JSONObject().put("latitude", destination.latitude).put("longitude", destination.longitude))
-            .put("vehicleCategory", vehicleCategory),
+            .put("vehicleCategory", vehicleCategory)
+            .put("routeQuoteToken", routeQuoteToken),
         token = token
     )
 
