@@ -80,6 +80,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const tripService = database ? createTripService(database, fareConfig, routesService) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const authAttempts = new Map();
+  const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
     const now = Date.now();
@@ -89,6 +90,17 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       return;
     }
     if (current.count >= 10) throw new AuthError("Too many attempts. Please try again later.", 429);
+    current.count += 1;
+  };
+  const checkRouteRateLimit = (request) => {
+    const key = request.socket.remoteAddress ?? "unknown";
+    const now = Date.now();
+    const current = routeAttempts.get(key);
+    if (!current || current.resetAt <= now) {
+      routeAttempts.set(key, { count: 1, resetAt: now + 60 * 1000 });
+      return;
+    }
+    if (current.count >= 30) throw new AuthError("Too many route requests. Please wait a minute and try again.", 429);
     current.count += 1;
   };
   const getBearerToken = (request) => {
@@ -246,6 +258,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       }
 
       if (request.method === "POST" && url.pathname === "/v1/routes/preview") {
+        checkRouteRateLimit(request);
         const body = await readJson(request);
         const route = await routesService.computeRoute(body.origin, body.destination);
         const quoteToken = routesService.signRouteQuote(body.origin, body.destination, route);
