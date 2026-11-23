@@ -23,7 +23,7 @@ For journeys longer than 60 minutes, the R250 band is currently the starting flo
 
 The calculator supports four trusted traffic levels. For journeys up to 15 minutes, the adjustments are R0 / R10 / R15 / R20 (normal / moderate / heavy / severe), keeping the 10–15 minute range within the owner's R50–R70 starting range. For 16–25 minutes they are R0 / R10 / R15 / R25. For journeys longer than 25 minutes they are R0 / R10 / R25 / R40. The existing 30-minute illustration therefore calculates R150 / R160 / R175 / R190.
 
-The API currently uses the normal baseline because a live routing/traffic provider has not yet been connected. The calculator itself accepts a traffic level so the trusted routing integration can supply it later; the passenger app must never be allowed to choose its own traffic level.
+The trip-request API currently uses the normal baseline because a live routing/traffic provider has not yet been connected. The calculator itself accepts a traffic level so a trusted routing integration can supply it later; the passenger app must never be allowed to choose its own traffic level.
 
 ## Vehicle classes and route costs
 
@@ -35,7 +35,7 @@ The initial 12% platform commission is included in the passenger's displayed far
 
 ## Fare acceptance
 
-A requested trip must store a snapshot of the fare-rule version, route measurements, traffic level, vehicle class, passenger total and driver expected earnings. When a driver accepts, the fare snapshot is locked to that trip. Later traffic changes or owner fare-rule edits must not change an accepted trip's price. This acceptance workflow and the live traffic provider remain follow-up implementation work.
+A passenger trip request stores a snapshot of the fare-rule version, route measurements, traffic level, vehicle class, passenger total and expected driver earnings. When an eligible, activated driver accepts, the API transactionally assigns the driver and approved vehicle and sets the fare lock timestamp. Later traffic changes or fare-rule edits do not change an accepted trip's price. The live traffic provider and the complete trip lifecycle are still follow-up work.
 
 ## Configuration and status
 
