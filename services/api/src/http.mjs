@@ -6,6 +6,7 @@ import { AuthError, createAuthService } from "./auth-service.mjs";
 import { createDriverService } from "./driver-service.mjs";
 import { createTripService } from "./trip-service.mjs";
 import { createOwnerService } from "./owner-service.mjs";
+import { createGoogleRoutesService } from "./google-routes.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -78,6 +79,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
   const tripService = database ? createTripService(database, fareConfig) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
+  const routesService = createGoogleRoutesService();
   const authAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
@@ -119,7 +121,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           service: "chaufr-api",
           version: "0.3.0",
           endpoints: [
-            "GET /health", "GET /v1", "POST /v1/fare-quotes",
+            "GET /health", "GET /v1", "POST /v1/fare-quotes", "POST /v1/routes/preview",
             "POST /v1/auth/register", "POST /v1/auth/login",
             "GET /v1/auth/me", "POST /v1/auth/logout",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
@@ -242,6 +244,12 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
         return json(response, 201, await tripService.requestTrip(user, await readJson(request)));
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/routes/preview") {
+        const body = await readJson(request);
+        const route = await routesService.computeRoute(body.origin, body.destination);
+        return json(response, 200, { ...route, requestId });
       }
 
       if (request.method === "POST" && url.pathname === "/v1/fare-quotes") {
