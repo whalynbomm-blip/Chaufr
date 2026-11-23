@@ -26,4 +26,4 @@ Without the property, the app still builds, but the map and Places search remain
 
 ## Current integration boundary
 
-Google Maps display and Places-based pickup/destination selection are wired into the passenger journey screen. Route distance, traffic-aware duration, server-confirmed fare quotes, trip booking, live tracking and notifications still require their backend integrations; the app must not treat a straight-line map distance or a sample route as a real fare.
+Google Maps display and Places-based pickup/destination selection are wired into the passenger journey screen. The app requests a traffic-aware driving route from the server, displays the returned route line, and requests a fare based on the returned distance and duration. Trip submission sends the short-lived signed route quote so the server verifies the exact route measurements before creating the trip. Live driver matching, driver location tracking, trip history, receipts, payments and notifications are still outstanding.
