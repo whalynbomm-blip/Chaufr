@@ -107,9 +107,8 @@ export function createAuthService(pool) {
         [identifier],
       );
       const user = result.rows[0];
-      const passwordValid = user
-        ? await verifyPassword(input.password, user.password_hash)
-        : await verifyPassword(input.password, "$chaufr-scrypt$invalid");
+      const hashToVerify = user ? user.password_hash : await dummyPasswordHashPromise;
+      const passwordValid = await verifyPassword(input.password, hashToVerify);
       if (!user || !passwordValid || ["suspended", "closed"].includes(user.status)) {
         throw new AuthError("Invalid login details or account unavailable", 401);
       }
