@@ -1,4 +1,3 @@
-import { calculateFare } from "./fare-calculator.mjs";
 import { AuthError } from "./auth-service.mjs";
 
 const SA_DATE_SQL = "(now() AT TIME ZONE 'Africa/Johannesburg')::date";
@@ -84,14 +83,16 @@ export function createTripService(pool, fareConfig, routesService = null) {
       const pickupLabel = cleanLabel(input.pickupLabel, "Pickup");
       const destinationLabel = cleanLabel(input.destinationLabel, "Destination");
       if (!routesService) throw new AuthError("Trusted route calculation is not configured", 503);
-      const route = routesService.verifyRouteQuote(input.routeQuoteToken, input.origin, input.destination);
+      const vehicleCategory = input.vehicleCategory;
+      const verifiedQuote = routesService.verifyRouteQuote(
+        input.routeQuoteToken, input.origin, input.destination, vehicleCategory,
+      );
+      const route = verifiedQuote.route;
+      const fare = verifiedQuote.fare;
       const distanceKm = route.distanceKm;
       const durationMinutes = route.durationMinutes;
-      const vehicleCategory = input.vehicleCategory;
-      // Route duration is traffic-aware and calculated server-side. Never accept
-      // passenger-supplied distance, duration or traffic adjustments.
+      // Route and complete fare are signed by the server and expire after five minutes.
       const trafficLevel = "normal";
-      const fare = calculateFare({ distanceKm, durationMinutes, vehicleCategory, trafficLevel }, fareConfig);
       const quoteExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
       const snapshot = {
         pricingMode: fare.pricingMode,
