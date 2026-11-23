@@ -88,6 +88,77 @@ export function createOwnerService(pool, fareConfig) {
         client.release();
       }
     },
+
+    async listDrivers(user) {
+      requireOwner(user);
+      const result = await pool.query(
+        "SELECT u.id, u.display_name, u.email, u.phone_e164, u.status AS account_status, " +
+        "dp.verification_status, dp.rating, dp.created_at, " +
+        "COALESCE(json_agg(json_build_object('id', v.id, 'category', v.category, 'make', v.make, " +
+        "'model', v.model, 'status', v.status, 'fuelConsumption', v.fuel_consumption_l_per_100km)) " +
+        "FILTER (WHERE v.id IS NOT NULL), '[]'::json) AS vehicles " +
+        "FROM users u JOIN driver_profiles dp ON dp.user_id = u.id " +
+        "LEFT JOIN vehicles v ON v.driver_user_id = u.id " +
+        "GROUP BY u.id, dp.verification_status, dp.rating, dp.created_at " +
+        "ORDER BY dp.created_at DESC LIMIT 250"
+      );
+      return { drivers: result.rows };
+    },
+    async setDriverVerification(user, driverId, status) {
+      requireOwner(user);
+      if (!["verified", "rejected", "suspended"].includes(status)) {
+        throw new AuthError("Driver status must be verified, rejected or suspended");
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const updated = await client.query(
+          "UPDATE driver_profiles SET verification_status = $1 WHERE user_id = $2 " +
+          "RETURNING user_id, verification_status",
+          [status, driverId],
+        );
+        if (!updated.rowCount) throw new AuthError("Driver profile not found", 404);
+        await client.query(
+          "INSERT INTO audit_events (actor_user_id, action, resource_type, resource_id, details) " +
+          "VALUES ($1, 'driver.verification.updated', 'driver', $2, $3::jsonb)",
+          [user.id, driverId, JSON.stringify({ verificationStatus: status })],
+        );
+        await client.query("COMMIT");
+        return { driverId: updated.rows[0].user_id, verificationStatus: updated.rows[0].verification_status };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async setVehicleStatus(user, vehicleId, status) {
+      requireOwner(user);
+      if (!["approved", "rejected", "inactive"].includes(status)) {
+        throw new AuthError("Vehicle status must be approved, rejected or inactive");
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const updated = await client.query(
+          "UPDATE vehicles SET status = $1 WHERE id = $2 RETURNING id, driver_user_id, status",
+          [status, vehicleId],
+        );
+        if (!updated.rowCount) throw new AuthError("Vehicle not found", 404);
+        await client.query(
+          "INSERT INTO audit_events (actor_user_id, action, resource_type, resource_id, details) " +
+          "VALUES ($1, 'vehicle.review.updated', 'vehicle', $2, $3::jsonb)",
+          [user.id, vehicleId, JSON.stringify({ driverUserId: updated.rows[0].driver_user_id, status })],
+        );
+        await client.query("COMMIT");
+        return { vehicleId: updated.rows[0].id, driverId: updated.rows[0].driver_user_id, status: updated.rows[0].status };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async getOverview(user) {
       requireOwner(user);
       const result = await pool.query(
