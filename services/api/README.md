@@ -39,16 +39,25 @@ Supported categories: `standard`, `comfort`, `xl`.
 
 The request accepts route distance, estimated duration and vehicle category. Fare rates, fuel price, vehicle fuel consumption, operating cost, commission and minimum fare are read from server configuration. Client-supplied fare settings are ignored.
 
-## Authentication security foundation
+## Authentication endpoints
 
-The API includes tested scrypt password-hashing and verification helpers, opaque access-token generation, token hashing, and migration `0003_auth_sessions.sql` for expiring/revocable sessions. These are security building blocks only. Driver/passenger registration, login endpoints, database-backed session validation, phone/email verification and password reset are not yet implemented or available in the apps. Do not treat the current demo apps as authenticated accounts.
+When PostgreSQL is configured, the API exposes:
+
+- `POST /v1/auth/register` — creates a passenger or driver account and returns a bearer token.
+- `POST /v1/auth/login` — accepts an email address or E.164 phone number and password.
+- `GET /v1/auth/me` — returns the authenticated account; requires `Authorization: Bearer <token>`.
+- `POST /v1/auth/logout` — revokes the supplied bearer session.
+
+Passwords must be 12–128 characters. Registration requires a display name and either an email address or international-format phone number. Public registration is restricted to passenger and driver roles; owner and operations accounts cannot be self-created. Driver accounts receive a pending driver profile. Access tokens are random opaque values; only their SHA-256 hashes are stored. Sessions expire after 30 days and can be revoked. Registration and login have a basic per-process IP rate limit.
+
+These endpoints are an initial account foundation, not a complete production identity system. Email/phone ownership verification, password reset, stronger distributed rate limiting, admin account provisioning and app-side account screens are still outstanding. Do not treat the Android demo screens as connected to live accounts yet.
 
 ## Current limitations
 
 - Route distance and duration are supplied to the API; no maps/routing provider is connected.
 - Quotes are estimates and do not create bookings or reserve drivers.
-- PostgreSQL connection and ordered migration execution are implemented, but user/session HTTP operations and trip persistence are not yet wired up.
-- Authentication helpers and session schema exist, but HTTP authentication is not yet implemented.
+- PostgreSQL connection, ordered migrations, registration/login endpoints and revocable session validation are implemented and integration-tested.
+- Trip creation, driver dispatch, live location and app-side account integration are not yet implemented.
 - Production hosting and payment processing are not implemented.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
