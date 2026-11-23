@@ -59,7 +59,7 @@ function calculateScheduledFare(trip, fareConfig, consumption) {
 
   if (band.approved === false) {
     const error = new Error("Pricing for this journey duration has not yet been approved by Chaufr");
-    error.status = 503;
+    error.status = 422;
     throw error;
   }
 
