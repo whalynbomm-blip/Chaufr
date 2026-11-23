@@ -381,9 +381,10 @@ export function createTripService(pool, fareConfig, routesService = null) {
       try {
         await client.query("BEGIN");
         const result = await client.query(
-          "UPDATE trips SET status = 'completed', completed_at = now(), commission_earned_at = now() " +
+          "UPDATE trips SET status = 'completed', completed_at = now(), " +
+          "commission_earned_at = CASE WHEN fare_snapshot->>'rewardRedemption' = 'true' THEN NULL ELSE now() END " +
           "WHERE id = $1 AND driver_user_id = $2 AND status = 'in_progress' " +
-          "RETURNING id, quoted_total, driver_earnings, completed_at",
+          "RETURNING id, quoted_total, driver_earnings, completed_at, commission_earned_at",
           [tripId, driver.id],
         );
         if (!result.rowCount) throw new AuthError("Only the assigned driver can complete an in-progress trip", 409);
@@ -418,7 +419,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
           passengerFare: Number(trip.quoted_total),
           driverEarnings: Number(trip.driver_earnings),
           completedAt: trip.completed_at,
-          commissionRecorded: true,
+          commissionRecorded: Boolean(trip.commission_earned_at),
         };
       } catch (error) {
         await client.query("ROLLBACK");
