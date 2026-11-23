@@ -8,6 +8,37 @@ import java.net.URL
 
 /** Calls the shared Chaufr API. Fare coefficients are never sent by the app. */
 object ChaufrApi {
+    suspend fun driverProfile(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/profile", token = token)
+
+    suspend fun submitDriverVehicle(
+        baseUrl: String, token: String, category: String, make: String, model: String,
+        registration: String, licenceNumber: String, fuelConsumption: Double
+    ): JSONObject = requestJson(
+        baseUrl, "POST", "/v1/driver/vehicles",
+        JSONObject()
+            .put("category", category)
+            .put("make", make)
+            .put("model", model)
+            .put("registration", registration)
+            .put("licenceNumber", licenceNumber)
+            .put("fuelConsumptionLitresPer100Km", fuelConsumption),
+        token
+    )
+
+    suspend fun setDriverPresence(
+        baseUrl: String, token: String, isOnline: Boolean,
+        latitude: Double? = null, longitude: Double? = null, accuracyMeters: Double? = null
+    ): JSONObject {
+        val body = JSONObject().put("isOnline", isOnline)
+        if (latitude != null && longitude != null) {
+            body.put("latitude", latitude).put("longitude", longitude)
+            if (accuracyMeters != null) body.put("accuracyMeters", accuracyMeters)
+        }
+        return requestJson(baseUrl, "PUT", "/v1/driver/presence", body, token)
+    }
+
+
     suspend fun registerAccount(
         baseUrl: String, displayName: String, email: String, phone: String,
         password: String, role: String
