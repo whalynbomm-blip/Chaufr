@@ -22,7 +22,7 @@ Build both apps from the repository root:
 gradle :apps:passenger-android:assembleDebug :apps:driver-android:assembleDebug
 ```
 
-Without the property, the app still builds, but the map and Places search remain unavailable and the screen explains that the key must be configured.
+Without the property, the app still builds, but the map and Places search remain unavailable and the screen explains that the key must be configured. For GitHub Actions APK builds, add repository Actions secrets named `GOOGLE_MAPS_ANDROID_API_KEY` and `CHAUFR_API_BASE_URL`; the workflow passes them to Gradle without storing their values in the repository. The API URL must point to the deployed HTTPS Chaufr API.
 
 ## Current integration boundary
 
