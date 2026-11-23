@@ -25,7 +25,7 @@ async function hasPaidActivation(queryable, driverUserId) {
   return result.rows[0] ?? null;
 }
 
-export function createTripService(pool, fareConfig) {
+export function createTripService(pool, fareConfig, routesService = null) {
   if (!pool || typeof pool.connect !== "function") throw new TypeError("A PostgreSQL pool is required");
   if (!fareConfig) throw new TypeError("Server fare configuration is required");
 
@@ -83,11 +83,13 @@ export function createTripService(pool, fareConfig) {
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthError("Invalid trip details");
       const pickupLabel = cleanLabel(input.pickupLabel, "Pickup");
       const destinationLabel = cleanLabel(input.destinationLabel, "Destination");
-      const distanceKm = input.distanceKm;
-      const durationMinutes = input.durationMinutes;
+      if (!routesService) throw new AuthError("Trusted route calculation is not configured", 503);
+      const route = await routesService.computeRoute(input.origin, input.destination);
+      const distanceKm = route.distanceKm;
+      const durationMinutes = route.durationMinutes;
       const vehicleCategory = input.vehicleCategory;
-      // Until a trusted routing provider is connected, quotes use normal traffic.
-      // Never accept a passenger-supplied traffic level.
+      // Route duration is traffic-aware and calculated server-side. Never accept
+      // passenger-supplied distance, duration or traffic adjustments.
       const trafficLevel = "normal";
       const fare = calculateFare({ distanceKm, durationMinutes, vehicleCategory, trafficLevel }, fareConfig);
       const quoteExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
@@ -97,6 +99,8 @@ export function createTripService(pool, fareConfig) {
         currency: fare.currency,
         distanceKm,
         durationMinutes,
+        encodedPolyline: route.encodedPolyline,
+        trafficAware: route.trafficAware,
         vehicleCategory,
         trafficLevel,
         passengerTotal: fare.passengerTotal,
