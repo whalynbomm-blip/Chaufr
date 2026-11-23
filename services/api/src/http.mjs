@@ -74,10 +74,9 @@ export const developmentFareConfig = () => ({
   },
 });
 
-export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
+export function createAppServer({ fareConfig = developmentFareConfig(), database = null, routesService = createGoogleRoutesService() } = {}) {
   const authService = database ? createAuthService(database) : null;
   const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
-  const routesService = createGoogleRoutesService();
   const tripService = database ? createTripService(database, fareConfig, routesService) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const authAttempts = new Map();
