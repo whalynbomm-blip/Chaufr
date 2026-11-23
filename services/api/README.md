@@ -52,12 +52,19 @@ Passwords must be 12–128 characters. Registration requires a display name and 
 
 These endpoints are an initial account foundation, not a complete production identity system. Email/phone ownership verification, password reset, stronger distributed rate limiting, admin account provisioning and app-side account screens are still outstanding. Do not treat the Android demo screens as connected to live accounts yet.
 
+## Driver onboarding and availability
+
+Authenticated driver accounts can submit a vehicle and licence number through `POST /v1/driver/vehicles`. Vehicle registration and licence identifiers are encrypted with AES-256-GCM before they are stored. This endpoint requires `VEHICLE_DATA_ENCRYPTION_KEY`, a private base64-encoded 32-byte key; generate one with `openssl rand -base64 32` and provide it through the deployment secret manager. Never commit the production key.
+
+Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner review/approval tools, document uploads and the Android vehicle onboarding form are not yet implemented.
+
 ## Current limitations
 
 - Route distance and duration are supplied to the API; no maps/routing provider is connected.
 - Quotes are estimates and do not create bookings or reserve drivers.
 - PostgreSQL connection, ordered migrations, registration/login endpoints and revocable session validation are implemented and integration-tested.
-- Trip creation, driver dispatch, live location and app-side account integration are not yet implemented.
+- Driver vehicle submission and availability gates are implemented in the API; owner approval, passenger trip creation, driver dispatch and live location streaming are not yet implemented.
+- Android account screens and secure token storage are present, but the API URL is blank in the current debug builds and app-side vehicle onboarding is still pending.
 - Production hosting and payment processing are not implemented.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
