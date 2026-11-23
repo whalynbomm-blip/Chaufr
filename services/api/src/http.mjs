@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { calculateFare } from "./fare-calculator.mjs";
 import { AuthError, createAuthService } from "./auth-service.mjs";
+import { createDriverService } from "./driver-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -51,6 +52,7 @@ export const developmentFareConfig = () => ({
 
 export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
   const authService = database ? createAuthService(database) : null;
+  const driverService = database ? createDriverService(database) : null;
   const authAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
@@ -89,9 +91,31 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /health", "GET /v1", "POST /v1/fare-quotes",
             "POST /v1/auth/register", "POST /v1/auth/login",
             "GET /v1/auth/me", "POST /v1/auth/logout",
+            "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
           ],
           database: database ? "connected" : "not_configured",
         });
+      }
+
+      if (url.pathname.startsWith("/v1/driver/")) {
+        if (!authService || !driverService) {
+          return json(response, 503, { error: "Driver services are unavailable until the database is configured", requestId });
+        }
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "driver") return json(response, 403, { error: "Driver account required", requestId });
+
+        if (request.method === "GET" && url.pathname === "/v1/driver/profile") {
+          return json(response, 200, await driverService.getProfile(user));
+        }
+        if (request.method === "POST" && url.pathname === "/v1/driver/vehicles") {
+          return json(response, 201, await driverService.submitVehicle(user, await readJson(request)));
+        }
+        if (request.method === "PUT" && url.pathname === "/v1/driver/presence") {
+          return json(response, 200, await driverService.setPresence(user, await readJson(request)));
+        }
       }
 
       if (url.pathname.startsWith("/v1/auth/")) {
