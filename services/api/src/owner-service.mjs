@@ -123,6 +123,9 @@ export function createOwnerService(pool, fareConfig) {
           "VALUES ($1, 'driver.verification.updated', 'driver', $2, $3::jsonb)",
           [user.id, driverId, JSON.stringify({ verificationStatus: status })],
         );
+        if (status !== "verified") {
+          await client.query("UPDATE driver_presence SET is_online = false, updated_at = now() WHERE driver_user_id = $1", [driverId]);
+        }
         await client.query("COMMIT");
         return { driverId: updated.rows[0].user_id, verificationStatus: updated.rows[0].verification_status };
       } catch (error) {
@@ -150,6 +153,15 @@ export function createOwnerService(pool, fareConfig) {
           "VALUES ($1, 'vehicle.review.updated', 'vehicle', $2, $3::jsonb)",
           [user.id, vehicleId, JSON.stringify({ driverUserId: updated.rows[0].driver_user_id, status })],
         );
+        if (status !== "approved") {
+          const approved = await client.query(
+            "SELECT 1 FROM vehicles WHERE driver_user_id = $1 AND status = 'approved' LIMIT 1",
+            [updated.rows[0].driver_user_id],
+          );
+          if (!approved.rowCount) {
+            await client.query("UPDATE driver_presence SET is_online = false, updated_at = now() WHERE driver_user_id = $1", [updated.rows[0].driver_user_id]);
+          }
+        }
         await client.query("COMMIT");
         return { vehicleId: updated.rows[0].id, driverId: updated.rows[0].driver_user_id, status: updated.rows[0].status };
       } catch (error) {
