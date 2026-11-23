@@ -4,14 +4,14 @@ Chaufr uses one server-side fare calculation for passenger quotes and trip reque
 
 ## Starting fare bands
 
-These are the initial schedule values supplied by the owner. They are configurable development defaults, not a claim that live traffic or routing is connected yet. The 16–22 minute starting amount has not been confirmed; the stored R85 placeholder is explicitly unapproved and the API blocks quotes in that band until the owner enters and approves a fare.
+These are the initial schedule values supplied by the owner. They are configurable development defaults, not a claim that live traffic or routing is connected yet. The unapproved R85 band has been removed. Journeys from 16 through 29 minutes now use the R100 starting band.
 
 | Journey duration | Starting fare |
 | --- | ---: |
 | Up to 7 minutes | R40 |
 | 8–15 minutes | R50 |
 | 16–22 minutes | Not approved — no fare charged until owner approval |
-| 23–29 minutes | R100 |
+| 16–29 minutes | R100 |
 | 30–39 minutes | R150 |
 | 40–49 minutes | R170 |
 | 50–59 minutes | R200 |
@@ -39,4 +39,4 @@ A passenger trip request stores a snapshot of the fare-rule version, route measu
 
 ## Configuration and status
 
-The schedule, traffic additions, category multipliers, fuel price, fuel consumption, distance rate, operating cost, commission and minimum fare are configured on the API server. No live routing provider, production payment provider, or production fare configuration is enabled by this repository yet.
+The schedule, traffic additions, category multipliers, fuel price, fuel consumption, distance rate, operating cost, commission and minimum fare are configured through the owner console. The unapproved R85 band has been removed from both defaults and existing saved pricing by database migration 0007. No live routing provider or production payment provider is enabled by this repository yet.
