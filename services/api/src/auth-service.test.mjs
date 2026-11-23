@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { Pool } from "pg";
 import { applyMigrations } from "./database.mjs";
 import { AuthError, createAuthService } from "./auth-service.mjs";
+import { createAppServer } from "./http.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -69,7 +70,41 @@ test("registration, login, session validation and logout work with PostgreSQL", 
     );
     assert.equal(profile.rows[0].verification_status, "pending");
 
-    assert.equal(await auth.logout(registered.accessToken), true);
+    const server = createAppServer({ database: pool });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+      const me = await fetch(`${base}/v1/auth/me`, {
+        headers: { authorization: `Bearer ${loggedIn.accessToken}` },
+      });
+      assert.equal(me.status, 200);
+      assert.equal((await me.json()).user.id, registered.user.id);
+
+      const createdOverHttp = await fetch(`${base}/v1/auth/register`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          displayName: "HTTP Passenger",
+          email: "http@example.com",
+          password: "http-test-password-123",
+        }),
+      });
+      assert.equal(createdOverHttp.status, 201);
+
+      const logoutResponse = await fetch(`${base}/v1/auth/logout`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${registered.accessToken}` },
+      });
+      assert.equal(logoutResponse.status, 200);
+      const revoked = await fetch(`${base}/v1/auth/me`, {
+        headers: { authorization: `Bearer ${registered.accessToken}` },
+      });
+      assert.equal(revoked.status, 401);
+    } finally {
+      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+
+    assert.equal(await auth.logout(registered.accessToken), false);
     assert.equal(await auth.authenticate(registered.accessToken), null);
     assert.equal(await auth.logout("invalid-token"), false);
   } finally {
