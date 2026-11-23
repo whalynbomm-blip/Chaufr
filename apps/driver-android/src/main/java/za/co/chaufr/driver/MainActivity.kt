@@ -102,11 +102,11 @@ private fun DriverHome() {
           Column(modifier = Modifier.padding(17.dp)) {
             Text("YOUR VEHICLE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Spacer(Modifier.height(8.dp))
-            Text("Vehicle profile not set up", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text("Add your vehicle details and documents during driver onboarding. Verification will be required before accepting real trips.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+            Text("Vehicle onboarding", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("Submit your vehicle and driver licence details in the Driver Account section above. Chaufr will require approval before you can go online.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
             Spacer(Modifier.height(12.dp))
             Text("DRIVER VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text("Not submitted", color = Navy, fontSize = 13.sp)
+            Text("Check your verification status in the Driver Account section.", color = Navy, fontSize = 12.sp)
           }
         }
 
@@ -144,6 +144,18 @@ private fun DriverAvailabilityCard() {
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
 
+  LaunchedEffect(apiUrl) {
+    val token = SecureTokenStore.load(context)
+    if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
+      try {
+        val profile = ChaufrApi.driverProfile(apiUrl, token)
+        available = profile.optBoolean("isOnline", false)
+      } catch (_: Exception) {
+        available = false
+      }
+    }
+  }
+
   fun lastKnownLocation(): Location? {
     val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
     val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -152,7 +164,7 @@ private fun DriverAvailabilityCard() {
       if (fine) locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
         ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
       else locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-    } catch (_: SecurityException) { null }
+    } catch (_: Exception) { null }
   }
 
   fun sendPresence(online: Boolean) {
