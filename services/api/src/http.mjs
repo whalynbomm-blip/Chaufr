@@ -55,8 +55,6 @@ export const developmentFareConfig = () => ({
   durationFareBands: [
     { maxMinutes: 7, startingFare: 40, approved: true },
     { maxMinutes: 15, startingFare: 50, approved: true },
-    // R85 is a placeholder only; no 16-22 minute fare has been approved by the owner.
-    { maxMinutes: 22, startingFare: 85, approved: false },
     { maxMinutes: 29, startingFare: 100, approved: true },
     { maxMinutes: 39, startingFare: 150, approved: true },
     { maxMinutes: 49, startingFare: 170, approved: true },
