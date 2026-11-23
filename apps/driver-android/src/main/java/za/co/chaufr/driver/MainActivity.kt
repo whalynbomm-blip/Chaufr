@@ -1,7 +1,14 @@
 package za.co.chaufr.driver
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +32,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -56,7 +66,6 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun DriverHome() {
-  var available by remember { mutableStateOf(false) }
   Surface(modifier = Modifier.fillMaxSize(), color = Page) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
       Column(
@@ -77,33 +86,7 @@ private fun DriverHome() {
 
       Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DriverAccountCard()
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          shape = RoundedCornerShape(18.dp),
-          colors = CardDefaults.cardColors(containerColor = Color.White),
-          elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-          Column(modifier = Modifier.padding(17.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Column(modifier = Modifier.weight(1f)) {
-                Text("DRIVER AVAILABILITY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                Spacer(Modifier.height(5.dp))
-                Text(if (available) "You're online" else "You're offline", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                Text(if (available) "Demo status only — not visible to passengers." else "Go online when you're ready to receive trips.", color = Muted, fontSize = 11.sp)
-              }
-              Switch(checked = available, onCheckedChange = { available = it })
-            }
-            Spacer(Modifier.height(12.dp))
-            Button(
-              onClick = { available = !available },
-              modifier = Modifier.fillMaxWidth().height(48.dp),
-              shape = RoundedCornerShape(12.dp),
-              colors = ButtonDefaults.buttonColors(containerColor = if (available) Navy else Blue)
-            ) {
-              Text(if (available) "Go offline" else "Go online", fontWeight = FontWeight.Bold)
-            }
-          }
-        }
+        DriverAvailabilityCard()
 
         Text("TODAY'S SUMMARY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -146,6 +129,116 @@ private fun DriverHome() {
           fontSize = 10.sp,
           lineHeight = 15.sp
         )
+      }
+    }
+  }
+}
+
+@Composable
+private fun DriverAvailabilityCard() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+  var available by remember { mutableStateOf(false) }
+  var busy by remember { mutableStateOf(false) }
+  var message by remember { mutableStateOf("") }
+
+  fun lastKnownLocation(): Location? {
+    val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    if (!fine && !coarse) return null
+    return try {
+      if (fine) locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+      else locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+    } catch (_: SecurityException) { null }
+  }
+
+  fun sendPresence(online: Boolean) {
+    if (apiUrl.isBlank()) {
+      message = "Live availability will work after the Chaufr server is connected."
+      return
+    }
+    val token = SecureTokenStore.load(context)
+    if (token.isNullOrBlank()) {
+      message = "Sign in to your driver account before changing availability."
+      return
+    }
+    scope.launch {
+      busy = true
+      message = ""
+      try {
+        val result = if (online) {
+          val location = lastKnownLocation()
+            ?: throw IllegalStateException("Location is unavailable. Turn on location and try again.")
+          ChaufrApi.setDriverPresence(
+            apiUrl, token, true, location.latitude, location.longitude,
+            if (location.hasAccuracy()) location.accuracy.toDouble() else null
+          )
+        } else {
+          ChaufrApi.setDriverPresence(apiUrl, token, false)
+        }
+        available = result.optBoolean("isOnline", online)
+        message = if (available) "Your availability has been sent to Chaufr." else "You are now offline."
+      } catch (error: Exception) {
+        message = error.message ?: "Unable to update driver availability."
+      } finally { busy = false }
+    }
+  }
+
+  val permissionLauncher = rememberLauncherForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+  ) { results ->
+    if (results.values.any { it }) sendPresence(true)
+    else message = "Location permission is needed before you can go online."
+  }
+
+  fun requestPresence(online: Boolean) {
+    if (online) {
+      val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+      val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+      if (!fine && !coarse) {
+        permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        return
+      }
+    }
+    sendPresence(online)
+  }
+
+  Card(
+    modifier = Modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+  ) {
+    Column(modifier = Modifier.padding(17.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("DRIVER AVAILABILITY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+          Spacer(Modifier.height(5.dp))
+          Text(if (available) "You're online" else "You're offline", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+          Text("Availability is controlled by your verified driver account.", color = Muted, fontSize = 11.sp)
+        }
+        Switch(checked = available, onCheckedChange = { requestPresence(it) }, enabled = !busy)
+      }
+      Spacer(Modifier.height(12.dp))
+      Button(
+        onClick = { requestPresence(!available) },
+        enabled = !busy,
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = if (available) Navy else Blue)
+      ) {
+        Text(if (busy) "Updating..." else if (available) "Go offline" else "Go online", fontWeight = FontWeight.Bold)
+      }
+      if (message.isNotBlank()) {
+        Spacer(Modifier.height(8.dp))
+        Text(message, color = if (message.contains("sent") || message.contains("offline")) Green else Color(0xFFB42318), fontSize = 11.sp)
+      }
+      if (apiUrl.isBlank()) {
+        Spacer(Modifier.height(6.dp))
+        Text("Connect the Chaufr API to enable live availability.", color = Muted, fontSize = 10.sp)
       }
     }
   }
