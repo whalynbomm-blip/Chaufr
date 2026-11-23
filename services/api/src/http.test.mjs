@@ -9,8 +9,8 @@ const config = {
   vehicleFuelConsumptionLitresPer100Km: { standard: 8 },
 };
 
-async function withServer(run) {
-  const server = createAppServer({ fareConfig: config });
+async function withServer(run, options = {}) {
+  const server = createAppServer({ fareConfig: config, ...options });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   try { await run(`http://127.0.0.1:${address.port}`); }
@@ -71,4 +71,40 @@ test("owner console is served from the API origin", async () => {
     assert.match(page, /Chaufr Owner Console/);
     assert.match(page, /Owner sign in/);
   });
+});
+
+
+test("route preview returns a server-calculated fare and signed route token", async () => {
+  const routesService = {
+    computeRoute: async () => ({
+      distanceKm: 4.25,
+      durationMinutes: 12,
+      encodedPolyline: "encoded",
+      trafficAware: true,
+    }),
+    signRouteQuote: (origin, destination, route, quote) => {
+      assert.equal(route.distanceKm, 4.25);
+      assert.equal(quote.vehicleCategory, "standard");
+      assert.equal(quote.fare.passengerTotal, 60);
+      return "signed-route-token";
+    },
+    verifyRouteQuote: () => { throw new Error("not used in route preview test"); },
+  };
+  await withServer(async (base) => {
+    const response = await fetch(base + "/v1/routes/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        origin: { latitude: -33.9, longitude: 18.4 },
+        destination: { latitude: -33.91, longitude: 18.42 },
+        vehicleCategory: "standard",
+      }),
+    });
+    assert.equal(response.status, 200);
+    const quote = await response.json();
+    assert.equal(quote.distanceKm, 4.25);
+    assert.equal(quote.durationMinutes, 12);
+    assert.equal(quote.passengerTotal, 60);
+    assert.equal(quote.quoteToken, "signed-route-token");
+  }, { routesService });
 });
