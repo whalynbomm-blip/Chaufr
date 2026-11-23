@@ -103,7 +103,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       if (request.method === "GET" && ["/owner", "/owner/"].includes(url.pathname)) {
-        const page = await readFile(new URL("../../../apps/owner-dashboard/index.html", import.meta.url), "utf8");
+        const page = await readFile(new URL("../public/owner.html", import.meta.url), "utf8");
         response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
         response.end(page);
         return;
