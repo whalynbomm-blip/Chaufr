@@ -4,20 +4,21 @@ import { Pool } from "pg";
 import { applyMigrations } from "./database.mjs";
 import { createAuthService } from "./auth-service.mjs";
 import { createDriverService } from "./driver-service.mjs";
-import { createAppServer } from "./http.mjs";
+import { createTripService } from "./trip-service.mjs";
+import { createAppServer, developmentFareConfig } from "./http.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
 const testKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
-test("driver onboarding encrypts identifiers and gates online status", {
+test("driver activation gates access and accepted trips retain a locked fare", {
   skip: !databaseUrl && "DATABASE_URL is not set; PostgreSQL driver integration test skipped",
 }, async () => {
   const admin = new Pool({ connectionString: databaseUrl });
-  const schema = `chaufr_driver_${process.pid}_${Date.now()}`;
-  await admin.query(`CREATE SCHEMA "${schema}"`);
+  const schema = "chaufr_driver_" + process.pid + "_" + Date.now();
+  await admin.query('CREATE SCHEMA "' + schema + '"');
   const pool = new Pool({
     connectionString: databaseUrl,
-    options: `-c search_path=${schema},public`,
+    options: "-c search_path=" + schema + ",public",
   });
   let server;
 
@@ -25,11 +26,22 @@ test("driver onboarding encrypts identifiers and gates online status", {
     await applyMigrations(pool);
     const auth = createAuthService(pool);
     const drivers = createDriverService(pool, testKey);
+    const fareConfig = {
+      ...developmentFareConfig(),
+      vehicleCategories: ["standard", "comfort", "xl"],
+    };
+    const trips = createTripService(pool, fareConfig);
     const account = await auth.register({
       displayName: "Test Driver",
       phone: "+27821112222",
       password: "test-driver-password-123",
       role: "driver",
+    });
+    const passenger = await auth.register({
+      displayName: "Test Passenger",
+      phone: "+27821112223",
+      password: "test-passenger-password-123",
+      role: "passenger",
     });
 
     const submitted = await drivers.submitVehicle(account.user, {
@@ -44,9 +56,8 @@ test("driver onboarding encrypts identifiers and gates online status", {
     assert.equal(submitted.vehicle.status, "pending");
 
     const stored = await pool.query(
-      `SELECT v.registration_encrypted, d.licence_number_encrypted
-       FROM vehicles v JOIN driver_profiles d ON d.user_id = v.driver_user_id
-       WHERE v.id = $1`,
+      "SELECT v.registration_encrypted, d.licence_number_encrypted " +
+      "FROM vehicles v JOIN driver_profiles d ON d.user_id = v.driver_user_id WHERE v.id = $1",
       [submitted.vehicle.id],
     );
     assert.notEqual(stored.rows[0].registration_encrypted.toString("utf8"), "CA 123-456");
@@ -54,48 +65,105 @@ test("driver onboarding encrypts identifiers and gates online status", {
     const profile = await drivers.getProfile(account.user);
     assert.equal(profile.vehicles.length, 1);
     assert.equal("registration" in profile.vehicles[0], false);
-
-    await assert.rejects(
-      () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
-      (error) => error.status === 403,
-    );
-
-    server = createAppServer({ database: pool });
-    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-    const base = `http://127.0.0.1:${server.address().port}`;
-    const vehicleResponse = await fetch(`${base}/v1/driver/profile`, {
-      headers: { authorization: `Bearer ${account.accessToken}` },
-    });
-    assert.equal(vehicleResponse.status, 200);
+    assert.equal(profile.dailyActivation.isPaid, false);
 
     await pool.query("UPDATE driver_profiles SET verification_status = 'verified' WHERE user_id = $1", [account.user.id]);
     await pool.query("UPDATE vehicles SET status = 'approved' WHERE id = $1", [submitted.vehicle.id]);
 
-    const online = await fetch(`${base}/v1/driver/presence`, {
+    await assert.rejects(
+      () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
+      (error) => error.status === 403 && /R30 daily/.test(error.message),
+    );
+
+    server = createAppServer({ database: pool, fareConfig });
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const base = "http://127.0.0.1:" + server.address().port;
+    const authHeader = { authorization: "Bearer " + account.accessToken };
+    const passengerHeader = { authorization: "Bearer " + passenger.accessToken };
+
+    const profileResponse = await fetch(base + "/v1/driver/profile", { headers: authHeader });
+    assert.equal(profileResponse.status, 200);
+
+    const unpaidRequests = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
+    assert.equal(unpaidRequests.status, 403);
+
+    const operatingDate = new Date().toLocaleString("sv-SE", { timeZone: "Africa/Johannesburg" }).slice(0, 10);
+    const payment = {
+      driverUserId: account.user.id,
+      operatingDate,
+      amount: 30,
+      currency: "ZAR",
+      provider: "test-payment-provider",
+      providerReference: "test-payment-" + Date.now(),
+    };
+    const activated = await trips.recordVerifiedActivationPayment(payment);
+    const repeated = await trips.recordVerifiedActivationPayment(payment);
+    assert.equal(activated.id, repeated.id);
+
+    const activationResponse = await fetch(base + "/v1/driver/activation", { headers: authHeader });
+    assert.equal(activationResponse.status, 200);
+    assert.equal((await activationResponse.json()).isPaid, true);
+
+    const online = await fetch(base + "/v1/driver/presence", {
       method: "PUT",
-      headers: {
-        authorization: `Bearer ${account.accessToken}`,
-        "content-type": "application/json",
-      },
+      headers: { ...authHeader, "content-type": "application/json" },
       body: JSON.stringify({ isOnline: true, latitude: -33.9, longitude: 18.4, accuracyMeters: 12 }),
     });
     assert.equal(online.status, 200);
     assert.equal((await online.json()).isOnline, true);
 
-    const offline = await fetch(`${base}/v1/driver/presence`, {
-      method: "PUT",
-      headers: {
-        authorization: `Bearer ${account.accessToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ isOnline: false }),
+    const requested = await fetch(base + "/v1/trips", {
+      method: "POST",
+      headers: { ...passengerHeader, "content-type": "application/json" },
+      body: JSON.stringify({
+        pickupLabel: "Cape Town Station",
+        destinationLabel: "V&A Waterfront",
+        distanceKm: 4,
+        durationMinutes: 7,
+        vehicleCategory: "standard",
+        trafficLevel: "severe",
+        platformCommissionRate: 0,
+      }),
     });
-    assert.equal(offline.status, 200);
-    assert.equal((await offline.json()).isOnline, false);
+    assert.equal(requested.status, 201);
+    const trip = await requested.json();
+    assert.equal(trip.passengerTotal, 40);
+
+    const available = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
+    assert.equal(available.status, 200);
+    const availableBody = await available.json();
+    assert.equal(availableBody.trips.length, 1);
+    assert.equal(availableBody.trips[0].passengerFare, 40);
+    assert.equal("platformCommission" in availableBody.trips[0], false);
+    assert.equal("companyRevenue" in availableBody.trips[0], false);
+
+    const acceptedResponse = await fetch(base + "/v1/driver/trips/" + trip.tripId + "/accept", {
+      method: "POST",
+      headers: authHeader,
+    });
+    assert.equal(acceptedResponse.status, 200);
+    const accepted = await acceptedResponse.json();
+    assert.equal(accepted.status, "accepted");
+    assert.equal(accepted.fareLocked, true);
+    assert.equal(accepted.passengerFare, 40);
+    assert.equal(accepted.expectedDriverEarnings, 35.2);
+    assert.equal("platformCommission" in accepted, false);
+
+    const locked = await pool.query(
+      "SELECT fare_locked_at, quoted_total, fare_snapshot FROM trips WHERE id = $1",
+      [trip.tripId],
+    );
+    assert.ok(locked.rows[0].fare_locked_at);
+    assert.equal(Number(locked.rows[0].quoted_total), 40);
+    assert.equal(locked.rows[0].fare_snapshot.trafficLevel, "normal");
+    assert.equal(locked.rows[0].fare_snapshot.passengerTotal, 40);
+
+    const unavailableAgain = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
+    assert.equal((await unavailableAgain.json()).trips.length, 0);
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     await pool.end();
-    await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
+    await admin.query('DROP SCHEMA "' + schema + '" CASCADE');
     await admin.end();
   }
 });
