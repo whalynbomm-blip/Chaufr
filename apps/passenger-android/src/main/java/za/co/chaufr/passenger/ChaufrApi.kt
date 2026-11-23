@@ -76,6 +76,25 @@ object ChaufrApi {
             .put("destination", JSONObject().put("latitude", destination.latitude).put("longitude", destination.longitude))
     )
 
+    suspend fun requestTrip(
+        baseUrl: String,
+        token: String,
+        pickupLabel: String,
+        destinationLabel: String,
+        origin: com.google.android.gms.maps.model.LatLng,
+        destination: com.google.android.gms.maps.model.LatLng,
+        vehicleCategory: String
+    ): JSONObject = requestJson(
+        baseUrl, "POST", "/v1/trips",
+        JSONObject()
+            .put("pickupLabel", pickupLabel)
+            .put("destinationLabel", destinationLabel)
+            .put("origin", JSONObject().put("latitude", origin.latitude).put("longitude", origin.longitude))
+            .put("destination", JSONObject().put("latitude", destination.latitude).put("longitude", destination.longitude))
+            .put("vehicleCategory", vehicleCategory),
+        token = token
+    )
+
     suspend fun requestFareQuote(
         baseUrl: String,
         distanceKm: Double,
