@@ -21,4 +21,10 @@ The follow-on migration `migrations/0002_driver_dispatch.sql` adds:
 - `driver_presence`: online/offline state, optional coordinates, accuracy and last-seen time.
 - `trip_offers`: per-driver offers with pending/accepted/declined/expired/withdrawn states and expiry timestamps.
 
-Apply migrations in numeric order. The API does not yet read or write these tables; they are not live driver availability or dispatch functionality. Authenticated repository methods and transaction-safe trip acceptance must be implemented before enabling real trips.
+## Authentication sessions
+
+The migration `migrations/0003_auth_sessions.sql` adds revocable, expiring sessions. The API must store only the SHA-256 hash of each opaque bearer token, never the raw token. Revoke sessions on logout, password reset, account suspension or suspected compromise. Expired and revoked sessions must be rejected on every authenticated request.
+
+The built-in crypto helpers in `src/auth-crypto.mjs` use scrypt password hashes, constant-time password comparison and random 256-bit opaque access tokens. They are tested independently, but **registration, login, session persistence, token middleware and database integration are not yet connected to HTTP endpoints**.
+
+Apply migrations in numeric order. The API does not yet read or write these tables; they are not live driver availability, authentication or dispatch functionality. Transaction-safe trip acceptance and role-based access checks are required before enabling real trips.
