@@ -14,6 +14,10 @@ const config = {
   fuelPricePerLitre: 25,
   vehicleCategories: ["standard", "comfort", "xl"],
   vehicleFuelConsumptionLitresPer100Km: { standard: 8, comfort: 9, xl: 11 },
+  vehicleCategoryMultipliers: { standard: 1, comfort: 1.15, xl: 1.3 },
+  trafficAdjustmentsByDuration: {
+    short: { normal: 0 }, medium: { normal: 0 }, long: { normal: 0 },
+  },
 };
 
 test("calculates a transparent quote using server-side fuel assumptions", () => {
