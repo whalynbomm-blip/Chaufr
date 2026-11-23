@@ -4,6 +4,7 @@ import { calculateFare } from "./fare-calculator.mjs";
 import { AuthError, createAuthService } from "./auth-service.mjs";
 import { createDriverService } from "./driver-service.mjs";
 import { createTripService } from "./trip-service.mjs";
+import { createOwnerService } from "./owner-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -75,6 +76,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const authService = database ? createAuthService(database) : null;
   const driverService = database ? createDriverService(database) : null;
   const tripService = database ? createTripService(database, fareConfig) : null;
+  const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const authAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
@@ -117,9 +119,30 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/activation", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/trips",
+            "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing",
           ],
           database: database ? "connected" : "not_configured",
         });
+      }
+
+      if (url.pathname.startsWith("/v1/owner/")) {
+        if (!authService || !ownerService) {
+          return json(response, 503, { error: "Owner services are unavailable until the database is configured", requestId });
+        }
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "owner") return json(response, 403, { error: "Owner access required", requestId });
+        if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
+          return json(response, 200, await ownerService.getOverview(user));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/pricing") {
+          return json(response, 200, await ownerService.getPricing(user));
+        }
+        if (request.method === "PUT" && url.pathname === "/v1/owner/pricing") {
+          return json(response, 200, await ownerService.updatePricing(user, await readJson(request)));
+        }
       }
 
       if (url.pathname.startsWith("/v1/driver/")) {
