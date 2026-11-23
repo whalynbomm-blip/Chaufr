@@ -270,6 +270,8 @@ private fun PassengerHome() {
                 }
 
                 Spacer(Modifier.height(16.dp))
+                PassengerAccountCard()
+                Spacer(Modifier.height(16.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
