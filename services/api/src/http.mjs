@@ -160,12 +160,12 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {
           return json(response, 200, await ownerService.listDrivers(user));
         }
-        const driverReviewMatch = /^\\/v1\\/owner\\/drivers\\/([0-9a-f-]{36})\\/verification$/i.exec(url.pathname);
+        const driverReviewMatch = /^\/v1\/owner\/drivers\/([0-9a-f-]{36})\/verification$/i.exec(url.pathname);
         if (request.method === "PATCH" && driverReviewMatch) {
           const body = await readJson(request);
           return json(response, 200, await ownerService.setDriverVerification(user, driverReviewMatch[1], body.status));
         }
-        const vehicleReviewMatch = /^\\/v1\\/owner\\/vehicles\\/([0-9a-f-]{36})\\/status$/i.exec(url.pathname);
+        const vehicleReviewMatch = /^\/v1\/owner\/vehicles\/([0-9a-f-]{36})\/status$/i.exec(url.pathname);
         if (request.method === "PATCH" && vehicleReviewMatch) {
           const body = await readJson(request);
           return json(response, 200, await ownerService.setVehicleStatus(user, vehicleReviewMatch[1], body.status));
