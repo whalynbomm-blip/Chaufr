@@ -14,7 +14,7 @@ All clients communicate with the backend over HTTPS. Business rules, fare calcul
 ## Proposed implementation stack
 
 - Android: Kotlin, Jetpack Compose, Gradle; separate passenger and driver application IDs.
-- Owner dashboard: React + TypeScript.
+- Owner dashboard: responsive same-origin web console served by the API, with owner-only authenticated controls.
 - API: TypeScript on Node.js with a documented REST interface.
 - Database: PostgreSQL with schema migrations.
 - Authentication: short-lived access tokens and refresh-token rotation; role and resource checks on every protected API.
