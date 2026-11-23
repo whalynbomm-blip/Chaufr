@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
 import com.google.android.gms.maps.model.LatLng
+import com.google.android.libraries.places.api.Places
 import kotlinx.coroutines.launch
 
 private val ChaufrNavy = Color(0xFF101C2C)
@@ -55,6 +56,9 @@ private val ChaufrGreen = Color(0xFF16865B)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (BuildConfig.GOOGLE_MAPS_API_KEY.isNotBlank() && !Places.isInitialized()) {
+            Places.initialize(applicationContext, BuildConfig.GOOGLE_MAPS_API_KEY)
+        }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(
                 primary = ChaufrBlue,
