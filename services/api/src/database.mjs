@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const migrationsDirectory = fileURLToPath(new URL("../migrations/", import.meta.url));
 const MIGRATION_LOCK_ID = 73_628_104;
@@ -24,7 +24,7 @@ export async function applyMigrations(pool, directory = migrationsDirectory) {
       );
       if (existing.rowCount) continue;
 
-      const sql = await readFile(new URL(filename, `file://${directory.endsWith("/") ? directory : directory + "/"}`), "utf8");
+      const sql = await readFile(pathToFileURL(`${directory.endsWith("/") ? directory : directory + "/"}${filename}`), "utf8");
       await client.query("BEGIN");
       try {
         await client.query(sql);
