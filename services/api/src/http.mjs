@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { calculateFare } from "./fare-calculator.mjs";
 import { AuthError, createAuthService } from "./auth-service.mjs";
 import { createDriverService } from "./driver-service.mjs";
@@ -99,6 +100,12 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
     const requestId = randomUUID();
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
+      if (request.method === "GET" && ["/owner", "/owner/"].includes(url.pathname)) {
+        const page = await readFile(new URL("../../../apps/owner-dashboard/index.html", import.meta.url), "utf8");
+        response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-content-type-options": "nosniff" });
+        response.end(page);
+        return;
+      }
       if (request.method === "GET" && url.pathname === "/health") {
         if (database) await database.query("SELECT 1");
         return json(response, 200, {
