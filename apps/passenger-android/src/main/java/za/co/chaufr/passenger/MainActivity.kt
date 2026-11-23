@@ -161,7 +161,7 @@ private fun PassengerHome() {
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = destination,
-                            onValueChange = { destination = it; destinationPoint = null; preview = null; message = "" },
+                            onValueChange = { destination = it; destinationPoint = null; routeQuoteToken = null; encodedRoute = null; preview = null; message = ""; bookingMessage = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Destination") },
                             placeholder = { Text("Where would you like to go?") },
@@ -176,6 +176,19 @@ private fun PassengerHome() {
                                 FilterChip(
                                     selected = vehicle == option,
                                     onClick = {
+                                        vehicle = option
+                                        preview = null
+                                        routeQuoteToken = null
+                                        encodedRoute = null
+                                        bookingMessage = ""
+                                    },
+                                    label = { Text(option) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = {
                                 if (pickupPoint == null || destinationPoint == null) {
                                     message = "Choose both pickup and destination on the Google map."
                                     preview = null
@@ -196,10 +209,9 @@ private fun PassengerHome() {
                                             encodedRoute = route.optString("encodedPolyline").takeIf { it.isNotBlank() }
                                             val distanceKm = route.getDouble("distanceKm")
                                             val durationMinutes = route.getDouble("durationMinutes")
-                                            val root = route
-                                            val breakdown = root.getJSONObject("breakdown")
+                                            val breakdown = route.getJSONObject("breakdown")
                                             preview = FarePreview(
-                                                total = root.getDouble("passengerTotal"),
+                                                total = route.getDouble("passengerTotal"),
                                                 distanceKm = distanceKm,
                                                 durationMinutes = durationMinutes,
                                                 baseFare = breakdown.getDouble("baseFare"),
@@ -214,6 +226,8 @@ private fun PassengerHome() {
                                         } catch (error: Exception) {
                                             message = error.message ?: "Unable to calculate this route. Please try again."
                                             preview = null
+                                            routeQuoteToken = null
+                                            encodedRoute = null
                                         } finally {
                                             loading = false
                                         }
