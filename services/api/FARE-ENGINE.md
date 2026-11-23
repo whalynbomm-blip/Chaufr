@@ -4,20 +4,20 @@ Chaufr uses one server-side fare calculation for passenger quotes and trip reque
 
 ## Starting fare bands
 
-These are the initial schedule values supplied by the owner. They are configurable development defaults, not a claim that live traffic or routing is connected yet.
+These are the initial schedule values supplied by the owner. They are configurable development defaults, not a claim that live traffic or routing is connected yet. The 16–22 minute starting amount has not been confirmed; the stored R85 placeholder is explicitly unapproved and the API blocks quotes in that band until the owner enters and approves a fare.
 
 | Journey duration | Starting fare |
 | --- | ---: |
 | Up to 7 minutes | R40 |
 | 8–15 minutes | R50 |
-| 16–22 minutes | R85 |
+| 16–22 minutes | Not approved — no fare charged until owner approval |
 | 23–29 minutes | R100 |
 | 30–39 minutes | R150 |
 | 40–49 minutes | R170 |
 | 50–59 minutes | R200 |
 | 60 minutes and longer | R250 |
 
-For journeys longer than 60 minutes, the R250 band is currently the starting floor; an additional long-trip increment still needs owner configuration.
+For journeys of 60 minutes and longer, R250 is the current starting floor. The owner can add further duration bands and adjust the long-trip schedule in the owner console.
 
 ## Traffic adjustments
 
