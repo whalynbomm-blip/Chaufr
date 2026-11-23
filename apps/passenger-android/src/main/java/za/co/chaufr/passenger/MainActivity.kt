@@ -358,7 +358,27 @@ private fun PassengerHome() {
                 }
 
                 Spacer(Modifier.height(16.dp))
-                PassengerAccountCard()
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(modifier = Modifier.padding(17.dp)) {
+                        Text("CHAUFR REWARDS", color = ChaufrNavy, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(5.dp))
+                        Text("$rewardsTickets / 9 tickets", color = ChaufrBlue, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Earn 1 ticket for every completed trip. Redeem 9 tickets for a free ride between 5 and 20 minutes.", color = ChaufrMuted, fontSize = 12.sp, lineHeight = 17.sp)
+                        Spacer(Modifier.height(9.dp))
+                        Button(onClick = {
+                            val savedToken = SecureTokenStore.load(context)
+                            if (savedToken == null) rewardsMessage = "Sign in to your passenger account to view your tickets."
+                            else refreshRewards(savedToken)
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Refresh my tickets") }
+                        if (rewardsMessage.isNotBlank()) Text(rewardsMessage, color = ChaufrMuted, fontSize = 11.sp)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                PassengerAccountCard(onSignedIn = { refreshRewards(it) })
                 Spacer(Modifier.height(16.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
