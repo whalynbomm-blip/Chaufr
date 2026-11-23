@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
 
 private data class FarePreview(
     val total: Double,
+    val distanceKm: Double,
+    val durationMinutes: Double,
     val baseFare: Double = 10.0,
     val source: String = "DEMO",
     val driverEarnings: Double,
@@ -166,19 +168,15 @@ private fun PassengerHome() {
                             listOf("Standard", "Comfort", "XL").forEach { option ->
                                 FilterChip(
                                     selected = vehicle == option,
-                                    onClick = { vehicle = option; preview = null },
-                                    label = { Text(option) }
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = {
-                                if (pickup.isBlank() || destination.isBlank()) {
-                                    message = "Enter both pickup and destination to continue."
+                                    onClick = {
+                                if (pickupPoint == null || destinationPoint == null) {
+                                    message = "Choose both pickup and destination on the Google map."
                                     preview = null
-                                } else if (pickup.trim().equals(destination.trim(), ignoreCase = true)) {
+                                } else if (pickupPoint == destinationPoint) {
                                     message = "Pickup and destination must be different."
+                                    preview = null
+                                } else if (BuildConfig.CHAUFR_API_BASE_URL.isBlank()) {
+                                    message = "The Chaufr server is not connected in this build yet."
                                     preview = null
                                 } else if (!loading) {
                                     loading = true
@@ -186,40 +184,26 @@ private fun PassengerHome() {
                                     scope.launch {
                                         try {
                                             val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
-                                            if (apiUrl.isNotBlank()) {
-                                                val root = ChaufrApi.requestFareQuote(apiUrl, 8.5, 22.0, vehicle.lowercase())
-                                                val breakdown = root.getJSONObject("breakdown")
-                                                preview = FarePreview(
-                                                    total = root.getDouble("passengerTotal"),
-                                                    baseFare = breakdown.getDouble("baseFare"),
-                                                    source = "LIVE API",
-                                                    driverEarnings = breakdown.getDouble("driverEarnings"),
-                                                    commission = breakdown.getDouble("platformCommission"),
-                                                    distanceCharge = breakdown.getDouble("distanceCharge"),
-                                                    timeCharge = breakdown.getDouble("timeCharge"),
-                                                    fuelCost = breakdown.getDouble("fuelCost"),
-                                                    operatingCost = breakdown.getDouble("operatingCost")
-                                                )
-                                            } else {
-                                                val distanceKm = 8.5
-                                                val durationMinutes = 22.0
-                                                val fuelPrice = 24.50
-                                                val consumption = when (vehicle) { "Comfort" -> 9.0; "XL" -> 11.0; else -> 8.0 }
-                                                val distanceCharge = distanceKm * 5.0
-                                                val timeCharge = durationMinutes
-                                                val fuelCost = distanceKm * consumption / 100.0 * fuelPrice
-                                                val operatingCost = distanceKm * 2.0
-                                                val driverSubtotal = 10.0 + distanceCharge + timeCharge + fuelCost + operatingCost
-                                                val commission = driverSubtotal * 0.10
-                                                preview = FarePreview(
-                                                    total = maxOf(driverSubtotal + commission, 20.0),
-                                                    driverEarnings = driverSubtotal, commission = commission,
-                                                    distanceCharge = distanceCharge, timeCharge = timeCharge,
-                                                    fuelCost = fuelCost, operatingCost = operatingCost
-                                                )
-                                            }
+                                            val route = ChaufrApi.computeRoute(apiUrl, pickupPoint!!, destinationPoint!!)
+                                            val distanceKm = route.getDouble("distanceKm")
+                                            val durationMinutes = route.getDouble("durationMinutes")
+                                            val root = ChaufrApi.requestFareQuote(apiUrl, distanceKm, durationMinutes, vehicle.lowercase())
+                                            val breakdown = root.getJSONObject("breakdown")
+                                            preview = FarePreview(
+                                                total = root.getDouble("passengerTotal"),
+                                                distanceKm = distanceKm,
+                                                durationMinutes = durationMinutes,
+                                                baseFare = breakdown.getDouble("baseFare"),
+                                                source = "LIVE API",
+                                                driverEarnings = breakdown.getDouble("driverEarnings"),
+                                                commission = breakdown.getDouble("platformCommission"),
+                                                distanceCharge = breakdown.getDouble("distanceCharge"),
+                                                timeCharge = breakdown.getDouble("timeCharge"),
+                                                fuelCost = breakdown.getDouble("fuelCost"),
+                                                operatingCost = breakdown.getDouble("operatingCost")
+                                            )
                                         } catch (error: Exception) {
-                                            message = "Unable to get a fare. Check your connection and try again."
+                                            message = error.message ?: "Unable to calculate this route. Please try again."
                                             preview = null
                                         } finally {
                                             loading = false
@@ -255,7 +239,7 @@ private fun PassengerHome() {
                             }
                             Spacer(Modifier.height(7.dp))
                             Text(money(fare.total), color = ChaufrNavy, fontSize = 34.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("$vehicle · sample route 8.5 km · 22 min", color = ChaufrMuted, fontSize = 12.sp)
+                            Text("$vehicle · ${String.format(Locale("en", "ZA"), "%.1f", fare.distanceKm)} km · ${fare.durationMinutes.toInt()} min", color = ChaufrMuted, fontSize = 12.sp)
                             Spacer(Modifier.height(15.dp))
                             Divider(color = Color(0xFFE8ECF2))
                             Spacer(Modifier.height(12.dp))
