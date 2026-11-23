@@ -11,7 +11,7 @@ npm test
 npm start
 ```
 
-The API listens on port 3000 by default. Set fare values as environment variables before starting the server. `.env.example` documents the development settings; Node does not automatically load that file.
+The API listens on port 3000 by default. Set database and secret values in the host environment before starting the server. `.env.example` documents development settings; Node does not automatically load that file. Open `/owner` on the API origin to use the private owner console.
 
 ## PostgreSQL setup
 
@@ -76,7 +76,7 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 - Fare schedule defaults are development values and require owner approval/configuration before launch.
 - Passenger trip requests, driver acceptance, trip start and trip completion are implemented. Live matching/dispatch, driver-arriving state, cancellation, live tracking and passenger trip history remain outstanding.
 - The R30 activation data model and server-side gate are implemented, but payment provider integration and driver payment UI are not.
-- Owner approval tools, owner dashboard, document uploads and financial reports are not yet implemented.
+- Driver approval/rejection tools, document uploads, passenger support workflows and full financial reconciliation are not yet implemented. The owner console currently provides overview metrics and central pricing controls.
 - Driver location currently uses device last-known location when going online; continuous background location updates are not implemented.
 - Android app API URL is blank in current debug builds; configure it after deploying the API.
 - Production hosting and payment processing are not implemented.
