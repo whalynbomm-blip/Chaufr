@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
+import com.google.android.gms.maps.model.LatLng
 import kotlinx.coroutines.launch
 
 private val ChaufrNavy = Color(0xFF101C2C)
@@ -84,6 +85,8 @@ private data class FarePreview(
 private fun PassengerHome() {
     var pickup by remember { mutableStateOf("") }
     var destination by remember { mutableStateOf("") }
+    var pickupPoint by remember { mutableStateOf<LatLng?>(null) }
+    var destinationPoint by remember { mutableStateOf<LatLng?>(null) }
     var vehicle by remember { mutableStateOf("Standard") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
@@ -126,9 +129,16 @@ private fun PassengerHome() {
                     Column(modifier = Modifier.padding(17.dp)) {
                         Text("YOUR JOURNEY", color = ChaufrMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
                         Spacer(Modifier.height(12.dp))
+                        GoogleMapsRoutePicker(
+                            pickup = pickupPoint,
+                            destination = destinationPoint,
+                            onPickupSelected = { label, point -> pickup = label; pickupPoint = point; preview = null },
+                            onDestinationSelected = { label, point -> destination = label; destinationPoint = point; preview = null }
+                        )
+                        Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = pickup,
-                            onValueChange = { pickup = it; preview = null; message = "" },
+                            onValueChange = { pickup = it; pickupPoint = null; preview = null; message = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Pickup location") },
                             placeholder = { Text("Enter pickup address") },
@@ -138,7 +148,7 @@ private fun PassengerHome() {
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = destination,
-                            onValueChange = { destination = it; preview = null; message = "" },
+                            onValueChange = { destination = it; destinationPoint = null; preview = null; message = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Destination") },
                             placeholder = { Text("Where would you like to go?") },
