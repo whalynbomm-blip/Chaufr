@@ -76,6 +76,7 @@ private fun DriverHome() {
       }
 
       Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        DriverAccountCard()
         Card(
           modifier = Modifier.fillMaxWidth(),
           shape = RoundedCornerShape(18.dp),
