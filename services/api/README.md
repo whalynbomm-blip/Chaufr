@@ -74,7 +74,7 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 
 - Route distance and duration are supplied to the API; no maps/geocoding/routing provider or live traffic source is connected. Until that integration exists, trip requests use the normal-traffic baseline.
 - Fare schedule defaults are development values and require owner approval/configuration before launch.
-- Passenger trip request and driver acceptance APIs are implemented; live matching/dispatch, trip lifecycle (arriving, start, complete, cancel), live tracking and passenger trip history remain outstanding.
+- Passenger trip requests, driver acceptance, trip start and trip completion are implemented. Live matching/dispatch, driver-arriving state, cancellation, live tracking and passenger trip history remain outstanding.
 - The R30 activation data model and server-side gate are implemented, but payment provider integration and driver payment UI are not.
 - Owner approval tools, owner dashboard, document uploads and financial reports are not yet implemented.
 - Driver location currently uses device last-known location when going online; continuous background location updates are not implemented.
