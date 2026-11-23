@@ -227,5 +227,76 @@ export function createTripService(pool, fareConfig) {
         client.release();
       }
     },
+
+    async startTrip(driver, tripId) {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          "UPDATE trips SET status = 'in_progress', started_at = now() " +
+          "WHERE id = $1 AND driver_user_id = $2 AND status = 'accepted' " +
+          "RETURNING id, pickup_label, destination_label, quoted_total, driver_earnings, started_at",
+          [tripId, driver.id],
+        );
+        if (!result.rowCount) throw new AuthError("Only the assigned driver can start an accepted trip", 409);
+        await client.query(
+          "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'started')",
+          [tripId, driver.id],
+        );
+        await client.query("COMMIT");
+        const trip = result.rows[0];
+        return {
+          tripId: trip.id,
+          status: "in_progress",
+          pickupLabel: trip.pickup_label,
+          destinationLabel: trip.destination_label,
+          passengerFare: Number(trip.quoted_total),
+          expectedDriverEarnings: Number(trip.driver_earnings),
+          startedAt: trip.started_at,
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async completeTrip(driver, tripId) {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(
+          "UPDATE trips SET status = 'completed', completed_at = now(), commission_earned_at = now() " +
+          "WHERE id = $1 AND driver_user_id = $2 AND status = 'in_progress' " +
+          "RETURNING id, quoted_total, driver_earnings, completed_at",
+          [tripId, driver.id],
+        );
+        if (!result.rowCount) throw new AuthError("Only the assigned driver can complete an in-progress trip", 409);
+        await client.query(
+          "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'completed')",
+          [tripId, driver.id],
+        );
+        await client.query("COMMIT");
+        const trip = result.rows[0];
+        return {
+          tripId: trip.id,
+          status: "completed",
+          passengerFare: Number(trip.quoted_total),
+          driverEarnings: Number(trip.driver_earnings),
+          completedAt: trip.completed_at,
+          commissionRecorded: true,
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
   };
 }
