@@ -28,6 +28,19 @@ The migration runner applies the checked-in schema migrations. Authentication, d
 curl http://localhost:3000/health
 ```
 
+### Google Maps route preview
+
+The passenger app uses Google Places Autocomplete on Android to select pickup and destination points. The API then calls Google Routes server-side through `POST /v1/routes/preview`. The server returns traffic-aware distance/duration and a short-lived signed route quote. Passenger trip creation verifies that signed quote and recalculates the fare from its server-issued measurements, so a modified client cannot change the route distance or duration at booking time.
+
+Configure two separate Google credentials in the API deployment environment:
+
+- `GOOGLE_MAPS_SERVER_API_KEY`: server-restricted key with Routes API enabled. Restrict it to the Routes API and, where supported, the server's egress IP.
+- `FARE_QUOTE_SIGNING_SECRET`: private random secret used to sign five-minute route quotes. Generate with `openssl rand -base64 32`.
+
+Do not put either server value in the Android app or commit them to Git. The Android Places/Maps key is separate and must be restricted to the Android package and signing certificate.
+
+The route preview endpoint is limited to 30 requests per source IP per minute. Production deployments should also use a shared rate limiter and provider quota/budget alerts.
+
 ### Fare estimate
 ```sh
 curl -X POST http://localhost:3000/v1/fare-quotes \
