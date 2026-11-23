@@ -5,6 +5,7 @@ import { applyMigrations } from "./database.mjs";
 import { createAuthService } from "./auth-service.mjs";
 import { createDriverService } from "./driver-service.mjs";
 import { createTripService } from "./trip-service.mjs";
+import { calculateFare } from "./fare-calculator.mjs";
 import { createAppServer, developmentFareConfig } from "./http.mjs";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -31,10 +32,14 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       vehicleCategories: ["standard", "comfort", "xl"],
     };
     const testRoute = { distanceKm: 4, durationMinutes: 7, encodedPolyline: null, trafficAware: true };
+    const testFare = calculateFare({ distanceKm: 4, durationMinutes: 7, vehicleCategory: "standard", trafficLevel: "normal" }, fareConfig);
     const testRoutes = {
       computeRoute: async () => testRoute,
       signRouteQuote: () => "test-route-quote",
-      verifyRouteQuote: (token) => { if (token !== "test-route-quote") throw Object.assign(new Error("Invalid route quote"), { status: 400 }); return testRoute; },
+      verifyRouteQuote: (token, origin, destination, category) => {
+        if (token !== "test-route-quote" || category !== "standard") throw Object.assign(new Error("Invalid route quote"), { status: 400 });
+        return { route: testRoute, fare: testFare };
+      },
     };
     const trips = createTripService(pool, fareConfig, testRoutes);
     const account = await auth.register({
