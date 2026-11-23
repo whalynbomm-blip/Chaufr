@@ -65,6 +65,17 @@ object ChaufrApi {
         }
     }
 
+    suspend fun computeRoute(
+        baseUrl: String,
+        pickup: com.google.android.gms.maps.model.LatLng,
+        destination: com.google.android.gms.maps.model.LatLng
+    ): JSONObject = requestJson(
+        baseUrl, "POST", "/v1/routes/preview",
+        JSONObject()
+            .put("origin", JSONObject().put("latitude", pickup.latitude).put("longitude", pickup.longitude))
+            .put("destination", JSONObject().put("latitude", destination.latitude).put("longitude", destination.longitude))
+    )
+
     suspend fun requestFareQuote(
         baseUrl: String,
         distanceKm: Double,
