@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { calculateFare } from "./fare-calculator.mjs";
+import { AuthError, createAuthService } from "./auth-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -49,6 +50,25 @@ export const developmentFareConfig = () => ({
 });
 
 export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
+  const authService = database ? createAuthService(database) : null;
+  const authAttempts = new Map();
+  const checkAuthRateLimit = (request, route) => {
+    const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
+    const now = Date.now();
+    const current = authAttempts.get(key);
+    if (!current || current.resetAt <= now) {
+      authAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
+      return;
+    }
+    if (current.count >= 10) throw new AuthError("Too many attempts. Please try again later.", 429);
+    current.count += 1;
+  };
+  const getBearerToken = (request) => {
+    const header = request.headers.authorization ?? "";
+    const match = /^Bearer (chf_[A-Za-z0-9_-]{40,60})$/.exec(header);
+    return match?.[1] ?? null;
+  };
+
   return createServer(async (request, response) => {
     const requestId = randomUUID();
     try {
@@ -64,10 +84,43 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       if (request.method === "GET" && url.pathname === "/v1") {
         return json(response, 200, {
           service: "chaufr-api",
-          version: "0.2.0",
-          endpoints: ["GET /health", "GET /v1", "POST /v1/fare-quotes"],
+          version: "0.3.0",
+          endpoints: [
+            "GET /health", "GET /v1", "POST /v1/fare-quotes",
+            "POST /v1/auth/register", "POST /v1/auth/login",
+            "GET /v1/auth/me", "POST /v1/auth/logout",
+          ],
           database: database ? "connected" : "not_configured",
         });
+      }
+
+      if (url.pathname.startsWith("/v1/auth/")) {
+        if (!authService) {
+          return json(response, 503, { error: "Account services are unavailable until the database is configured", requestId });
+        }
+        if (request.method === "POST" && url.pathname === "/v1/auth/register") {
+          checkAuthRateLimit(request, "register");
+          const account = await authService.register(await readJson(request));
+          return json(response, 201, account);
+        }
+        if (request.method === "POST" && url.pathname === "/v1/auth/login") {
+          checkAuthRateLimit(request, "login");
+          const account = await authService.login(await readJson(request));
+          return json(response, 200, account);
+        }
+        if (request.method === "GET" && url.pathname === "/v1/auth/me") {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          return json(response, 200, { user });
+        }
+        if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          await authService.logout(token);
+          return json(response, 200, { ok: true });
+        }
       }
       if (request.method === "POST" && url.pathname === "/v1/fare-quotes") {
         const body = await readJson(request);
