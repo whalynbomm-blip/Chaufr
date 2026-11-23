@@ -13,6 +13,9 @@ android {
     versionCode = 1
     versionName = "0.1.0"
     buildConfigField("String", "CHAUFR_API_BASE_URL", "\"${providers.gradleProperty("chaufrApiBaseUrl").orNull ?: ""}\"")
+    val mapsKey = providers.gradleProperty("chaufrGoogleMapsApiKey").orNull ?: ""
+    manifestPlaceholders["MAPS_API_KEY"] = mapsKey
+    buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$mapsKey\"")
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_17
@@ -30,6 +33,8 @@ dependencies {
   implementation("androidx.compose.ui:ui")
   implementation("androidx.compose.ui:ui-tooling-preview")
   implementation("androidx.compose.material3:material3")
+  implementation("com.google.maps.android:maps-compose:6.4.1")
+  implementation("com.google.android.libraries.places:places:3.5.0")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
   debugImplementation("androidx.compose.ui:ui-tooling")
 }
