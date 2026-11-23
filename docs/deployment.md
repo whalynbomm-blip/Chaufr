@@ -36,7 +36,7 @@ Set fare configuration only in the hosting provider's private environment settin
 | `FARE_PER_KM` | Per-kilometre charge |
 | `FARE_PER_MINUTE` | Per-minute charge |
 | `FARE_OPERATING_PER_KM` | Operating-cost allowance per kilometre |
-| `FARE_COMMISSION_RATE` | Platform commission as a decimal fraction |
+| `FARE_COMMISSION_RATE` | Platform commission as a decimal fraction (default 0.12) |\n| `DAILY_ACTIVATION_FEE` | Driver daily activation fee in ZAR (default 30; owner dashboard can update it) |
 | `FARE_MINIMUM` | Minimum passenger fare |
 | `FARE_FUEL_PRICE_PER_LITRE` | Configured fuel price per litre |
 | `FARE_FUEL_STANDARD_L100KM` | Standard vehicle consumption |
