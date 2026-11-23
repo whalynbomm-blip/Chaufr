@@ -87,5 +87,5 @@ test("uses the next approved R100 band after removal of the provisional 16–22 
     ],
   };
   const quote = calculateFare({ distanceKm: 4, durationMinutes: 20, vehicleCategory: "standard" }, scheduled);
-  assert.equal(quote.breakdown.durationBandStartingFare, 100);
+  assert.equal(quote.breakdown.durationStartingFare, 100);
 });
