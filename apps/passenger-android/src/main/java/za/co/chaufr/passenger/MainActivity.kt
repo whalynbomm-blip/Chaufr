@@ -320,7 +320,7 @@ private fun PassengerHome() {
                                 Text(bookingMessage, color = if (bookingMessage.startsWith("Ride request submitted")) ChaufrGreen else Color(0xFFB42318), fontSize = 12.sp)
                             }
                             Text(
-                                if (fare.source == "LIVE API") "Server-calculated estimate using sample route measurements. Booking and driver matching are not connected yet." else "This is a sample calculation using development rates and an assumed route. It is not a live quote or a booking price.",
+                                "Server-calculated fare using a traffic-aware Google driving route. This price is locked when your ride request is submitted.",
                                 color = ChaufrMuted, fontSize = 11.sp, lineHeight = 16.sp
                             )
                         }
@@ -336,10 +336,10 @@ private fun PassengerHome() {
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF1FC))
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("COMING IN THE CONNECTED BUILD", color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("CHAUFR PASSENGER", color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(7.dp))
                         Text(
-                            "Live map and route distance · server-confirmed fare · passenger account · driver matching · live trip tracking · trip history and receipts.",
+                            "Google Maps · address search · traffic-aware route estimates · fixed server-calculated fares · passenger account · ride requests.",
                             color = Color(0xFF53647A), fontSize = 12.sp, lineHeight = 18.sp
                         )
                     }
