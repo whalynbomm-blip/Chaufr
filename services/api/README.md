@@ -56,15 +56,15 @@ These endpoints are an initial account foundation, not a complete production ide
 
 Authenticated driver accounts can submit a vehicle and licence number through `POST /v1/driver/vehicles`. Vehicle registration and licence identifiers are encrypted with AES-256-GCM before they are stored. This endpoint requires `VEHICLE_DATA_ENCRYPTION_KEY`, a private base64-encoded 32-byte key; generate one with `openssl rand -base64 32` and provide it through the deployment secret manager. Never commit the production key.
 
-Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner review/approval tools, document uploads and the Android vehicle onboarding form are not yet implemented.
+Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner review/approval tools and document uploads are not yet implemented. The driver Android app now includes the vehicle and licence submission form and connects its online/offline control to the API when a server URL is configured.
 
 ## Current limitations
 
 - Route distance and duration are supplied to the API; no maps/routing provider is connected.
 - Quotes are estimates and do not create bookings or reserve drivers.
 - PostgreSQL connection, ordered migrations, registration/login endpoints and revocable session validation are implemented and integration-tested.
-- Driver vehicle submission and availability gates are implemented in the API; owner approval, passenger trip creation, driver dispatch and live location streaming are not yet implemented.
-- Android account screens and secure token storage are present, but the API URL is blank in the current debug builds and app-side vehicle onboarding is still pending.
+- Driver vehicle submission, verification gates and API-backed online/offline status are implemented. Location is currently captured from the device last-known location when the driver goes online; continuous background location updates are not implemented.
+- Android account screens, secure token storage and driver vehicle onboarding are present, but the API URL is blank in the current debug builds. Owner approval, passenger trip creation, driver dispatch and live trip tracking remain outstanding.
 - Production hosting and payment processing are not implemented.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
