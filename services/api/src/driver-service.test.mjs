@@ -123,6 +123,10 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(online.status, 200);
     assert.equal((await online.json()).isOnline, true);
 
+    const initialRewardsResponse = await fetch(base + "/v1/passenger/rewards", { headers: passengerHeader });
+    assert.equal(initialRewardsResponse.status, 200);
+    assert.equal((await initialRewardsResponse.json()).tickets, 0);
+
     const requested = await fetch(base + "/v1/trips", {
       method: "POST",
       headers: { ...passengerHeader, "content-type": "application/json" },
@@ -195,6 +199,44 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(locked.rows[0].fare_snapshot.passengerTotal, 40);
     assert.ok(locked.rows[0].commission_earned_at);
     assert.equal(locked.rows[0].status, "completed");
+
+    const earnedRewardsResponse = await fetch(base + "/v1/passenger/rewards", { headers: passengerHeader });
+    assert.equal(earnedRewardsResponse.status, 200);
+    const earnedRewards = await earnedRewardsResponse.json();
+    assert.equal(earnedRewards.tickets, 1);
+    assert.equal(earnedRewards.ticketsUntilFreeRide, 8);
+
+    await pool.query(
+      "UPDATE passenger_reward_accounts SET tickets_balance = 9 WHERE passenger_user_id = $1",
+      [passenger.user.id],
+    );
+    const rewardTripResponse = await fetch(base + "/v1/trips", {
+      method: "POST",
+      headers: { ...passengerHeader, "content-type": "application/json" },
+      body: JSON.stringify({
+        pickupLabel: "Cape Town Station",
+        destinationLabel: "V&A Waterfront",
+        routeQuoteToken: "test-route-quote",
+        origin: { latitude: -33.9, longitude: 18.4 },
+        destination: { latitude: -33.91, longitude: 18.42 },
+        vehicleCategory: "standard",
+        redeemReward: true,
+      }),
+    });
+    assert.equal(rewardTripResponse.status, 201);
+    const rewardTrip = await rewardTripResponse.json();
+    assert.equal(rewardTrip.passengerTotal, 0);
+    assert.equal(rewardTrip.regularFare, 40);
+    assert.equal(rewardTrip.rewardApplied, true);
+    const rewardTripRecord = await pool.query(
+      "SELECT quoted_total, passenger_payable, driver_earnings FROM trips WHERE id = $1",
+      [rewardTrip.tripId],
+    );
+    assert.equal(Number(rewardTripRecord.rows[0].quoted_total), 40);
+    assert.equal(Number(rewardTripRecord.rows[0].passenger_payable), 0);
+    assert.equal(Number(rewardTripRecord.rows[0].driver_earnings), 35.2);
+    const remainingRewardsResponse = await fetch(base + "/v1/passenger/rewards", { headers: passengerHeader });
+    assert.equal((await remainingRewardsResponse.json()).tickets, 0);
 
     const unavailableAgain = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
     assert.equal((await unavailableAgain.json()).trips.length, 0);
