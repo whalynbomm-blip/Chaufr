@@ -17,7 +17,7 @@ export function createGoogleRoutesService({
   signingSecret = process.env.FARE_QUOTE_SIGNING_SECRET,
   fetchImpl = globalThis.fetch,
 } = {}) {
-  const signRouteQuote = (originInput, destinationInput, route) => {
+  const signRouteQuote = (originInput, destinationInput, route, quote) => {
     if (!signingSecret) {
       throw Object.assign(new Error("Fare quote signing is not configured on the Chaufr server"), { status: 503 });
     }
@@ -28,6 +28,8 @@ export function createGoogleRoutesService({
       durationMinutes: route.durationMinutes,
       encodedPolyline: route.encodedPolyline ?? null,
       trafficAware: true,
+      vehicleCategory: quote.vehicleCategory,
+      fare: quote.fare,
       expiresAt: Date.now() + 5 * 60 * 1000,
     };
     const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -35,7 +37,7 @@ export function createGoogleRoutesService({
     return encoded + "." + signature;
   };
 
-  const verifyRouteQuote = (token, originInput, destinationInput) => {
+  const verifyRouteQuote = (token, originInput, destinationInput, vehicleCategory) => {
     if (!signingSecret) throw Object.assign(new Error("Fare quote signing is not configured on the Chaufr server"), { status: 503 });
     if (typeof token !== "string" || token.length > 4096) throw invalid("A valid route quote is required");
     const [encoded, suppliedSignature, extra] = token.split(".");
@@ -50,14 +52,18 @@ export function createGoogleRoutesService({
     const destination = validPoint(destinationInput, "Destination");
     if (payload.expiresAt <= Date.now()) throw Object.assign(new Error("Route quote has expired. Please calculate the fare again."), { status: 409 });
     if (payload.origin.latitude !== origin.latitude || payload.origin.longitude !== origin.longitude ||
-        payload.destination.latitude !== destination.latitude || payload.destination.longitude !== destination.longitude) {
+        payload.destination.latitude !== destination.latitude || payload.destination.longitude !== destination.longitude ||
+        payload.vehicleCategory !== vehicleCategory || !payload.fare || typeof payload.fare.passengerTotal !== "number") {
       throw invalid("Route quote does not match the selected pickup and destination");
     }
     return {
-      distanceKm: payload.distanceKm,
-      durationMinutes: payload.durationMinutes,
-      encodedPolyline: payload.encodedPolyline ?? null,
-      trafficAware: payload.trafficAware === true,
+      route: {
+        distanceKm: payload.distanceKm,
+        durationMinutes: payload.durationMinutes,
+        encodedPolyline: payload.encodedPolyline ?? null,
+        trafficAware: payload.trafficAware === true,
+      },
+      fare: payload.fare,
     };
   };
 
