@@ -112,7 +112,7 @@ private fun PassengerHome() {
                     Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(24.dp))
-                Text("Where are you going?", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text("Start your journey", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 Text("Set your route and preview a clear fixed fare.", color = Color(0xFFB8C7DA), fontSize = 13.sp)
             }
 
