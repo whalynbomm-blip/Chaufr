@@ -86,7 +86,8 @@ object ChaufrApi {
         origin: com.google.android.gms.maps.model.LatLng,
         destination: com.google.android.gms.maps.model.LatLng,
         vehicleCategory: String,
-        routeQuoteToken: String
+        routeQuoteToken: String,
+        redeemReward: Boolean = false
     ): JSONObject = requestJson(
         baseUrl, "POST", "/v1/trips",
         JSONObject()
@@ -95,9 +96,13 @@ object ChaufrApi {
             .put("origin", JSONObject().put("latitude", origin.latitude).put("longitude", origin.longitude))
             .put("destination", JSONObject().put("latitude", destination.latitude).put("longitude", destination.longitude))
             .put("vehicleCategory", vehicleCategory)
-            .put("routeQuoteToken", routeQuoteToken),
+            .put("routeQuoteToken", routeQuoteToken)
+            .put("redeemReward", redeemReward),
         token = token
     )
+
+    suspend fun passengerRewards(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/passenger/rewards", token = token)
 
     suspend fun requestFareQuote(
         baseUrl: String,
