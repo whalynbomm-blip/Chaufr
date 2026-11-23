@@ -2,7 +2,7 @@
 
 ## Current position
 
-The API is container-ready (`services/api/Dockerfile`) and exposes `GET /health` for a hosting platform health check. It has not yet been deployed to a public host. No live API URL exists, and no production secrets or credentials are stored in GitHub.
+The API is container-ready (`services/api/Dockerfile`) and exposes `GET /health` for a hosting platform health check. It has not yet been deployed to a public host. No live API URL exists, and no production secrets or credentials are stored in GitHub. The owner console is served by the API at `/owner` and uses same-origin authenticated API requests.
 
 ## Hosting requirements
 
@@ -50,9 +50,9 @@ Do not use the sample values as live commercial pricing without approving and va
 1. Select and authorize the hosting provider and deployment project.
 2. Configure production fare rules and verify the health endpoint.
 3. Connect PostgreSQL and apply versioned migrations.
-4. Implement authentication, authorization, rate limiting and persistent quote/trip records.
+4. Provision the owner account securely through a trusted database operator; public registration must never grant owner privileges.\n5. Review the owner pricing console at `/owner`, approve all fare bands and verify audit events before allowing public trip requests.
 5. Connect a routing provider and calculate routes on trusted server-side infrastructure.
 6. Configure monitoring, backups, privacy controls and incident response.
 7. Complete security and South African legal/compliance review.
 
-Deploying the current API alone does not create a complete ride-hailing service. Booking, dispatch, driver tracking, payments and the owner dashboard remain to be built.
+Deploying the current API alone does not create a complete ride-hailing service. Live dispatch, driver tracking, payment-provider integration and the remaining owner operations tools still need to be completed.
