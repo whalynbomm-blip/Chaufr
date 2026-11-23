@@ -146,7 +146,20 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
           return json(response, 200, await ownerService.getOverview(user));
         }
-        if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {\n          return json(response, 200, await ownerService.listDrivers(user));\n        }\n        const driverReviewMatch = /^\\/v1\\/owner\\/drivers\\/([0-9a-f-]{36})\\/verification$/i.exec(url.pathname);\n        if (request.method === "PATCH" && driverReviewMatch) {\n          const body = await readJson(request);\n          return json(response, 200, await ownerService.setDriverVerification(user, driverReviewMatch[1], body.status));\n        }\n        const vehicleReviewMatch = /^\\/v1\\/owner\\/vehicles\\/([0-9a-f-]{36})\\/status$/i.exec(url.pathname);\n        if (request.method === "PATCH" && vehicleReviewMatch) {\n          const body = await readJson(request);\n          return json(response, 200, await ownerService.setVehicleStatus(user, vehicleReviewMatch[1], body.status));\n        }\n        if (request.method === "GET" && url.pathname === "/v1/owner/pricing") {
+        if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {
+          return json(response, 200, await ownerService.listDrivers(user));
+        }
+        const driverReviewMatch = /^\\/v1\\/owner\\/drivers\\/([0-9a-f-]{36})\\/verification$/i.exec(url.pathname);
+        if (request.method === "PATCH" && driverReviewMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await ownerService.setDriverVerification(user, driverReviewMatch[1], body.status));
+        }
+        const vehicleReviewMatch = /^\\/v1\\/owner\\/vehicles\\/([0-9a-f-]{36})\\/status$/i.exec(url.pathname);
+        if (request.method === "PATCH" && vehicleReviewMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await ownerService.setVehicleStatus(user, vehicleReviewMatch[1], body.status));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/pricing") {
           return json(response, 200, await ownerService.getPricing(user));
         }
         if (request.method === "PUT" && url.pathname === "/v1/owner/pricing") {
