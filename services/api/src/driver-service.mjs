@@ -43,8 +43,21 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
         "SELECT is_online, last_seen_at FROM driver_presence WHERE driver_user_id = $1",
         [user.id],
       );
+      const activation = await pool.query(
+        "SELECT operating_date, amount, currency, status, paid_at FROM driver_daily_activations " +
+        "WHERE driver_user_id = $1 AND operating_date = (now() AT TIME ZONE 'Africa/Johannesburg')::date LIMIT 1",
+        [user.id],
+      );
       return {
         verificationStatus: profile.rows[0].verification_status,
+        dailyActivation: {
+          amount: 30,
+          currency: "ZAR",
+          status: activation.rows[0]?.status ?? "unpaid",
+          isPaid: activation.rows[0]?.status === "paid",
+          operatingDate: activation.rows[0]?.operating_date ?? null,
+          paidAt: activation.rows[0]?.paid_at ?? null,
+        },
         rating: profile.rows[0].rating,
         isOnline: presence.rows[0]?.is_online ?? false,
         lastSeenAt: presence.rows[0]?.last_seen_at ?? null,
@@ -118,6 +131,15 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
       const longitude = input.longitude == null ? null : Number(input.longitude);
       const accuracy = input.accuracyMeters == null ? null : Number(input.accuracyMeters);
       if (input.isOnline) {
+        const activation = await pool.query(
+          "SELECT 1 FROM driver_daily_activations " +
+          "WHERE driver_user_id = $1 AND operating_date = (now() AT TIME ZONE 'Africa/Johannesburg')::date " +
+          "AND status = 'paid' LIMIT 1",
+          [user.id],
+        );
+        if (!activation.rowCount) {
+          throw new AuthError("Pay the R30 daily Chaufr activation fee before going online or accessing trip requests", 403);
+        }
         if (profile.rows[0].verification_status !== "verified") {
           throw new AuthError("Your driver profile must be verified before going online", 403);
         }
