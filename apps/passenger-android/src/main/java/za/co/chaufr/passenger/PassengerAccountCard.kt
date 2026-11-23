@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @Composable
-fun PassengerAccountCard() {
+fun PassengerAccountCard(onSignedIn: (String) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
@@ -135,6 +135,7 @@ fun PassengerAccountCard() {
                                 val newToken = result.getString("accessToken")
                                 SecureTokenStore.save(context, newToken)
                                 token = newToken
+                                onSignedIn(newToken)
                                 displayName = result.getJSONObject("user").optString("displayName")
                                 password = ""
                                 message = if (registering) "Your account has been created." else "Welcome back."
