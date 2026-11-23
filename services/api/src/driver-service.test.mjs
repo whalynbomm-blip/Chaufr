@@ -72,7 +72,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
 
     await assert.rejects(
       () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
-      (error) => error.status === 403 && /R30 daily/.test(error.message),
+      (error) => error.status === 403 && /R30\\.00 daily/.test(error.message),
     );
 
     server = createAppServer({ database: pool, fareConfig });
