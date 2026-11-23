@@ -149,14 +149,40 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(accepted.expectedDriverEarnings, 35.2);
     assert.equal("platformCommission" in accepted, false);
 
+    const startedResponse = await fetch(base + "/v1/driver/trips/" + trip.tripId + "/start", {
+      method: "POST",
+      headers: authHeader,
+    });
+    assert.equal(startedResponse.status, 200);
+    assert.equal((await startedResponse.json()).status, "in_progress");
+
+    const beforeCompletion = await pool.query(
+      "SELECT commission_earned_at FROM trips WHERE id = $1",
+      [trip.tripId],
+    );
+    assert.equal(beforeCompletion.rows[0].commission_earned_at, null);
+
+    const completedResponse = await fetch(base + "/v1/driver/trips/" + trip.tripId + "/complete", {
+      method: "POST",
+      headers: authHeader,
+    });
+    assert.equal(completedResponse.status, 200);
+    const completed = await completedResponse.json();
+    assert.equal(completed.status, "completed");
+    assert.equal(completed.commissionRecorded, true);
+    assert.equal(completed.driverEarnings, 35.2);
+    assert.equal("platformCommission" in completed, false);
+
     const locked = await pool.query(
-      "SELECT fare_locked_at, quoted_total, fare_snapshot FROM trips WHERE id = $1",
+      "SELECT fare_locked_at, quoted_total, fare_snapshot, commission_earned_at, status FROM trips WHERE id = $1",
       [trip.tripId],
     );
     assert.ok(locked.rows[0].fare_locked_at);
     assert.equal(Number(locked.rows[0].quoted_total), 40);
     assert.equal(locked.rows[0].fare_snapshot.trafficLevel, "normal");
     assert.equal(locked.rows[0].fare_snapshot.passengerTotal, 40);
+    assert.ok(locked.rows[0].commission_earned_at);
+    assert.equal(locked.rows[0].status, "completed");
 
     const unavailableAgain = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
     assert.equal((await unavailableAgain.json()).trips.length, 0);
