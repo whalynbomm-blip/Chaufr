@@ -191,12 +191,12 @@ private fun PassengerHome() {
                                     scope.launch {
                                         try {
                                             val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
-                                            val route = ChaufrApi.computeRoute(apiUrl, pickupPoint!!, destinationPoint!!)
+                                            val route = ChaufrApi.computeRoute(apiUrl, pickupPoint!!, destinationPoint!!, vehicle.lowercase())
                                             routeQuoteToken = route.getString("quoteToken")
                                             encodedRoute = route.optString("encodedPolyline").takeIf { it.isNotBlank() }
                                             val distanceKm = route.getDouble("distanceKm")
                                             val durationMinutes = route.getDouble("durationMinutes")
-                                            val root = ChaufrApi.requestFareQuote(apiUrl, distanceKm, durationMinutes, vehicle.lowercase())
+                                            val root = route
                                             val breakdown = root.getJSONObject("breakdown")
                                             preview = FarePreview(
                                                 total = root.getDouble("passengerTotal"),
