@@ -13,16 +13,11 @@ test("owner pricing service rejects driver and passenger roles", async () => {
   await assert.rejects(() => service.getOverview({ id: "passenger-1", role: "passenger" }), (error) => error.status === 403);
 });
 
-test("owner pricing validation preserves unapproved bands until explicitly approved", () => {
+test("owner default pricing no longer contains the removed R85 duration band", () => {
   const defaults = developmentFareConfig();
   const next = validatePricingConfig({}, defaults);
-  const provisional = next.durationFareBands.find((band) => band.maxMinutes === 22);
-  assert.equal(provisional.startingFare, 85);
-  assert.equal(provisional.approved, false);
-  const approved = validatePricingConfig({
-    durationFareBands: next.durationFareBands.map((band) => band.maxMinutes === 22 ? { ...band, startingFare: 90, approved: true } : band),
-  }, defaults);
-  assert.equal(approved.durationFareBands.find((band) => band.maxMinutes === 22).approved, true);
+  assert.equal(next.durationFareBands.some((band) => band.maxMinutes === 22 || band.startingFare === 85), false);
+  assert.deepEqual(next.durationFareBands.map((band) => band.maxMinutes), [7, 15, 29, 39, 49, 59, 1440]);
 });
 
 test("owner pricing validation rejects overlapping or out-of-order duration bands", () => {
