@@ -19,7 +19,7 @@ Create a database and a dedicated application user, then set `DATABASE_URL` in t
 
 Set `DB_SSL=true` for managed PostgreSQL services that require TLS. Certificate verification remains enabled. Do not disable certificate checks or commit database credentials. Without `DATABASE_URL`, the API runs in its existing demo/development mode without persistence.
 
-The migration runner currently applies the checked-in schema migrations; it does not yet make the HTTP routes use database records.
+The migration runner applies the checked-in schema migrations. Authentication, driver onboarding, activation gating and trip request/acceptance routes use PostgreSQL records.
 
 ## Endpoints
 
@@ -58,13 +58,27 @@ Authenticated driver accounts can submit a vehicle and licence number through `P
 
 Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner review/approval tools and document uploads are not yet implemented. The driver Android app now includes the vehicle and licence submission form and connects its online/offline control to the API when a server URL is configured.
 
+## Fare schedule and trip acceptance
+
+The central fare engine supports the owner's initial duration bands, traffic adjustments, vehicle multipliers, route-cost floor and 12% commission. See `FARE-ENGINE.md` for the complete schedule and calculations. The passenger-facing fare includes the commission; expected driver earnings are returned separately. Client fare and traffic overrides are ignored.
+
+Authenticated passengers can create a trip request with `POST /v1/trips`. The server calculates and stores the fare snapshot and a five-minute request expiry. Authenticated drivers can query `GET /v1/driver/trips/available` and accept through `POST /v1/driver/trips/:tripId/accept`. Acceptance is transactional, records the assigned driver/vehicle and locks the stored fare. Later fare-rule changes do not recalculate an accepted trip.
+
+## Daily driver activation
+
+A driver must have a successful R30 ZAR activation payment recorded for the current South African operating date before going online or accessing trip requests. The activation is unique per driver and date, and a paid activation is marked non-refundable. Driver-facing responses expose only that driver's activation status and trip earnings, not company revenue totals.
+
+`GET /v1/driver/activation` returns the driver's activation status. The internal `recordVerifiedActivationPayment` service method is designed to be called only after a payment provider verifies the transaction. There is intentionally no client-controlled payment confirmation endpoint. A real payment provider/webhook still needs to be connected before drivers can make payments in production. Push notifications and dispatch fan-out are not yet implemented; any future delivery path must apply the same paid-activation check.
+
 ## Current limitations
 
-- Route distance and duration are supplied to the API; no maps/routing provider is connected.
-- Quotes are estimates and do not create bookings or reserve drivers.
-- PostgreSQL connection, ordered migrations, registration/login endpoints and revocable session validation are implemented and integration-tested.
-- Driver vehicle submission, verification gates and API-backed online/offline status are implemented. Location is currently captured from the device last-known location when the driver goes online; continuous background location updates are not implemented.
-- Android account screens, secure token storage and driver vehicle onboarding are present, but the API URL is blank in the current debug builds. Owner approval, passenger trip creation, driver dispatch and live trip tracking remain outstanding.
+- Route distance and duration are supplied to the API; no maps/geocoding/routing provider or live traffic source is connected. Until that integration exists, trip requests use the normal-traffic baseline.
+- Fare schedule defaults are development values and require owner approval/configuration before launch.
+- Passenger trip request and driver acceptance APIs are implemented; live matching/dispatch, trip lifecycle (arriving, start, complete, cancel), live tracking and passenger trip history remain outstanding.
+- The R30 activation data model and server-side gate are implemented, but payment provider integration and driver payment UI are not.
+- Owner approval tools, owner dashboard, document uploads and financial reports are not yet implemented.
+- Driver location currently uses device last-known location when going online; continuous background location updates are not implemented.
+- Android app API URL is blank in current debug builds; configure it after deploying the API.
 - Production hosting and payment processing are not implemented.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
