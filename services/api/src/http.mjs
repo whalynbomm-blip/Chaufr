@@ -128,7 +128,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/activation", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/trips",
-            "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing",
+            "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -146,7 +146,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
           return json(response, 200, await ownerService.getOverview(user));
         }
-        if (request.method === "GET" && url.pathname === "/v1/owner/pricing") {
+        if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {\n          return json(response, 200, await ownerService.listDrivers(user));\n        }\n        const driverReviewMatch = /^\\/v1\\/owner\\/drivers\\/([0-9a-f-]{36})\\/verification$/i.exec(url.pathname);\n        if (request.method === "PATCH" && driverReviewMatch) {\n          const body = await readJson(request);\n          return json(response, 200, await ownerService.setDriverVerification(user, driverReviewMatch[1], body.status));\n        }\n        const vehicleReviewMatch = /^\\/v1\\/owner\\/vehicles\\/([0-9a-f-]{36})\\/status$/i.exec(url.pathname);\n        if (request.method === "PATCH" && vehicleReviewMatch) {\n          const body = await readJson(request);\n          return json(response, 200, await ownerService.setVehicleStatus(user, vehicleReviewMatch[1], body.status));\n        }\n        if (request.method === "GET" && url.pathname === "/v1/owner/pricing") {
           return json(response, 200, await ownerService.getPricing(user));
         }
         if (request.method === "PUT" && url.pathname === "/v1/owner/pricing") {
