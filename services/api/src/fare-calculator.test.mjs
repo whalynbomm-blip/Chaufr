@@ -71,3 +71,21 @@ test("blocks an owner-unapproved journey duration instead of charging the provis
     /not yet been approved/,
   );
 });
+
+
+test("uses the next approved R100 band after removal of the provisional 16–22 minute band", () => {
+  const scheduled = {
+    ...config,
+    durationFareBands: [
+      { maxMinutes: 7, startingFare: 40, approved: true },
+      { maxMinutes: 15, startingFare: 50, approved: true },
+      { maxMinutes: 29, startingFare: 100, approved: true },
+      { maxMinutes: 39, startingFare: 150, approved: true },
+      { maxMinutes: 49, startingFare: 170, approved: true },
+      { maxMinutes: 59, startingFare: 200, approved: true },
+      { maxMinutes: 1440, startingFare: 250, approved: true },
+    ],
+  };
+  const quote = calculateFare({ distanceKm: 4, durationMinutes: 20, vehicleCategory: "standard" }, scheduled);
+  assert.equal(quote.breakdown.durationBandStartingFare, 100);
+});
