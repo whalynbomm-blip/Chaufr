@@ -31,6 +31,7 @@ import com.google.android.libraries.places.widget.model.AutocompleteActivityMode
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.launch
 
@@ -38,6 +39,7 @@ import kotlinx.coroutines.launch
 fun GoogleMapsRoutePicker(
     pickup: LatLng?,
     destination: LatLng?,
+    encodedRoute: String?,
     onPickupSelected: (String, LatLng) -> Unit,
     onDestinationSelected: (String, LatLng) -> Unit
 ) {
@@ -101,6 +103,10 @@ fun GoogleMapsRoutePicker(
                 ) {
                     pickup?.let { Marker(state = MarkerState(it), title = "Pickup") }
                     destination?.let { Marker(state = MarkerState(it), title = "Destination") }
+                    encodedRoute?.let { encoded ->
+                        val routePoints = decodeGooglePolyline(encoded)
+                        if (routePoints.size > 1) Polyline(points = routePoints, color = Color(0xFF2878F0), width = 8f)
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -124,4 +130,35 @@ fun GoogleMapsRoutePicker(
             }
         }
     }
+}
+
+private fun decodeGooglePolyline(encoded: String): List<LatLng> {
+    val points = mutableListOf<LatLng>()
+    var index = 0
+    var latitude = 0
+    var longitude = 0
+    while (index < encoded.length) {
+        var result = 0
+        var shift = 0
+        var byte: Int
+        do {
+            if (index >= encoded.length) return points
+            byte = encoded[index++].code - 63
+            result = result or ((byte and 0x1f) shl shift)
+            shift += 5
+        } while (byte >= 0x20)
+        latitude += if ((result and 1) != 0) (result shr 1).inv() else result shr 1
+
+        result = 0
+        shift = 0
+        do {
+            if (index >= encoded.length) return points
+            byte = encoded[index++].code - 63
+            result = result or ((byte and 0x1f) shl shift)
+            shift += 5
+        } while (byte >= 0x20)
+        longitude += if ((result and 1) != 0) (result shr 1).inv() else result shr 1
+        points.add(LatLng(latitude / 100000.0, longitude / 100000.0))
+    }
+    return points
 }
