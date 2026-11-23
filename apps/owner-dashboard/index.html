@@ -62,6 +62,7 @@ const $=id=>document.getElementById(id);
 let token=sessionStorage.getItem("chaufr_owner_token")||"";
 let config=null;
 const apiBase=()=>($("apiBase").value.trim().replace(/\/$/,""));
+$("apiBase").value=window.location.origin;
 const money=value=>"R"+Number(value||0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
 function status(el,message,error=false){$(el).textContent=message;$(el).className="status "+(error?"error":"ok")}
 async function api(path,options={}){const response=await fetch(apiBase()+path,{...options,headers:{"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{}),...(options.headers||{})}});const data=await response.json().catch(()=>({error:"Invalid server response"}));if(!response.ok)throw new Error(data.error||"Request failed");return data}
