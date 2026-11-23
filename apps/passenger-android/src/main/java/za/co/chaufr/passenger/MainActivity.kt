@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Locale
@@ -98,6 +99,9 @@ private fun PassengerHome() {
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    var bookingLoading by remember { mutableStateOf(false) }
+    var bookingMessage by remember { mutableStateOf("") }
 
     Surface(modifier = Modifier.fillMaxSize(), color = ChaufrBackground) {
         Column(
@@ -144,7 +148,7 @@ private fun PassengerHome() {
                         Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = pickup,
-                            onValueChange = { pickup = it; pickupPoint = null; preview = null; message = "" },
+                            onValueChange = { pickup = it; pickupPoint = null; preview = null; message = ""; bookingMessage = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Pickup location") },
                             placeholder = { Text("Enter pickup address") },
@@ -259,6 +263,42 @@ private fun PassengerHome() {
                                 Text(money(fare.total), fontWeight = FontWeight.ExtraBold, color = ChaufrBlue)
                             }
                             Spacer(Modifier.height(13.dp))
+                            Spacer(Modifier.height(14.dp))
+                            Button(
+                                onClick = {
+                                    if (!bookingLoading) scope.launch {
+                                        bookingLoading = true
+                                        bookingMessage = ""
+                                        try {
+                                            val token = SecureTokenStore.load(context)
+                                                ?: throw IllegalStateException("Sign in to your passenger account before requesting a ride.")
+                                            val result = ChaufrApi.requestTrip(
+                                                BuildConfig.CHAUFR_API_BASE_URL,
+                                                token,
+                                                pickup,
+                                                destination,
+                                                pickupPoint ?: throw IllegalStateException("Choose a pickup point on the map."),
+                                                destinationPoint ?: throw IllegalStateException("Choose a destination point on the map."),
+                                                vehicle.lowercase()
+                                            )
+                                            bookingMessage = "Ride request submitted. Automatic driver matching and live notifications are still being connected."
+                                        } catch (error: Exception) {
+                                            bookingMessage = error.message ?: "Unable to submit your ride request."
+                                        } finally {
+                                            bookingLoading = false
+                                        }
+                                    }
+                                },
+                                enabled = !bookingLoading,
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = ChaufrNavy)
+                            ) {
+                                Text(if (bookingLoading) "Submitting request..." else "Request this ride", fontWeight = FontWeight.Bold)
+                            }
+                            if (bookingMessage.isNotBlank()) {
+                                Text(bookingMessage, color = if (bookingMessage.startsWith("Ride request submitted")) ChaufrGreen else Color(0xFFB42318), fontSize = 12.sp)
+                            }
                             Text(
                                 if (fare.source == "LIVE API") "Server-calculated estimate using sample route measurements. Booking and driver matching are not connected yet." else "This is a sample calculation using development rates and an assumed route. It is not a live quote or a booking price.",
                                 color = ChaufrMuted, fontSize = 11.sp, lineHeight = 16.sp
