@@ -1,4 +1,8 @@
-# Chaufr Passenger Android app
+# Chaufr Passenger Android
+## Chaufr Rewards
+
+Passengers earn one reward ticket after each completed trip. Nine available tickets can be redeemed for a free passenger fare on a traffic-aware route between 5 and 20 minutes. Redemption is checked and reserved by the API, and the normal trip fare and driver earnings remain intact so the reward is funded by Chaufr. Unaccepted reward bookings release their reserved tickets after the request expires. Passengers can view their ticket balance from the Rewards card in the app.
+ app
 
 ## Google Maps and address search
 
