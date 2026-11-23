@@ -51,7 +51,7 @@ fun GoogleMapsRoutePicker(
         position = CameraPosition.fromLatLngZoom(capeTown, 11f)
     }
 
-    fun openPlaceSearch(isPickup: Boolean, launcher: (Intent) -> Unit) {
+    fun openPlaceSearch(launcher: (Intent) -> Unit) {
         if (!apiKeyReady) return
         val fields = listOf(Place.Field.ID, Place.Field.NAME, Place.Field.ADDRESS, Place.Field.LAT_LNG)
         launcher(
@@ -111,15 +111,15 @@ fun GoogleMapsRoutePicker(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         modifier = Modifier.weight(1f),
-                        onClick = { openPlaceSearch(true) { pickupLauncher.launch(it) } }
+                        onClick = { openPlaceSearch { pickupLauncher.launch(it) } }
                     ) { Text(if (pickup == null) "Choose pickup" else "Change pickup") }
                     Button(
                         modifier = Modifier.weight(1f),
-                        onClick = { openPlaceSearch(false) { destinationLauncher.launch(it) } }
+                        onClick = { openPlaceSearch { destinationLauncher.launch(it) } }
                     ) { Text(if (destination == null) "Choose destination" else "Change destination") }
                 }
                 Text(
-                    "Choose both points using Google Places. Route distance and traffic-based fare calculation are being connected separately.",
+                    "Choose both points using Google Places. Chaufr calculates the driving route and traffic-aware estimate before showing your fixed fare.",
                     color = Color(0xFF718096)
                 )
             } else {
