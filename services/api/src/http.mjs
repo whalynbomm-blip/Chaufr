@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { calculateFare } from "./fare-calculator.mjs";
 import { AuthError, createAuthService } from "./auth-service.mjs";
 import { createDriverService } from "./driver-service.mjs";
+import { createTripService } from "./trip-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -73,6 +74,7 @@ export const developmentFareConfig = () => ({
 export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
   const authService = database ? createAuthService(database) : null;
   const driverService = database ? createDriverService(database) : null;
+  const tripService = database ? createTripService(database, fareConfig) : null;
   const authAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
@@ -112,6 +114,8 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/auth/register", "POST /v1/auth/login",
             "GET /v1/auth/me", "POST /v1/auth/logout",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
+            "GET /v1/driver/activation", "GET /v1/driver/trips/available",
+            "POST /v1/driver/trips/:tripId/accept", "POST /v1/trips",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -135,6 +139,16 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         }
         if (request.method === "PUT" && url.pathname === "/v1/driver/presence") {
           return json(response, 200, await driverService.setPresence(user, await readJson(request)));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/driver/activation") {
+          return json(response, 200, await tripService.getActivationStatus(user));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/driver/trips/available") {
+          return json(response, 200, await tripService.listAvailableTrips(user));
+        }
+        const acceptMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/accept$/i.exec(url.pathname);
+        if (request.method === "POST" && acceptMatch) {
+          return json(response, 200, await tripService.acceptTrip(user, acceptMatch[1]));
         }
       }
 
@@ -166,6 +180,18 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           return json(response, 200, { ok: true });
         }
       }
+      if (request.method === "POST" && url.pathname === "/v1/trips") {
+        if (!authService || !tripService) {
+          return json(response, 503, { error: "Trip services are unavailable until the database is configured", requestId });
+        }
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
+        return json(response, 201, await tripService.requestTrip(user, await readJson(request)));
+      }
+
       if (request.method === "POST" && url.pathname === "/v1/fare-quotes") {
         const body = await readJson(request);
         const quote = calculateFare({
