@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -104,7 +105,26 @@ private fun PassengerHome() {
     val context = LocalContext.current
     var bookingLoading by remember { mutableStateOf(false) }
     var bookingMessage by remember { mutableStateOf("") }
+    var rewardsTickets by remember { mutableStateOf(0) }
+    var redeemReward by remember { mutableStateOf(false) }
+    var rewardsMessage by remember { mutableStateOf("") }
 
+    LaunchedEffect(BuildConfig.CHAUFR_API_BASE_URL) {
+        val savedToken = SecureTokenStore.load(context)
+        if (!savedToken.isNullOrBlank() && BuildConfig.CHAUFR_API_BASE_URL.isNotBlank()) {
+            try { rewardsTickets = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, savedToken).optInt("tickets", 0) } catch (_: Exception) { }
+        }
+    }
+
+    fun refreshRewards(token: String) {
+        if (BuildConfig.CHAUFR_API_BASE_URL.isBlank()) return
+        scope.launch {
+            try {
+                rewardsTickets = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, token).optInt("tickets", 0)
+                rewardsMessage = ""
+            } catch (error: Exception) { rewardsMessage = error.message ?: "Unable to refresh reward tickets." }
+        }
+    }
     Surface(modifier = Modifier.fillMaxSize(), color = ChaufrBackground) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -145,13 +165,13 @@ private fun PassengerHome() {
                             pickup = pickupPoint,
                             destination = destinationPoint,
                             encodedRoute = encodedRoute,
-                            onPickupSelected = { label, point -> pickup = label; pickupPoint = point; preview = null; routeQuoteToken = null; encodedRoute = null; bookingMessage = "" },
+                            onPickupSelected = { label, point -> pickup = label; pickupPoint = point; preview = null; routeQuoteToken = null; encodedRoute = null; redeemReward = false; bookingMessage = "" },
                             onDestinationSelected = { label, point -> destination = label; destinationPoint = point; preview = null; routeQuoteToken = null; encodedRoute = null; bookingMessage = "" }
                         )
                         Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = pickup,
-                            onValueChange = { pickup = it; pickupPoint = null; routeQuoteToken = null; encodedRoute = null; preview = null; message = ""; bookingMessage = "" },
+                            onValueChange = { pickup = it; pickupPoint = null; routeQuoteToken = null; encodedRoute = null; redeemReward = false; preview = null; message = ""; bookingMessage = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Pickup location") },
                             placeholder = { Text("Enter pickup address") },
@@ -161,7 +181,7 @@ private fun PassengerHome() {
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
                             value = destination,
-                            onValueChange = { destination = it; destinationPoint = null; routeQuoteToken = null; encodedRoute = null; preview = null; message = ""; bookingMessage = "" },
+                            onValueChange = { destination = it; destinationPoint = null; routeQuoteToken = null; encodedRoute = null; redeemReward = false; preview = null; message = ""; bookingMessage = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Destination") },
                             placeholder = { Text("Where would you like to go?") },
