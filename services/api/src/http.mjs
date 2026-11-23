@@ -115,7 +115,8 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/auth/me", "POST /v1/auth/logout",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
             "GET /v1/driver/activation", "GET /v1/driver/trips/available",
-            "POST /v1/driver/trips/:tripId/accept", "POST /v1/trips",
+            "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
+            "POST /v1/driver/trips/:tripId/complete", "POST /v1/trips",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -149,6 +150,14 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const acceptMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/accept$/i.exec(url.pathname);
         if (request.method === "POST" && acceptMatch) {
           return json(response, 200, await tripService.acceptTrip(user, acceptMatch[1]));
+        }
+        const startMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/start$/i.exec(url.pathname);
+        if (request.method === "POST" && startMatch) {
+          return json(response, 200, await tripService.startTrip(user, startMatch[1]));
+        }
+        const completeMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/complete$/i.exec(url.pathname);
+        if (request.method === "POST" && completeMatch) {
+          return json(response, 200, await tripService.completeTrip(user, completeMatch[1]));
         }
       }
 
