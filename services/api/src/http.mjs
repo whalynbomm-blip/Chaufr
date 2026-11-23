@@ -48,19 +48,25 @@ export const developmentFareConfig = () => ({
   },
 });
 
-export function createAppServer({ fareConfig = developmentFareConfig() } = {}) {
+export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
   return createServer(async (request, response) => {
     const requestId = randomUUID();
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
       if (request.method === "GET" && url.pathname === "/health") {
-        return json(response, 200, { status: "ok", service: "chaufr-api", requestId });
+        if (database) await database.query("SELECT 1");
+        return json(response, 200, {
+          status: "ok", service: "chaufr-api",
+          dependencies: { database: database ? "connected" : "not_configured" },
+          requestId,
+        });
       }
       if (request.method === "GET" && url.pathname === "/v1") {
         return json(response, 200, {
           service: "chaufr-api",
           version: "0.2.0",
           endpoints: ["GET /health", "GET /v1", "POST /v1/fare-quotes"],
+          database: database ? "connected" : "not_configured",
         });
       }
       if (request.method === "POST" && url.pathname === "/v1/fare-quotes") {
