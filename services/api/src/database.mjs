@@ -14,7 +14,7 @@ export async function applyMigrations(pool, directory = migrationsDirectory) {
     )`);
 
     const filenames = (await readdir(directory))
-      .filter((name) => /^\\d+_[a-z0-9_-]+\\.sql$/i.test(name))
+      .filter((name) => /^\d+_[a-z0-9_-]+\.sql$/i.test(name))
       .sort();
 
     for (const filename of filenames) {
@@ -24,7 +24,8 @@ export async function applyMigrations(pool, directory = migrationsDirectory) {
       );
       if (existing.rowCount) continue;
 
-      const sql = await readFile(pathToFileURL(`${directory.endsWith("/") ? directory : directory + "/"}${filename}`), "utf8");
+      const sqlPath = pathToFileURL(`${directory.endsWith("/") ? directory : directory + "/"}${filename}`);
+      const sql = await readFile(sqlPath, "utf8");
       await client.query("BEGIN");
       try {
         await client.query(sql);
