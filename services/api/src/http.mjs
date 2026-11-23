@@ -261,8 +261,17 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         checkRouteRateLimit(request);
         const body = await readJson(request);
         const route = await routesService.computeRoute(body.origin, body.destination);
-        const quoteToken = routesService.signRouteQuote(body.origin, body.destination, route);
-        return json(response, 200, { ...route, quoteToken, requestId });
+        const fare = calculateFare({
+          distanceKm: route.distanceKm,
+          durationMinutes: route.durationMinutes,
+          vehicleCategory: body.vehicleCategory,
+          trafficLevel: "normal",
+        }, fareConfig);
+        const quoteToken = routesService.signRouteQuote(body.origin, body.destination, route, {
+          vehicleCategory: body.vehicleCategory,
+          fare,
+        });
+        return json(response, 200, { ...route, ...fare, quoteToken, requestId });
       }
 
       if (request.method === "POST" && url.pathname === "/v1/fare-quotes") {
