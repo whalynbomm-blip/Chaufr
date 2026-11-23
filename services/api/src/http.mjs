@@ -77,9 +77,9 @@ export const developmentFareConfig = () => ({
 export function createAppServer({ fareConfig = developmentFareConfig(), database = null } = {}) {
   const authService = database ? createAuthService(database) : null;
   const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
-  const tripService = database ? createTripService(database, fareConfig) : null;
-  const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const routesService = createGoogleRoutesService();
+  const tripService = database ? createTripService(database, fareConfig, routesService) : null;
+  const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const authAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
