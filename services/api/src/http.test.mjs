@@ -61,3 +61,14 @@ test("unknown routes return 404", async () => {
     assert.equal(response.status, 404);
   });
 });
+
+test("owner console is served from the API origin", async () => {
+  await withServer(async (base) => {
+    const response = await fetch(`${base}/owner`);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("content-type"), /text\/html/);
+    const page = await response.text();
+    assert.match(page, /Chaufr Owner Console/);
+    assert.match(page, /Owner sign in/);
+  });
+});
