@@ -1,6 +1,14 @@
 # Product requirements
 
 ## Passenger Android app
+
+## Passenger loyalty rewards
+- Award one ticket for every completed passenger trip.
+- Nine tickets redeem one free passenger fare on a server-calculated route between 5 and 20 minutes inclusive.
+- Ticket balances are account-based and persisted in an auditable ledger; client-side balances are never trusted.
+- A redemption reserves nine tickets transactionally when the passenger submits the ride request. Expired or cancelled unaccepted requests release the reservation.
+- The regular trip fare and driver earnings remain unchanged. The passenger payable amount is zero and Chaufr funds the reward fare.
+
 - Register, sign in and manage a passenger profile.
 - Set pickup and destination and review the proposed route.
 - Receive a fixed upfront quote before requesting a trip.
