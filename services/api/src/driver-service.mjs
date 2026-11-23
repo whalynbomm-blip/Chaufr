@@ -39,7 +39,17 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
          FROM vehicles WHERE driver_user_id = $1 ORDER BY created_at DESC`,
         [user.id],
       );
-      return { verificationStatus: profile.rows[0].verification_status, rating: profile.rows[0].rating, vehicles: vehicles.rows };
+      const presence = await pool.query(
+        "SELECT is_online, last_seen_at FROM driver_presence WHERE driver_user_id = $1",
+        [user.id],
+      );
+      return {
+        verificationStatus: profile.rows[0].verification_status,
+        rating: profile.rows[0].rating,
+        isOnline: presence.rows[0]?.is_online ?? false,
+        lastSeenAt: presence.rows[0]?.last_seen_at ?? null,
+        vehicles: vehicles.rows,
+      };
     },
 
     async submitVehicle(user, input = {}) {
