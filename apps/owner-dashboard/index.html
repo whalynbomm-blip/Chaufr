@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101a2c">
+<title>Chaufr Owner Console</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f3f5f9;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}.top{background:#101a2c;color:#fff;padding:22px max(20px,calc((100% - 1120px)/2));display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{font-weight:800;letter-spacing:.08em}.brand span{color:#5da9ff}.top small{color:#b8c5d8}.wrap{max-width:1120px;margin:28px auto;padding:0 20px}.panel{background:#fff;border:1px solid #e3e8f0;border-radius:16px;padding:22px;box-shadow:0 8px 28px #1a2a4010;margin-bottom:18px}.hidden{display:none!important}h1{font-size:25px;margin:0 0 8px}h2{font-size:18px;margin:0 0 16px}.muted{color:#65728a;font-size:14px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.metric{padding:16px;border:1px solid #e6ebf2;border-radius:12px}.metric b{display:block;font-size:25px;margin-top:8px}.row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.field label{display:block;font-size:13px;color:#536078;margin-bottom:6px}.field input,.field select{width:100%;border:1px solid #cfd7e4;border-radius:9px;padding:11px;font:inherit;background:#fff;color:#172033}.btn{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer;background:#145cba;color:white}.btn.secondary{background:#e9eef6;color:#23334d}.btn:disabled{opacity:.55;cursor:wait}.actions{display:flex;gap:10px;flex-wrap:wrap}.status{margin-top:12px;font-size:14px;min-height:20px}.status.error{color:#b42318}.status.ok{color:#067647}.tablewrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:520px}th,td{text-align:left;padding:11px;border-bottom:1px solid #edf0f5;font-size:14px}th{color:#5b6880;font-weight:650}td input{width:100%;min-width:90px;padding:8px;border:1px solid #cfd7e4;border-radius:7px}.check{display:flex;align-items:center;gap:7px;white-space:nowrap}.login{max-width:430px;margin:60px auto}.login .field{margin:14px 0}.note{background:#f5f8fc;border-left:3px solid #5da9ff;padding:12px 14px;border-radius:8px;color:#526079;font-size:13px;margin:12px 0 18px}
+@media(max-width:760px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fields{grid-template-columns:1fr 1fr}.wrap{margin:18px auto}.panel{padding:17px}}
+@media(max-width:480px){.fields{grid-template-columns:1fr}.top{padding:18px 16px}.grid{gap:9px}.metric{padding:12px}.metric b{font-size:21px}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand">CHAUFR<span>.</span> <small>OWNER CONSOLE</small></div><button id="logout" class="btn secondary hidden">Sign out</button></header>
+<main class="wrap">
+<section id="loginPanel" class="panel login">
+<h1>Owner sign in</h1><p class="muted">Private access for the Chaufr platform owner. Owner accounts cannot be created from public registration.</p>
+<div class="field"><label for="apiBase">API address</label><input id="apiBase" value="" placeholder="https://your-chaufr-api.example.com" autocomplete="url"></div>
+<div class="field"><label for="identifier">Email or phone</label><input id="identifier" autocomplete="username"></div>
+<div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password"></div>
+<button id="login" class="btn">Sign in securely</button><div id="loginStatus" class="status" role="status"></div>
+</section>
+<section id="dashboard" class="hidden">
+<div class="row" style="margin:0 0 18px"><div><h1>Platform overview</h1><p class="muted">Owner-only operating and financial information</p></div><button id="refresh" class="btn secondary">Refresh data</button></div>
+<div class="grid" id="metrics">
+<div class="metric"><span class="muted">Passengers</span><b id="passengers">—</b></div>
+<div class="metric"><span class="muted">Drivers</span><b id="drivers">—</b></div>
+<div class="metric"><span class="muted">Drivers online</span><b id="onlineDrivers">—</b></div>
+<div class="metric"><span class="muted">Active trips</span><b id="activeTrips">—</b></div>
+<div class="metric"><span class="muted">Completed trips</span><b id="completedTrips">—</b></div>
+<div class="metric"><span class="muted">Recognized commission</span><b id="recognizedCommission">—</b></div>
+</div>
+<div class="panel" style="margin-top:18px">
+<div class="row"><div><h2>Central pricing controls</h2><p class="muted">Changes apply to new quotes and new trip requests. Accepted trip fares remain locked.</p></div><span class="muted" id="pricingVersion">Not loaded</span></div>
+<div class="note">The 16–22 minute fare is deliberately marked unapproved until you set and approve an amount. Quotes in that band will be blocked rather than charging an unapproved fare.</div>
+<div class="fields">
+<div class="field"><label for="dailyFee">Daily driver activation fee (R)</label><input id="dailyFee" type="number" min="0" max="1000" step=".01"></div>
+<div class="field"><label for="commission">Trip commission (%)</label><input id="commission" type="number" min="0" max="50" step=".1"></div>
+<div class="field"><label for="fuelPrice">Fuel price per litre (R)</label><input id="fuelPrice" type="number" min="0" max="200" step=".01"></div>
+<div class="field"><label for="baseFare">Base fare (R)</label><input id="baseFare" type="number" min="0" step=".01"></div>
+<div class="field"><label for="perKm">Distance rate per km (R)</label><input id="perKm" type="number" min="0" step=".01"></div>
+<div class="field"><label for="operating">Operating cost per km (R)</label><input id="operating" type="number" min="0" step=".01"></div>
+<div class="field"><label for="minimum">Minimum fare (R)</label><input id="minimum" type="number" min="0" step=".01"></div>
+</div>
+<h2 style="margin-top:24px">Journey duration bands</h2>
+<div class="tablewrap"><table><thead><tr><th>Maximum minutes</th><th>Starting fare (R)</th><th>Approved for live quotes</th></tr></thead><tbody id="bands"></tbody></table></div>
+<h2 style="margin-top:24px">Vehicle category multipliers</h2>
+<div class="fields">
+<div class="field"><label for="standardMultiplier">Standard</label><input id="standardMultiplier" type="number" min="1" max="5" step=".01"></div>
+<div class="field"><label for="comfortMultiplier">Comfort</label><input id="comfortMultiplier" type="number" min="1" max="5" step=".01"></div>
+<div class="field"><label for="xlMultiplier">XL</label><input id="xlMultiplier" type="number" min="1" max="5" step=".01"></div>
+</div>
+<div class="actions" style="margin-top:22px"><button id="save" class="btn">Save pricing changes</button><button id="reloadPricing" class="btn secondary">Discard unsaved changes</button></div>
+<div id="saveStatus" class="status" role="status"></div>
+</div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let token=sessionStorage.getItem("chaufr_owner_token")||"";
+let config=null;
+const apiBase=()=>($("apiBase").value.trim().replace(/\/$/,""));
+const money=value=>"R"+Number(value||0).toLocaleString("en-ZA",{minimumFractionDigits:2,maximumFractionDigits:2});
+function status(el,message,error=false){$(el).textContent=message;$(el).className="status "+(error?"error":"ok")}
+async function api(path,options={}){const response=await fetch(apiBase()+path,{...options,headers:{"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{}),...(options.headers||{})}});const data=await response.json().catch(()=>({error:"Invalid server response"}));if(!response.ok)throw new Error(data.error||"Request failed");return data}
+function showDashboard(show){$("dashboard").classList.toggle("hidden",!show);$("loginPanel").classList.toggle("hidden",show);$("logout").classList.toggle("hidden",!show)}
+async function signIn(){try{if(!apiBase())throw new Error("Enter the API address first");const result=await api("/v1/auth/login",{method:"POST",body:JSON.stringify({identifier:$("identifier").value.trim(),password:$("password").value})});if(result.user?.role!=="owner")throw new Error("This account is not an owner account");token=result.accessToken;sessionStorage.setItem("chaufr_owner_token",token);showDashboard(true);await refreshAll()}catch(e){token="";sessionStorage.removeItem("chaufr_owner_token");status("loginStatus",e.message,true)}}
+async function refreshAll(){try{const [overview,pricing]=await Promise.all([api("/v1/owner/overview"),api("/v1/owner/pricing")]);for(const key of ["passengers","drivers","onlineDrivers","activeTrips","completedTrips"])$(key).textContent=overview[key].toLocaleString("en-ZA");$("recognizedCommission").textContent=money(overview.recognizedCommission);config=pricing.config;renderPricing();$("pricingVersion").textContent="Version "+pricing.version+(pricing.updatedAt?" · "+new Date(pricing.updatedAt).toLocaleString():" · defaults");}catch(e){if(/session|owner access|authentication/i.test(e.message)){logout()}status("saveStatus",e.message,true)}}
+function renderPricing(){if(!config)return;$("dailyFee").value=config.dailyActivationFee;$("commission").value=(config.platformCommissionRate*100).toFixed(1);$("fuelPrice").value=config.fuelPricePerLitre;$("baseFare").value=config.baseFare;$("perKm").value=config.perKmRate;$("operating").value=config.operatingCostPerKm;$("minimum").value=config.minimumFare;$("standardMultiplier").value=config.vehicleCategoryMultipliers.standard;$("comfortMultiplier").value=config.vehicleCategoryMultipliers.comfort;$("xlMultiplier").value=config.vehicleCategoryMultipliers.xl;$("bands").replaceChildren();config.durationFareBands.forEach((band,index)=>{const tr=document.createElement("tr");tr.innerHTML='<td><input type="number" min="1" max="1440" step="1" data-band="maxMinutes" data-index="'+index+'"></td><td><input type="number" min="0" max="10000" step=".01" data-band="startingFare" data-index="'+index+'"></td><td><label class="check"><input type="checkbox" data-band="approved" data-index="'+index+'"> Approve</label></td>';$("bands").append(tr);tr.querySelector('[data-band="maxMinutes"]').value=band.maxMinutes;tr.querySelector('[data-band="startingFare"]').value=band.startingFare;tr.querySelector('[data-band="approved"]').checked=band.approved===true;});}
+function readPricing(){const next=structuredClone(config);next.dailyActivationFee=Number($("dailyFee").value);next.platformCommissionRate=Number($("commission").value)/100;next.fuelPricePerLitre=Number($("fuelPrice").value);next.baseFare=Number($("baseFare").value);next.perKmRate=Number($("perKm").value);next.operatingCostPerKm=Number($("operating").value);next.minimumFare=Number($("minimum").value);next.vehicleCategoryMultipliers={standard:Number($("standardMultiplier").value),comfort:Number($("comfortMultiplier").value),xl:Number($("xlMultiplier").value)};document.querySelectorAll("[data-band]").forEach(input=>{const i=Number(input.dataset.index),key=input.dataset.band;next.durationFareBands[i][key]=key==="approved"?input.checked:Number(input.value)});return next}
+async function savePricing(){try{$("save").disabled=true;const result=await api("/v1/owner/pricing",{method:"PUT",body:JSON.stringify(readPricing())});config=result.config;renderPricing();$("pricingVersion").textContent="Version "+result.version+" · saved";status("saveStatus","Pricing changes saved and audited.");}catch(e){status("saveStatus",e.message,true)}finally{$("save").disabled=false}}
+function logout(){token="";sessionStorage.removeItem("chaufr_owner_token");showDashboard(false);status("loginStatus","You have signed out.");}
+$("login").addEventListener("click",signIn);$("password").addEventListener("keydown",e=>{if(e.key==="Enter")signIn()});$("logout").addEventListener("click",logout);$("refresh").addEventListener("click",refreshAll);$("reloadPricing").addEventListener("click",refreshAll);$("save").addEventListener("click",savePricing);
+if(token){showDashboard(true);refreshAll().catch(()=>logout())}
+</script>
+</body>
+</html>
