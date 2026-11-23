@@ -2,6 +2,7 @@ package za.co.chaufr.driver
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -10,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +43,14 @@ fun DriverAccountCard() {
     var registering by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var verificationStatus by remember { mutableStateOf("pending") }
+    var vehicleMake by remember { mutableStateOf("") }
+    var vehicleModel by remember { mutableStateOf("") }
+    var vehicleRegistration by remember { mutableStateOf("") }
+    var licenceNumber by remember { mutableStateOf("") }
+    var fuelConsumption by remember { mutableStateOf("8.0") }
+    var vehicleCategory by remember { mutableStateOf("standard") }
+    var vehicleCount by remember { mutableStateOf(0) }
 
     LaunchedEffect(apiUrl) {
         val saved = SecureTokenStore.load(context)
@@ -52,6 +62,19 @@ fun DriverAccountCard() {
                 identifier = user.optString("email").ifBlank { user.optString("phone") }
             } catch (_: Exception) {
                 SecureTokenStore.clear(context)
+            }
+        }
+    }
+
+    LaunchedEffect(token) {
+        val activeToken = token ?: return@LaunchedEffect
+        if (apiUrl.isNotBlank()) {
+            try {
+                val profile = ChaufrApi.driverProfile(apiUrl, activeToken)
+                verificationStatus = profile.optString("verificationStatus", "pending")
+                vehicleCount = profile.optJSONArray("vehicles")?.length() ?: 0
+            } catch (error: Exception) {
+                message = error.message ?: "Unable to load driver profile."
             }
         }
     }
@@ -69,6 +92,61 @@ fun DriverAccountCard() {
             if (token != null) {
                 Text("Signed in as $displayName", color = Color(0xFF53647A))
                 Text("Your Chaufr account session is active on this device.", color = Color(0xFF8291A5))
+                Text("Verification status: $verificationStatus · Vehicles submitted: $vehicleCount", color = Color(0xFF53647A))
+                Text("VEHICLE ONBOARDING", color = Color(0xFF101C2C), fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("standard", "comfort", "xl").forEach { option ->
+                        FilterChip(
+                            selected = vehicleCategory == option,
+                            onClick = { vehicleCategory = option },
+                            label = { Text(option.replaceFirstChar { it.uppercase() }) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = vehicleMake, onValueChange = { vehicleMake = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Vehicle make") }, singleLine = true
+                )
+                OutlinedTextField(
+                    value = vehicleModel, onValueChange = { vehicleModel = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Vehicle model") }, singleLine = true
+                )
+                OutlinedTextField(
+                    value = vehicleRegistration, onValueChange = { vehicleRegistration = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Vehicle registration") }, singleLine = true
+                )
+                OutlinedTextField(
+                    value = licenceNumber, onValueChange = { licenceNumber = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Driver licence number") }, singleLine = true
+                )
+                OutlinedTextField(
+                    value = fuelConsumption, onValueChange = { fuelConsumption = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Fuel consumption (L/100 km)") }, singleLine = true
+                )
+                Button(
+                    onClick = {
+                        if (!busy) scope.launch {
+                            busy = true
+                            message = ""
+                            try {
+                                val consumption = fuelConsumption.toDoubleOrNull()
+                                    ?: throw IllegalArgumentException("Enter a valid fuel consumption value.")
+                                val result = ChaufrApi.submitDriverVehicle(
+                                    apiUrl, token!!, vehicleCategory, vehicleMake, vehicleModel,
+                                    vehicleRegistration, licenceNumber, consumption
+                                )
+                                verificationStatus = result.optString("verificationStatus", "in_review")
+                                vehicleCount += 1
+                                message = "Vehicle submitted. Your driver profile is now under review."
+                                vehicleMake = ""; vehicleModel = ""; vehicleRegistration = ""; licenceNumber = ""
+                            } catch (error: Exception) {
+                                message = error.message ?: "Unable to submit vehicle details."
+                            } finally { busy = false }
+                        }
+                    },
+                    enabled = !busy && apiUrl.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (busy) "Please wait..." else "Submit vehicle for review") }
                 Button(
                     onClick = {
                         if (!busy) scope.launch {
