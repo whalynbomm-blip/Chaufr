@@ -134,6 +134,8 @@ export function createTripService(pool, fareConfig) {
       requireRole(driver, "driver");
       const activation = await hasPaidActivation(pool, driver.id);
       if (!activation) throw activationRequired();
+      const verification = await pool.query("SELECT verification_status FROM driver_profiles WHERE user_id = $1", [driver.id]);
+      if (verification.rows[0]?.verification_status !== "verified") throw new AuthError("Your driver profile must be verified before accessing trip requests", 403);
       const presence = await pool.query("SELECT is_online FROM driver_presence WHERE driver_user_id = $1", [driver.id]);
       if (!presence.rows[0]?.is_online) throw new AuthError("Go online to access available trip requests", 403);
       const result = await pool.query(
