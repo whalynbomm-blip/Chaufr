@@ -238,8 +238,11 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     const remainingRewardsResponse = await fetch(base + "/v1/passenger/rewards", { headers: passengerHeader });
     assert.equal((await remainingRewardsResponse.json()).tickets, 0);
 
-    const unavailableAgain = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
-    assert.equal((await unavailableAgain.json()).trips.length, 0);
+    const rewardOfferResponse = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
+    const rewardOffers = (await rewardOfferResponse.json()).trips;
+    assert.equal(rewardOffers.length, 1);
+    assert.equal(rewardOffers[0].passengerFare, 40);
+    assert.equal(rewardOffers[0].expectedDriverEarnings, 35.2);
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     await pool.end();
