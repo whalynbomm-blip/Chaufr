@@ -94,6 +94,7 @@ private fun PassengerHome() {
     var destination by remember { mutableStateOf("") }
     var pickupPoint by remember { mutableStateOf<LatLng?>(null) }
     var destinationPoint by remember { mutableStateOf<LatLng?>(null) }
+    var routeQuoteToken by remember { mutableStateOf<String?>(null) }
     var vehicle by remember { mutableStateOf("Standard") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
@@ -142,13 +143,13 @@ private fun PassengerHome() {
                         GoogleMapsRoutePicker(
                             pickup = pickupPoint,
                             destination = destinationPoint,
-                            onPickupSelected = { label, point -> pickup = label; pickupPoint = point; preview = null },
-                            onDestinationSelected = { label, point -> destination = label; destinationPoint = point; preview = null }
+                            onPickupSelected = { label, point -> pickup = label; pickupPoint = point; preview = null; routeQuoteToken = null; bookingMessage = "" },
+                            onDestinationSelected = { label, point -> destination = label; destinationPoint = point; preview = null; routeQuoteToken = null; bookingMessage = "" }
                         )
                         Spacer(Modifier.height(12.dp))
                         OutlinedTextField(
                             value = pickup,
-                            onValueChange = { pickup = it; pickupPoint = null; preview = null; message = ""; bookingMessage = "" },
+                            onValueChange = { pickup = it; pickupPoint = null; routeQuoteToken = null; preview = null; message = ""; bookingMessage = "" },
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("Pickup location") },
                             placeholder = { Text("Enter pickup address") },
@@ -189,6 +190,7 @@ private fun PassengerHome() {
                                         try {
                                             val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
                                             val route = ChaufrApi.computeRoute(apiUrl, pickupPoint!!, destinationPoint!!)
+                                            routeQuoteToken = route.getString("quoteToken")
                                             val distanceKm = route.getDouble("distanceKm")
                                             val durationMinutes = route.getDouble("durationMinutes")
                                             val root = ChaufrApi.requestFareQuote(apiUrl, distanceKm, durationMinutes, vehicle.lowercase())
@@ -279,7 +281,8 @@ private fun PassengerHome() {
                                                 destination,
                                                 pickupPoint ?: throw IllegalStateException("Choose a pickup point on the map."),
                                                 destinationPoint ?: throw IllegalStateException("Choose a destination point on the map."),
-                                                vehicle.lowercase()
+                                                vehicle.lowercase(),
+                                                routeQuoteToken ?: throw IllegalStateException("Calculate the fare again before requesting this ride.")
                                             )
                                             bookingMessage = "Ride request submitted. Automatic driver matching and live notifications are still being connected."
                                         } catch (error: Exception) {
