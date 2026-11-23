@@ -30,7 +30,8 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       ...developmentFareConfig(),
       vehicleCategories: ["standard", "comfort", "xl"],
     };
-    const trips = createTripService(pool, fareConfig);
+    const testRoutes = { computeRoute: async () => ({ distanceKm: 4, durationMinutes: 7, encodedPolyline: null, trafficAware: true }) };
+    const trips = createTripService(pool, fareConfig, testRoutes);
     const account = await auth.register({
       displayName: "Test Driver",
       phone: "+27821112222",
@@ -75,7 +76,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       (error) => error.status === 403 && /R30.00 daily/.test(error.message),
     );
 
-    server = createAppServer({ database: pool, fareConfig });
+    server = createAppServer({ database: pool, fareConfig, routesService: testRoutes });
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const base = "http://127.0.0.1:" + server.address().port;
     const authHeader = { authorization: "Bearer " + account.accessToken };
@@ -118,8 +119,8 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       body: JSON.stringify({
         pickupLabel: "Cape Town Station",
         destinationLabel: "V&A Waterfront",
-        distanceKm: 4,
-        durationMinutes: 7,
+        origin: { latitude: -33.9, longitude: 18.4 },
+        destination: { latitude: -33.91, longitude: 18.42 },
         vehicleCategory: "standard",
         trafficLevel: "severe",
         platformCommissionRate: 0,
