@@ -50,3 +50,24 @@ test("rejects missing server-side fuel assumptions", () => {
     ...config, vehicleFuelConsumptionLitresPer100Km: {},
   }), /fuel consumption/);
 });
+
+test("blocks an owner-unapproved journey duration instead of charging the provisional fare", () => {
+  const scheduled = {
+    ...config,
+    durationFareBands: [
+      { maxMinutes: 15, startingFare: 50, approved: true },
+      { maxMinutes: 22, startingFare: 85, approved: false },
+      { maxMinutes: 1440, startingFare: 100, approved: true },
+    ],
+    trafficAdjustmentsByDuration: {
+      short: { normal: 0, moderate: 10, heavy: 15, severe: 20 },
+      medium: { normal: 0, moderate: 10, heavy: 15, severe: 20 },
+      long: { normal: 0, moderate: 10, heavy: 15, severe: 20 },
+    },
+    vehicleCategoryMultipliers: { standard: 1, comfort: 1.15, xl: 1.3 },
+  };
+  assert.throws(
+    () => calculateFare({ distanceKm: 4, durationMinutes: 20, vehicleCategory: "standard" }, scheduled),
+    /not yet been approved/,
+  );
+});
