@@ -248,7 +248,8 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       if (request.method === "POST" && url.pathname === "/v1/routes/preview") {
         const body = await readJson(request);
         const route = await routesService.computeRoute(body.origin, body.destination);
-        return json(response, 200, { ...route, requestId });
+        const quoteToken = routesService.signRouteQuote(body.origin, body.destination, route);
+        return json(response, 200, { ...route, quoteToken, requestId });
       }
 
       if (request.method === "POST" && url.pathname === "/v1/fare-quotes") {
