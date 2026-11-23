@@ -1,58 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Blue navigation route behind the pin -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#168BFF"
-        android:strokeWidth="4"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round"
-        android:pathData="M12,77 C22,66 30,75 39,68 C46,62 48,58 55,54 C68,46 78,49 94,28" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#55D8FF"
-        android:strokeWidth="1.5"
-        android:strokeLineCap="round"
-        android:pathData="M13,77 C23,68 29,76 38,69" />
-
-    <!-- Gold location pin with a blue inner face -->
-    <path
-        android:fillColor="#FFC928"
-        android:pathData="M54,8 C34,8 20,23 20,43 C20,65 54,98 54,98 C54,98 88,65 88,43 C88,23 74,8 54,8 Z" />
-    <path
-        android:fillColor="#F59E0B"
-        android:pathData="M54,13 C37,13 25,26 25,43 C25,61 54,90 54,90 C54,90 83,61 83,43 C83,26 71,13 54,13 Z" />
-    <path
-        android:fillColor="#087CF0"
-        android:pathData="M54,18 C40,18 30,29 30,43 C30,57 40,67 54,67 C68,67 78,57 78,43 C78,29 68,18 54,18 Z" />
-    <path
-        android:fillColor="#06152F"
-        android:pathData="M54,22 C42,22 34,31 34,43 C34,54 43,62 54,62 C65,62 74,54 74,43 C74,31 66,22 54,22 Z" />
-
-    <!-- Clean white car silhouette with blue headlights -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M37,42 L42,33 C43,31 45,30 48,30 L60,30 C63,30 65,31 66,33 L71,42 L75,45 L75,54 L70,54 L68,51 L40,51 L38,54 L33,54 L33,45 Z" />
-    <path
-        android:fillColor="#168BFF"
-        android:pathData="M44,34 L64,34 L68,41 L40,41 Z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,44 L70,44 L72,49 L36,49 Z" />
-    <path
-        android:fillColor="#55D8FF"
-        android:pathData="M38,44 L45,44 L42,47 L37,47 Z" />
-    <path
-        android:fillColor="#55D8FF"
-        android:pathData="M63,44 L70,44 L71,47 L66,47 Z" />
-    <path
-        android:fillColor="#06152F"
-        android:pathData="M41,50 L48,50 L47,53 L40,53 Z" />
-    <path
-        android:fillColor="#06152F"
-        android:pathData="M60,50 L67,50 L68,53 L61,53 Z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#00000000" android:strokeColor="#087CF0" android:strokeWidth="3.2" android:strokeLineCap="round" android:pathData="M75,20 C88,29 91,44 84,56" />
+    <path android:fillColor="#D99A12" android:pathData="M54,5 C32,5 17,21 17,42 C17,61 44,84 54,94 C64,84 91,61 91,42 C91,21 76,5 54,5 Z" />
+    <path android:fillColor="#FFC928" android:pathData="M54,9 C35,9 21,23 21,42 C21,58 44,79 54,88 C64,79 87,58 87,42 C87,23 73,9 54,9 Z" />
+    <path android:fillColor="#071735" android:pathData="M54,15 C39,15 27,27 27,42 C27,57 39,69 54,69 C69,69 81,57 81,42 C81,27 69,15 54,15 Z" />
+    <path android:fillColor="#FFC928" android:pathData="M65,29 C61,25 57,23 52,23 C41,23 34,31 34,42 C34,53 41,61 52,61 C57,61 62,59 66,55 L60,49 C58,52 55,54 52,54 C46,54 42,49 42,42 C42,35 46,30 52,30 C55,30 58,32 60,35 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#D99A12" android:strokeWidth="2.8" android:pathData="M30,98 C42,91 66,91 78,98 C66,105 42,105 30,98 Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#168BFF" android:strokeWidth="2" android:pathData="M40,98 C47,95 61,95 68,98" />
 </vector>
