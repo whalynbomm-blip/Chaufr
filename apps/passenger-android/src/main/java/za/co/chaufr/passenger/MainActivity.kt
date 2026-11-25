@@ -116,6 +116,7 @@ private fun PassengerHome() {
     var bookingMessage by remember { mutableStateOf("") }
     var activePassengerTripId by remember { mutableStateOf<String?>(null) }
     var tripStatusSnapshot by remember { mutableStateOf<org.json.JSONObject?>(null) }
+    var tripCancellationLoading by remember { mutableStateOf(false) }
     var rewardsTickets by remember { mutableStateOf(0) }
     var rewardsHistory by remember { mutableStateOf<List<RewardHistoryEntry>>(emptyList()) }
     var redeemReward by remember { mutableStateOf(false) }
@@ -420,6 +421,27 @@ private fun PassengerHome() {
                                                 "Driver location updated · ${location.optDouble("latitude")} / ${location.optDouble("longitude")}",
                                                 color = ChaufrMuted, fontSize = 10.sp
                                             )
+                                        }
+                                        if (snapshot.optString("status") == "requested") {
+                                            Button(
+                                                onClick = {
+                                                    val tripId = activePassengerTripId
+                                                    val token = SecureTokenStore.load(context)
+                                                    if (tripId != null && token != null && !tripCancellationLoading) scope.launch {
+                                                        tripCancellationLoading = true
+                                                        try {
+                                                            val cancelled = ChaufrApi.cancelPassengerTrip(BuildConfig.CHAUFR_API_BASE_URL, token, tripId)
+                                                            tripStatusSnapshot = org.json.JSONObject(snapshot.toString()).put("status", cancelled.optString("status", "cancelled"))
+                                                            bookingMessage = if (cancelled.optInt("rewardTicketsReleased", 0) > 0) "Ride cancelled. Your 9 reward tickets have been returned." else "Ride request cancelled."
+                                                            refreshRewards(token)
+                                                        } catch (error: Exception) {
+                                                            bookingMessage = error.message ?: "Unable to cancel this request."
+                                                        } finally { tripCancellationLoading = false }
+                                                    }
+                                                },
+                                                enabled = !tripCancellationLoading,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) { Text(if (tripCancellationLoading) "Cancelling..." else "Cancel request") }
                                         }
                                         if (snapshot.optString("status") in listOf("completed", "cancelled", "expired")) {
                                             Button(onClick = { activePassengerTripId = null; tripStatusSnapshot = null }, modifier = Modifier.fillMaxWidth()) { Text("Dismiss trip status") }
