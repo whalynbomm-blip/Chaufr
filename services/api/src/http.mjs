@@ -8,6 +8,7 @@ import { createTripService } from "./trip-service.mjs";
 import { createOwnerService } from "./owner-service.mjs";
 import { createGoogleRoutesService } from "./google-routes.mjs";
 import { createPushService } from "./push-service.mjs";
+import { createFcmSender } from "./fcm-sender.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -80,7 +81,8 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
-  const pushService = database ? createPushService(database) : null;
+  const fcmSender = createFcmSender();
+  const pushService = database ? createPushService(database, fcmSender) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
