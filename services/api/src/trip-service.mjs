@@ -494,9 +494,13 @@ export function createTripService(pool, fareConfig, routesService = null) {
           "AND status = 'pending' AND expires_at > now() FOR UPDATE",
           [tripId, driver.id],
         );
+        const offerHistory = await client.query(
+          "SELECT 1 FROM trip_offers WHERE trip_id = $1 LIMIT 1",
+          [tripId],
+        );
         if (!trip || !["requested", "offered"].includes(trip.status) ||
             new Date(trip.quote_expires_at) <= new Date() ||
-            (trip.status === "offered" && !offer.rowCount)) {
+            (offerHistory.rowCount > 0 && !offer.rowCount)) {
           throw new AuthError("This trip is no longer available", 409);
         }
         const vehicle = await client.query(
