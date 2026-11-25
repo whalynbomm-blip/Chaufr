@@ -144,6 +144,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
+            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -163,6 +164,14 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         }
         if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {
           return json(response, 200, await ownerService.listDrivers(user));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/reward-commission-requests") {
+          return json(response, 200, await ownerService.listRewardCommissionRequests(user));
+        }
+        const rewardCommissionReviewMatch = /^\/v1\/owner\/reward-commission-requests\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && rewardCommissionReviewMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await ownerService.reviewRewardCommissionRequest(user, rewardCommissionReviewMatch[1], body.status));
         }
         const driverReviewMatch = /^\/v1\/owner\/drivers\/([0-9a-f-]{36})\/verification$/i.exec(url.pathname);
         if (request.method === "PATCH" && driverReviewMatch) {
