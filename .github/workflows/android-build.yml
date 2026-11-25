@@ -47,6 +47,10 @@ jobs:
         env:
           ORG_GRADLE_PROJECT_chaufrGoogleMapsApiKey: ${{ secrets.GOOGLE_MAPS_ANDROID_API_KEY }}
           ORG_GRADLE_PROJECT_chaufrApiBaseUrl: ${{ secrets.CHAUFR_API_BASE_URL }}
+          ORG_GRADLE_PROJECT_firebaseApiKey: ${{ secrets.FIREBASE_API_KEY }}
+          ORG_GRADLE_PROJECT_firebaseAppId: ${{ secrets.FIREBASE_APP_ID }}
+          ORG_GRADLE_PROJECT_firebaseProjectId: ${{ secrets.FIREBASE_PROJECT_ID }}
+          ORG_GRADLE_PROJECT_firebaseSenderId: ${{ secrets.FIREBASE_SENDER_ID }}
         run: gradle :apps:passenger-android:assembleDebug :apps:driver-android:assembleDebug
       - name: Upload debug APKs
         uses: actions/upload-artifact@v4
