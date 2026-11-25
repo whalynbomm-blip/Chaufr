@@ -202,6 +202,9 @@ private fun PassengerHome() {
                             pickup = pickupPoint,
                             destination = destinationPoint,
                             encodedRoute = encodedRoute,
+                            driverLocation = tripStatusSnapshot?.optJSONObject("driver")?.optJSONObject("location")?.let {
+                                LatLng(it.optDouble("latitude"), it.optDouble("longitude"))
+                            },
                             onPickupSelected = { label, point -> pickup = label; pickupPoint = point; preview = null; routeQuoteToken = null; encodedRoute = null; redeemReward = false; bookingMessage = "" },
                             onDestinationSelected = { label, point -> destination = label; destinationPoint = point; preview = null; routeQuoteToken = null; encodedRoute = null; bookingMessage = "" }
                         )
