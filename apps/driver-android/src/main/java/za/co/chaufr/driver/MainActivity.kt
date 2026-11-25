@@ -36,6 +36,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -87,6 +89,7 @@ private fun DriverHome() {
       Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DriverAccountCard()
         DriverAvailabilityCard()
+        AvailableTripsCard()
 
         Text("TODAY'S SUMMARY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -292,6 +295,84 @@ private fun SummaryCard(title: String, value: String, modifier: Modifier = Modif
       Text(title, color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
       Spacer(Modifier.height(7.dp))
       Text(value, color = Navy, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+    }
+  }
+}
+
+@Composable
+private fun AvailableTripsCard() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var trips by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+  var loading by remember { mutableStateOf(false) }
+  var message by remember { mutableStateOf("") }
+  var acceptingId by remember { mutableStateOf<String?>(null) }
+
+  suspend fun refresh() {
+    val token = SecureTokenStore.load(context) ?: return
+    if (apiUrl.isBlank()) return
+    loading = true
+    try {
+      val result = ChaufrApi.availableTrips(apiUrl, token)
+      val array = result.optJSONArray("trips")
+      trips = (0 until (array?.length() ?: 0)).mapNotNull { array?.optJSONObject(it) }
+      if (message.startsWith("Unable")) message = ""
+    } catch (error: Exception) {
+      trips = emptyList()
+      message = error.message ?: "Unable to load trip requests."
+    } finally { loading = false }
+  }
+
+  LaunchedEffect(apiUrl) {
+    while (true) {
+      refresh()
+      delay(20_000)
+    }
+  }
+
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("AVAILABLE TRIPS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+          Text(if (loading) "Checking requests…" else trips.size.toString() + " requests", color = Navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+        Button(onClick = { scope.launch { refresh() } }, enabled = !loading) { Text("Refresh") }
+      }
+      if (apiUrl.isBlank()) {
+        Text("Trip requests will appear here when the Chaufr API is connected and your account is approved, activated and online.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+      } else if (trips.isEmpty()) {
+        Text("No requests currently available. Requests are checked automatically every 20 seconds while this screen is open.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+      }
+      trips.forEach { trip ->
+        val id = trip.optString("tripId")
+        Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2F6FC))) {
+          Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(trip.optString("pickupLabel", "Pickup"), color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Text("↓ " + trip.optString("destinationLabel", "Destination"), color = Muted, fontSize = 12.sp)
+            Text(String.format(Locale.US, "%.1f km · %d min", trip.optDouble("distanceKm", 0.0), trip.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
+            Text("Expected earnings: R " + String.format(Locale.US, "%.2f", trip.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Button(onClick = {
+              scope.launch {
+                acceptingId = id
+                message = ""
+                try {
+                  val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to accept trips.")
+                  val accepted = ChaufrApi.acceptTrip(apiUrl, token, id)
+                  message = "Trip accepted. Pickup: " + accepted.optString("pickupLabel") + ". Fare locked."
+                  trips = trips.filterNot { it.optString("tripId") == id }
+                  refresh()
+                } catch (error: Exception) { message = error.message ?: "Unable to accept trip." }
+                finally { acceptingId = null }
+              }
+            }, enabled = acceptingId == null, modifier = Modifier.fillMaxWidth()) {
+              Text(if (acceptingId == id) "Accepting…" else "Accept trip")
+            }
+          }
+        }
+      }
+      if (message.isNotBlank()) Text(message, color = if (message.contains("accepted")) Green else Color(0xFFB42318), fontSize = 11.sp, lineHeight = 16.sp)
     }
   }
 }
