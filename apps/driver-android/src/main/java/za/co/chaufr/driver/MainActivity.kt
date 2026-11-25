@@ -167,6 +167,31 @@ private fun DriverAvailabilityCard() {
     } catch (_: Exception) { null }
   }
 
+  // While online, refresh driver coordinates every 30 seconds while this screen is active.
+  // Location is only shared while the driver has explicitly enabled online availability.
+  LaunchedEffect(available, apiUrl) {
+    if (!available || apiUrl.isBlank()) return@LaunchedEffect
+    val token = SecureTokenStore.load(context) ?: return@LaunchedEffect
+    while (available) {
+      delay(30_000)
+      val location = lastKnownLocation()
+      if (location == null || System.currentTimeMillis() - location.time > 90_000) {
+        message = "Online, but location is stale. Please enable GPS and keep Chaufr open to refresh your location."
+        continue
+      }
+      try {
+        val update = ChaufrApi.setDriverPresence(
+          apiUrl, token, true, location.latitude, location.longitude,
+          if (location.hasAccuracy()) location.accuracy.toDouble() else null
+        )
+        available = update.optBoolean("isOnline", true)
+        message = "Online · location refreshed."
+      } catch (error: Exception) {
+        message = "Online status remains selected; location refresh failed. Check your connection."
+      }
+    }
+  }
+
   fun sendPresence(online: Boolean) {
     if (apiUrl.isBlank()) {
       message = "Live availability will work after the Chaufr server is connected."
