@@ -433,7 +433,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, " +
         "t.fare_snapshot->>'vehicleCategory' AS vehicle_category " +
         "FROM trips t JOIN trip_offers o ON o.trip_id = t.id " +
-        "WHERE t.status = 'offered' AND t.driver_user_id IS NULL " +
+        "WHERE t.status = 'requested' AND t.driver_user_id IS NULL " +
         "AND o.driver_user_id = $1 AND o.status = 'pending' AND o.expires_at > now() " +
         "AND t.quote_expires_at > now() ORDER BY o.offered_at ASC LIMIT 50",
         [driver.id],
