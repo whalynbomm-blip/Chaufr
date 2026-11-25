@@ -7,7 +7,7 @@ test("payment intents require valid purpose and exact ZAR cents", async () => {
   const pool = { query: async (sql, params) => {
     calls.push({ sql, params });
     return { rows: [{ id: "intent-1", purpose: params[1], amount_minor: params[4], currency: "ZAR", status: "pending", expires_at: "2026-11-26T12:00:00Z" }] };
-  }};
+  }, connect: async () => { throw new Error("Intent creation must not open a transaction"); }};
   const service = createPaymentService(pool);
   await assert.rejects(() => service.createIntent({ userId: "u1", purpose: "other", amount: 30 }));
   await assert.rejects(() => service.createIntent({ userId: "u1", purpose: "driver_activation", amount: 30.001, activationId: "a1" }));
