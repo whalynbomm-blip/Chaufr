@@ -367,7 +367,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
           );
         }
         await client.query("COMMIT");
-        const dispatch = await offerTripToNextDriver(pool, trip.id, input.origin);
+        const dispatch = await offerTripToNextDriver(pool, trip.id, input.origin, routesService);
         return {
           tripId: trip.id,
           status: trip.status,
@@ -435,7 +435,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         "AND (o.id IS NULL OR o.expires_at <= now()) ORDER BY t.id LIMIT 25",
       );
       for (const pendingTrip of redispatchable.rows) {
-        await offerTripToNextDriver(pool, pendingTrip.id, pendingTrip.pickup_location);
+        await offerTripToNextDriver(pool, pendingTrip.id, pendingTrip.pickup_location, routesService);
       }
       const result = await pool.query(
         "SELECT t.id, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
@@ -591,7 +591,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         "SELECT fare_snapshot->'pickupLocation' AS pickup_location FROM trips WHERE id = $1",
         [tripId],
       );
-      const dispatch = await offerTripToNextDriver(pool, tripId, trip.rows[0]?.pickup_location);
+      const dispatch = await offerTripToNextDriver(pool, tripId, trip.rows[0]?.pickup_location, routesService);
       return { ...declined, nextDispatchStatus: dispatch.status };
     },
 
