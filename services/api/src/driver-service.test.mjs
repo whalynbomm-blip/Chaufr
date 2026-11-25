@@ -176,7 +176,9 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(acceptedStatusBody.driver.name, "Test Driver");
     assert.equal(acceptedStatusBody.driver.vehicle.make, "Toyota");
     assert.equal(acceptedStatusBody.driver.vehicle.model, "Corolla");
-    assert.equal(acceptedStatusBody.driver.location, null);
+    assert.equal(acceptedStatusBody.driver.location.latitude, -33.9);
+    assert.equal(acceptedStatusBody.driver.location.longitude, 18.4);
+    assert.equal(acceptedStatusBody.driver.location.accuracyMeters, 12);
 
     const startedResponse = await fetch(base + "/v1/driver/trips/" + trip.tripId + "/start", {
       method: "POST",
