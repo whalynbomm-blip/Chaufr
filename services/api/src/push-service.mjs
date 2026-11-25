@@ -1,6 +1,6 @@
 import { AuthError } from "./auth-service.mjs";
 
-export function createPushService(pool) {
+export function createPushService(pool, fcmSender = null) {
   if (!pool || typeof pool.query !== "function") throw new TypeError("A PostgreSQL pool is required");
   return {
     async registerDevice(user, input = {}) {
@@ -21,6 +21,20 @@ export function createPushService(pool) {
         [user.id, token, platform, deviceLabel],
       );
       return { registered: true, deviceId: result.rows[0].id };
+    },
+
+    async sendToUser(userId, message) {
+      if (!fcmSender) return { sent: 0, skipped: true, reason: "firebase_not_configured" };
+      const result = await pool.query(
+        "SELECT fcm_token FROM push_devices WHERE user_id = $1 AND is_active = true ORDER BY last_seen_at DESC LIMIT 20",
+        [userId],
+      );
+      if (!result.rowCount) return { sent: 0, skipped: true, reason: "no_registered_devices" };
+      const delivery = await fcmSender.sendToTokens(result.rows.map((row) => row.fcm_token), message);
+      if (delivery.invalidTokens?.length) {
+        await pool.query("UPDATE push_devices SET is_active = false, updated_at = now() WHERE fcm_token = ANY($1::text[])", [delivery.invalidTokens]);
+      }
+      return delivery;
     },
 
     async unregisterDevice(user, input = {}) {
