@@ -328,6 +328,16 @@ export function createTripService(pool, fareConfig, routesService = null) {
           }
         }
         const passengerPayable = redeemReward ? 0 : fare.passengerTotal;
+        const tripPlatformCommission = redeemReward
+          ? Math.round(fare.passengerTotal * 0.05 * 100) / 100
+          : fare.breakdown.platformCommission;
+        const tripDriverEarnings = redeemReward
+          ? Math.round((fare.passengerTotal - tripPlatformCommission) * 100) / 100
+          : fare.breakdown.driverEarnings;
+        snapshot.driverEarnings = tripDriverEarnings;
+        snapshot.platformCommission = tripPlatformCommission;
+        snapshot.breakdown.driverEarnings = tripDriverEarnings;
+        snapshot.breakdown.platformCommission = tripPlatformCommission;
         const result = await client.query(
           "INSERT INTO trips (passenger_user_id, status, pickup_label, destination_label, distance_km, " +
           "duration_minutes, quoted_total, passenger_payable, driver_earnings, platform_commission, quote_inputs, quote_expires_at, " +
@@ -335,9 +345,9 @@ export function createTripService(pool, fareConfig, routesService = null) {
           "VALUES ($1, 'requested', $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13::jsonb, $14) " +
           "RETURNING id, status, pickup_label, destination_label, distance_km, duration_minutes, quoted_total, passenger_payable, quote_expires_at",
           [passenger.id, pickupLabel, destinationLabel, distanceKm, durationMinutes,
-            fare.passengerTotal, passengerPayable, fare.breakdown.driverEarnings, fare.breakdown.platformCommission,
+            fare.passengerTotal, passengerPayable, tripDriverEarnings, tripPlatformCommission,
             JSON.stringify(snapshot), quoteExpiresAt, trafficLevel, JSON.stringify(snapshot),
-            fareConfig.platformCommissionRate],
+            redeemReward ? 0.05 : fareConfig.platformCommissionRate],
         );
         const trip = result.rows[0];
         if (redeemReward) {
