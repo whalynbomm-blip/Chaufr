@@ -61,6 +61,7 @@ fun DriverAccountCard() {
                 displayName = user.optString("displayName")
                 identifier = user.optString("email").ifBlank { user.optString("phone") }
             } catch (_: Exception) {
+                DriverLocationService.stop(context)
                 SecureTokenStore.clear(context)
             }
         }
@@ -152,6 +153,8 @@ fun DriverAccountCard() {
                         if (!busy) scope.launch {
                             busy = true
                             try {
+                                DriverLocationService.stop(context)
+                                try { ChaufrApi.setDriverPresence(apiUrl, token!!, false) } catch (_: Exception) { }
                                 ChaufrApi.logoutAccount(apiUrl, token!!)
                                 SecureTokenStore.clear(context)
                                 token = null
