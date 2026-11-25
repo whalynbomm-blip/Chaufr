@@ -171,6 +171,52 @@ export function createOwnerService(pool, fareConfig) {
         client.release();
       }
     },
+    async listRewardCommissionRequests(user) {
+      requireOwner(user);
+      const result = await pool.query(
+        "SELECT r.id, r.trip_id, r.driver_user_id, u.display_name AS driver_name, " +
+        "u.phone_e164, u.email, r.amount, r.status, r.requested_at, r.updated_at " +
+        "FROM reward_driver_commission_requests r JOIN users u ON u.id = r.driver_user_id " +
+        "ORDER BY CASE r.status WHEN 'requested' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, r.requested_at ASC LIMIT 500"
+      );
+      return { requests: result.rows.map((row) => ({ ...row, amount: Number(row.amount) })) };
+    },
+    async reviewRewardCommissionRequest(user, requestId, status) {
+      requireOwner(user);
+      if (!["approved", "rejected", "paid"].includes(status)) {
+        throw new AuthError("Payout status must be approved, rejected or paid");
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const current = await client.query(
+          "SELECT id, driver_user_id, amount, status FROM reward_driver_commission_requests WHERE id = $1 FOR UPDATE",
+          [requestId],
+        );
+        const row = current.rows[0];
+        if (!row) throw new AuthError("Reward commission request not found", 404);
+        const allowed = (row.status === "requested" && ["approved", "rejected"].includes(status)) ||
+          (row.status === "approved" && status === "paid");
+        if (!allowed) throw new AuthError("Invalid payout transition: " + row.status + " to " + status, 409);
+        const updated = await client.query(
+          "UPDATE reward_driver_commission_requests SET status = $1, updated_at = now() WHERE id = $2 " +
+          "RETURNING id, trip_id, driver_user_id, amount, status, requested_at, updated_at",
+          [status, requestId],
+        );
+        await client.query(
+          "INSERT INTO audit_events (actor_user_id, action, resource_type, resource_id, details) " +
+          "VALUES ($1, 'reward_commission.reviewed', 'reward_commission_request', $2, $3::jsonb)",
+          [user.id, requestId, JSON.stringify({ previousStatus: row.status, status, amount: Number(row.amount), driverUserId: row.driver_user_id })],
+        );
+        await client.query("COMMIT");
+        return { request: { ...updated.rows[0], amount: Number(updated.rows[0].amount) } };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async getOverview(user) {
       requireOwner(user);
       const result = await pool.query(
