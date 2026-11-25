@@ -92,3 +92,33 @@ test("signed route quotes preserve route measurements and expire", async () => {
   assert.throws(() => service.verifyRouteQuote(token, origin, { latitude: -33.92, longitude: 18.43 }, "standard"), { status: 400 });
   assert.throws(() => service.verifyRouteQuote(token, origin, destination, "xl"), { status: 400 });
 });
+
+test("Google Routes ranks nearby drivers by traffic-aware matrix ETA", async () => {
+  let request;
+  const service = createGoogleRoutesService({
+    apiKey: "matrix-test-key",
+    fetchImpl: async (url, options) => {
+      request = { url, options };
+      return {
+        ok: true,
+        json: async () => [
+          { originIndex: 0, destinationIndex: 0, duration: "480s", distanceMeters: 2200, condition: "ROUTE_EXISTS" },
+          { originIndex: 0, destinationIndex: 1, duration: "300s", distanceMeters: 1500, condition: "ROUTE_EXISTS" },
+        ],
+      };
+    },
+  });
+  const matrix = await service.computeRouteMatrix(
+    { latitude: -33.9, longitude: 18.4 },
+    [{ latitude: -33.91, longitude: 18.41 }, { latitude: -33.92, longitude: 18.42 }],
+  );
+  assert.equal(request.url, "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix");
+  assert.equal(request.options.headers["X-Goog-Api-Key"], "matrix-test-key");
+  assert.deepEqual(matrix.map((item) => item.durationSeconds), [480, 300]);
+  assert.equal(JSON.parse(request.options.body).routingPreference, "TRAFFIC_AWARE");
+});
+
+test("Google Routes matrix returns null when server key is not configured", async () => {
+  const service = createGoogleRoutesService({ apiKey: "", fetchImpl: async () => { throw new Error("must not call"); } });
+  assert.equal(await service.computeRouteMatrix({ latitude: -33, longitude: 18 }, [{ latitude: -34, longitude: 19 }]), null);
+});
