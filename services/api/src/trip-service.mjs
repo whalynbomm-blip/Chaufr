@@ -540,6 +540,35 @@ export function createTripService(pool, fareConfig, routesService = null) {
       }
     },
 
+    async requestRewardDriverCommission(driver, tripId) {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const trip = await pool.query(
+        "SELECT id, driver_earnings, status, fare_snapshot->>'rewardRedemption' AS reward_redemption " +
+        "FROM trips WHERE id = $1 AND driver_user_id = $2 LIMIT 1",
+        [tripId, driver.id],
+      );
+      const row = trip.rows[0];
+      if (!row) throw new AuthError("Trip not found", 404);
+      if (row.status !== "completed") throw new AuthError("Commission can only be requested after the reward ride is completed", 409);
+      if (row.reward_redemption !== "true") throw new AuthError("This trip is not a free-ride reward trip", 400);
+      const amount = Math.round(Number(row.driver_earnings) * 50) / 100;
+      const result = await pool.query(
+        "INSERT INTO reward_driver_commission_requests (trip_id, driver_user_id, amount) " +
+        "VALUES ($1, $2, $3) ON CONFLICT (trip_id) DO UPDATE SET trip_id = EXCLUDED.trip_id " +
+        "RETURNING id, amount, status, requested_at",
+        [tripId, driver.id, amount],
+      );
+      return {
+        tripId,
+        requestId: result.rows[0].id,
+        amount: Number(result.rows[0].amount),
+        status: result.rows[0].status,
+        requestedAt: result.rows[0].requested_at,
+        message: "Your reward-ride commission request has been recorded for platform review.",
+      };
+    },
+
     async completeTrip(driver, tripId) {
       requireRole(driver, "driver");
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
