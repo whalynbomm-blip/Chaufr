@@ -149,6 +149,58 @@ export function createTripService(pool, fareConfig, routesService = null) {
       }
     },
 
+    async cancelPassengerTrip(passenger, tripId) {
+      requireRole(passenger, "passenger");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const tripResult = await client.query(
+          "SELECT id, status FROM trips WHERE id = $1 AND passenger_user_id = $2 FOR UPDATE",
+          [tripId, passenger.id],
+        );
+        const trip = tripResult.rows[0];
+        if (!trip) throw new AuthError("Trip not found", 404);
+        if (trip.status !== "requested") {
+          throw new AuthError("Only a ride request that has not yet been accepted can be cancelled here", 409);
+        }
+        await client.query(
+          "UPDATE trips SET status = 'cancelled', cancelled_at = now() WHERE id = $1 AND status = 'requested'",
+          [tripId],
+        );
+        const redemption = await client.query(
+          "UPDATE passenger_reward_redemptions SET status = 'released', updated_at = now() " +
+          "WHERE trip_id = $1 AND passenger_user_id = $2 AND status = 'reserved' RETURNING tickets_reserved",
+          [tripId, passenger.id],
+        );
+        if (redemption.rowCount) {
+          const tickets = Number(redemption.rows[0].tickets_reserved);
+          await client.query(
+            "INSERT INTO passenger_reward_accounts (passenger_user_id, tickets_balance, updated_at) " +
+            "VALUES ($1, $2, now()) ON CONFLICT (passenger_user_id) DO UPDATE SET " +
+            "tickets_balance = passenger_reward_accounts.tickets_balance + EXCLUDED.tickets_balance, updated_at = now()",
+            [passenger.id, tickets],
+          );
+          await client.query(
+            "INSERT INTO passenger_reward_ledger (passenger_user_id, trip_id, entry_type, tickets_delta) " +
+            "VALUES ($1, $2, 'released', $3) ON CONFLICT (trip_id, entry_type) DO NOTHING",
+            [passenger.id, tripId, tickets],
+          );
+        }
+        await client.query(
+          "INSERT INTO trip_events (trip_id, actor_user_id, event_type, details) VALUES ($1, $2, 'passenger_cancelled', '{}'::jsonb)",
+          [tripId, passenger.id],
+        );
+        await client.query("COMMIT");
+        return { tripId, status: "cancelled", rewardTicketsReleased: redemption.rowCount ? Number(redemption.rows[0].tickets_reserved) : 0 };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
     async getPassengerTripStatus(passenger, tripId) {
       requireRole(passenger, "passenger");
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
