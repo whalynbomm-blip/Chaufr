@@ -166,6 +166,10 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           [tripId, passenger.id],
         );
         const trip = tripResult.rows[0];
+        const offeredDrivers = await client.query(
+          "SELECT DISTINCT driver_user_id FROM trip_offers WHERE trip_id = $1 AND status = 'pending'",
+          [tripId],
+        );
         if (!trip) throw new AuthError("Trip not found", 404);
         if (trip.status !== "requested") {
           throw new AuthError("Only a ride request that has not yet been accepted can be cancelled here", 409);
@@ -198,6 +202,9 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           [tripId, passenger.id],
         );
         await client.query("COMMIT");
+        for (const offeredDriver of offeredDrivers.rows) {
+          await notify(offeredDriver.driver_user_id, "Chaufr trip cancelled", "The passenger cancelled this ride request.", { type: "trip_cancelled", tripId });
+        }
         return { tripId, status: "cancelled", rewardTicketsReleased: redemption.rowCount ? Number(redemption.rows[0].tickets_reserved) : 0 };
       } catch (error) {
         await client.query("ROLLBACK");
