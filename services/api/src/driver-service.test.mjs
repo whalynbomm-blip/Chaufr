@@ -141,8 +141,9 @@ test("driver activation gates access and accepted trips retain a locked fare", {
         platformCommissionRate: 0,
       }),
     });
-    assert.equal(requested.status, 201);
-    const trip = await requested.json();
+    const requestedBody = await requested.json();
+    assert.equal(requested.status, 201, JSON.stringify(requestedBody));
+    const trip = requestedBody;
     assert.equal(trip.passengerTotal, 40);
     const passengerStatusUrl = base + "/v1/passenger/trips/" + trip.tripId + "/status";
     const initialPassengerStatus = await fetch(passengerStatusUrl, { headers: passengerHeader });
