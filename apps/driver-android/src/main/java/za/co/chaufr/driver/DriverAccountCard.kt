@@ -156,6 +156,7 @@ fun DriverAccountCard() {
                             try {
                                 DriverLocationService.stop(context)
                                 try { ChaufrApi.setDriverPresence(apiUrl, token!!, false) } catch (_: Exception) { }
+                                runCatching { ChaufrPushSetup.unregister(context, apiUrl, token!!) }
                                 ChaufrApi.logoutAccount(apiUrl, token!!)
                                 SecureTokenStore.clear(context)
                                 token = null
