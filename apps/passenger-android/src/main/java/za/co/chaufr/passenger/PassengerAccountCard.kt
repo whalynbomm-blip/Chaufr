@@ -56,6 +56,13 @@ fun PassengerAccountCard(onSignedIn: (String) -> Unit = {}) {
         }
     }
 
+    LaunchedEffect(token, apiUrl) {
+        val activeToken = token ?: return@LaunchedEffect
+        if (apiUrl.isNotBlank()) {
+            runCatching { ChaufrPushSetup.register(context, apiUrl, activeToken) }
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(18.dp),
