@@ -104,6 +104,9 @@ object ChaufrApi {
     suspend fun passengerRewards(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/passenger/rewards", token = token)
 
+    suspend fun passengerTripStatus(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/passenger/trips/$tripId/status", token = token)
+
     suspend fun requestFareQuote(
         baseUrl: String,
         distanceKm: Double,
