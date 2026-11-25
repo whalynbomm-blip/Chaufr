@@ -71,8 +71,8 @@ export function createPaymentService(pool) {
           const activation = await client.query(
             "UPDATE driver_daily_activations SET status = 'paid', payment_provider = $2, provider_reference = $3, " +
             "paid_at = now(), non_refundable_at = now(), updated_at = now() " +
-            "WHERE id = $1 AND status <> 'paid' RETURNING id",
-            [intent.activation_id, provider.trim(), providerReference.trim()],
+            "WHERE id = $1 AND driver_user_id = $4 AND status <> 'paid' RETURNING id",
+            [intent.activation_id, provider.trim(), providerReference.trim(), intent.user_id],
           );
           if (!activation.rowCount) throw new AuthError("Driver activation is already paid or unavailable", 409);
           await client.query(
