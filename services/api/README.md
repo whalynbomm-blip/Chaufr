@@ -81,18 +81,17 @@ Authenticated passengers can create a trip request with `POST /v1/trips`. The se
 
 A driver must have a successful R30 ZAR activation payment recorded for the current South African operating date before going online or accessing trip requests. The activation is unique per driver and date, and a paid activation is marked non-refundable. Driver-facing responses expose only that driver's activation status and trip earnings, not company revenue totals.
 
-`GET /v1/driver/activation` returns the driver's activation status. The internal `recordVerifiedActivationPayment` service method is designed to be called only after a payment provider verifies the transaction. There is intentionally no client-controlled payment confirmation endpoint. A real payment provider/webhook still needs to be connected before drivers can make payments in production. Push notifications and dispatch fan-out are not yet implemented; any future delivery path must apply the same paid-activation check.
+`GET /v1/driver/activation` returns the driver's activation status. The internal `recordVerifiedActivationPayment` service method is designed to be called only after a payment provider verifies the transaction. There is intentionally no client-controlled payment confirmation endpoint. A real payment provider/webhook still needs to be connected before drivers can make payments in production.
 
 ## Current limitations
 
-- Route distance and duration are supplied to the API; no maps/geocoding/routing provider or live traffic source is connected. Until that integration exists, trip requests use the normal-traffic baseline.
-- Fare schedule defaults are development values and require owner approval/configuration before launch.
-- Passenger trip requests, driver acceptance, trip start and trip completion are implemented. Live matching/dispatch, driver-arriving state, cancellation, live tracking and passenger trip history remain outstanding.
-- The R30 activation data model and server-side gate are implemented, but payment provider integration and driver payment UI are not.
-- Driver approval/rejection tools, document uploads, passenger support workflows and full financial reconciliation are not yet implemented. The owner console currently provides overview metrics and central pricing controls.
-- Driver location currently uses device last-known location when going online; continuous background location updates are not implemented.
-- Android app API URL is blank in current debug builds; configure it after deploying the API.
-- Production hosting and payment processing are not implemented.
+- Production hosting, managed PostgreSQL provisioning, production secrets and public API URL still need to be configured.
+- Google Routes traffic-aware ETA and distance estimation is integrated server-side, but production use requires `GOOGLE_MAPS_SERVER_API_KEY` and `FARE_QUOTE_SIGNING_SECRET`.
+- Driver dispatch offers eligible drivers sequentially with an offer timeout and redispatch after decline/expiry. Driver location is updated by an Android foreground location service; passenger trip status polls for fresh driver coordinates. Real-device testing is still required.
+- FCM device registration and notification delivery are implemented, but require matching Firebase Android configuration values in CI and `FIREBASE_SERVICE_ACCOUNT_JSON` on the API host.
+- Daily R30 activation is enforced server-side, but payment-provider checkout/webhooks are not connected; do not treat the internal verified-payment method as a public payment route.
+- Owner driver verification/document review, payment reconciliation, refunds, passenger support workflows and ratings remain outstanding.
+- Android debug builds need the deployed `chaufrApiBaseUrl`; passenger map selection also needs an Android-restricted `chaufrGoogleMapsApiKey`.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
 See `../../docs/deployment.md` before deploying.
