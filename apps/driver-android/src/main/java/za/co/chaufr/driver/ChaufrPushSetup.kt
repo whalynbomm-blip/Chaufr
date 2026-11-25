@@ -22,8 +22,8 @@ object ChaufrPushSetup {
                 .build()
             FirebaseApp.initializeApp(context, options)
         }
-        val firebaseApp = FirebaseApp.getApps(context).firstOrNull() ?: return
-        val fcmToken = FirebaseMessaging.getInstance(firebaseApp).token.await()
+        if (FirebaseApp.getApps(context).isEmpty()) return
+        val fcmToken = FirebaseMessaging.getInstance().token.await()
         ChaufrApi.registerPushDevice(apiUrl, accessToken, fcmToken, android.os.Build.MODEL)
     }
 }
