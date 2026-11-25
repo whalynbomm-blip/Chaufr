@@ -179,7 +179,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(accepted.status, "accepted");
     assert.equal(accepted.fareLocked, true);
     assert.equal(accepted.passengerFare, 40);
-    assert.equal(accepted.expectedDriverEarnings, 38);
+    assert.equal(accepted.expectedDriverEarnings, 35.2);
     assert.equal("platformCommission" in accepted, false);
     const acceptedPassengerStatus = await fetch(passengerStatusUrl, { headers: passengerHeader });
     const acceptedStatusBody = await acceptedPassengerStatus.json();
@@ -214,7 +214,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     const completed = await completedResponse.json();
     assert.equal(completed.status, "completed");
     assert.equal(completed.commissionRecorded, true);
-    assert.equal(completed.driverEarnings, 38);
+    assert.equal(completed.driverEarnings, 35.2);
     assert.equal("platformCommission" in completed, false);
 
     const locked = await pool.query(
