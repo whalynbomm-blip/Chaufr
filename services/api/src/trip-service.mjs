@@ -540,8 +540,10 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         );
         await client.query("COMMIT");
         const accepted = updated.rows[0];
-        const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
-        await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
+        if (pushService) {
+          const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
+          await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
+        }
         return {
           tripId: accepted.id,
           status: "accepted",
@@ -580,8 +582,10 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         );
         await client.query("COMMIT");
         const trip = result.rows[0];
-        const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
-        await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr trip has started", "Your driver has started the trip.", { type: "trip_started", tripId });
+        if (pushService) {
+          const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
+          await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr trip has started", "Your driver has started the trip.", { type: "trip_started", tripId });
+        }
         return {
           tripId: trip.id,
           status: "in_progress",
@@ -682,7 +686,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         );
         await client.query("COMMIT");
         const trip = result.rows[0];
-        await notify(passengerId, "Your Chaufr trip is complete", "Your trip is complete. Your reward ticket has been added.", { type: "trip_completed", tripId });
+        if (pushService) await notify(passengerId, "Your Chaufr trip is complete", "Your trip is complete. Your reward ticket has been added.", { type: "trip_completed", tripId });
         return {
           tripId: trip.id,
           status: "completed",
