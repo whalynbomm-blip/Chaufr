@@ -1,4 +1,5 @@
 import { AuthError } from "./auth-service.mjs";
+import { offerTripToNextDriver, declineTripOffer } from "./dispatch-service.mjs";
 
 const SA_DATE_SQL = "(now() AT TIME ZONE 'Africa/Johannesburg')::date";
 const activationRequired = () => new AuthError(
@@ -309,6 +310,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         platformCommission: fare.breakdown.platformCommission,
         breakdown: fare.breakdown,
         rewardRedemption: redeemReward,
+        pickupLocation: { latitude: Number(input.origin.latitude), longitude: Number(input.origin.longitude) },
       };
       const client = await pool.connect();
       try {
@@ -365,9 +367,12 @@ export function createTripService(pool, fareConfig, routesService = null) {
           );
         }
         await client.query("COMMIT");
+        const dispatch = await offerTripToNextDriver(pool, trip.id, input.origin);
         return {
           tripId: trip.id,
           status: trip.status,
+          dispatchStatus: dispatch.status,
+          dispatchExpiresAt: dispatch.expiresAt ?? null,
           pickupLabel: trip.pickup_label,
           destinationLabel: trip.destination_label,
           distanceKm: Number(trip.distance_km),
@@ -427,8 +432,11 @@ export function createTripService(pool, fareConfig, routesService = null) {
         "SELECT t.id, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
         "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, " +
         "t.fare_snapshot->>'vehicleCategory' AS vehicle_category " +
-        "FROM trips t WHERE t.status = 'requested' AND t.driver_user_id IS NULL " +
-        "AND t.quote_expires_at > now() ORDER BY t.requested_at ASC LIMIT 50",
+        "FROM trips t JOIN trip_offers o ON o.trip_id = t.id " +
+        "WHERE t.status = 'offered' AND t.driver_user_id IS NULL " +
+        "AND o.driver_user_id = $1 AND o.status = 'pending' AND o.expires_at > now() " +
+        "AND t.quote_expires_at > now() ORDER BY o.offered_at ASC LIMIT 50",
+        [driver.id],
       );
       return {
         activation: { isPaid: true, operatingDate: activation.operating_date },
@@ -472,7 +480,14 @@ export function createTripService(pool, fareConfig, routesService = null) {
           [tripId],
         );
         const trip = tripResult.rows[0];
-        if (!trip || trip.status !== "requested" || new Date(trip.quote_expires_at) <= new Date()) {
+        const offer = await client.query(
+          "SELECT id FROM trip_offers WHERE trip_id = $1 AND driver_user_id = $2 " +
+          "AND status = 'pending' AND expires_at > now() FOR UPDATE",
+          [tripId, driver.id],
+        );
+        if (!trip || !["requested", "offered"].includes(trip.status) ||
+            new Date(trip.quote_expires_at) <= new Date() ||
+            (trip.status === "offered" && !offer.rowCount)) {
           throw new AuthError("This trip is no longer available", 409);
         }
         const vehicle = await client.query(
@@ -484,7 +499,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         const updated = await client.query(
           "UPDATE trips SET status = 'accepted', driver_user_id = $2, vehicle_id = $3, " +
           "accepted_at = now(), fare_locked_at = now() " +
-          "WHERE id = $1 AND status = 'requested' AND driver_user_id IS NULL " +
+          "WHERE id = $1 AND status IN ('requested', 'offered') AND driver_user_id IS NULL " +
           "RETURNING id, quoted_total, driver_earnings, pickup_label, destination_label, accepted_at, fare_locked_at",
           [tripId, driver.id, vehicle.rows[0].id],
         );
@@ -493,6 +508,11 @@ export function createTripService(pool, fareConfig, routesService = null) {
           "INSERT INTO trip_events (trip_id, actor_user_id, event_type, details) " +
           "VALUES ($1, $2, 'accepted', $3::jsonb)",
           [tripId, driver.id, JSON.stringify({ fareLocked: true })],
+        );
+        await client.query(
+          "UPDATE trip_offers SET status = CASE WHEN driver_user_id = $2 THEN 'accepted' ELSE 'withdrawn' END, responded_at = now() " +
+          "WHERE trip_id = $1 AND status = 'pending'",
+          [tripId, driver.id],
         );
         await client.query("COMMIT");
         const accepted = updated.rows[0];
@@ -549,6 +569,17 @@ export function createTripService(pool, fareConfig, routesService = null) {
       } finally {
         client.release();
       }
+    },
+
+    async declineTripOffer(driver, tripId) {
+      requireRole(driver, "driver");
+      const declined = await declineTripOffer(pool, driver, tripId);
+      const trip = await pool.query(
+        "SELECT fare_snapshot->'pickupLocation' AS pickup_location FROM trips WHERE id = $1",
+        [tripId],
+      );
+      const dispatch = await offerTripToNextDriver(pool, tripId, trip.rows[0]?.pickup_location);
+      return { ...declined, nextDispatchStatus: dispatch.status };
     },
 
     async requestRewardDriverCommission(driver, tripId) {
