@@ -67,10 +67,8 @@ export async function offerTripToNextDriver(pool, tripId, pickup) {
            SELECT 1 FROM trip_offers prior
            WHERE prior.trip_id = $4 AND prior.driver_user_id = p.driver_user_id
          )
-       GROUP BY p.driver_user_id, p.latitude, p.longitude
        ORDER BY distance_km ASC
-       LIMIT 1
-       FOR UPDATE OF p SKIP LOCKED`,
+       LIMIT 1`,
       [latitude, longitude, trip.vehicle_category, tripId],
     );
 
