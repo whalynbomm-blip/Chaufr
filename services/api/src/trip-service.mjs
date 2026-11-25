@@ -308,7 +308,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         passengerTotal: fare.passengerTotal,
         driverEarnings: fare.breakdown.driverEarnings,
         platformCommission: fare.breakdown.platformCommission,
-        breakdown: fare.breakdown,
+        breakdown: { ...fare.breakdown },
         rewardRedemption: redeemReward,
         pickupLocation: { latitude: Number(input.origin.latitude), longitude: Number(input.origin.longitude) },
       };
