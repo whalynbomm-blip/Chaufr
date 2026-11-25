@@ -144,6 +144,12 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(requested.status, 201);
     const trip = await requested.json();
     assert.equal(trip.passengerTotal, 40);
+    const passengerStatusUrl = base + "/v1/passenger/trips/" + trip.tripId + "/status";
+    const initialPassengerStatus = await fetch(passengerStatusUrl, { headers: passengerHeader });
+    assert.equal(initialPassengerStatus.status, 200);
+    assert.equal((await initialPassengerStatus.json()).status, "requested");
+    const unauthorizedStatus = await fetch(passengerStatusUrl, { headers: authHeader });
+    assert.equal(unauthorizedStatus.status, 403);
 
     const available = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
     assert.equal(available.status, 200);
@@ -164,6 +170,13 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(accepted.passengerFare, 40);
     assert.equal(accepted.expectedDriverEarnings, 35.2);
     assert.equal("platformCommission" in accepted, false);
+    const acceptedPassengerStatus = await fetch(passengerStatusUrl, { headers: passengerHeader });
+    const acceptedStatusBody = await acceptedPassengerStatus.json();
+    assert.equal(acceptedStatusBody.status, "accepted");
+    assert.equal(acceptedStatusBody.driver.name, "Test Driver");
+    assert.equal(acceptedStatusBody.driver.vehicle.make, "Toyota");
+    assert.equal(acceptedStatusBody.driver.vehicle.model, "Corolla");
+    assert.equal(acceptedStatusBody.driver.location, null);
 
     const startedResponse = await fetch(base + "/v1/driver/trips/" + trip.tripId + "/start", {
       method: "POST",
@@ -171,6 +184,8 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     });
     assert.equal(startedResponse.status, 200);
     assert.equal((await startedResponse.json()).status, "in_progress");
+    const inProgressPassengerStatus = await fetch(passengerStatusUrl, { headers: passengerHeader });
+    assert.equal((await inProgressPassengerStatus.json()).status, "in_progress");
 
     const beforeCompletion = await pool.query(
       "SELECT commission_earned_at FROM trips WHERE id = $1",
