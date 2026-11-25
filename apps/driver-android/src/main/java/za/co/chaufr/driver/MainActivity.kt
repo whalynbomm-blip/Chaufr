@@ -310,6 +310,8 @@ private fun DriverCurrentTripCard() {
   var trip by remember { mutableStateOf<JSONObject?>(null) }
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
+  var completedRewardTripId by remember { mutableStateOf<String?>(null) }
+  var commissionRequested by remember { mutableStateOf(false) }
 
   suspend fun refreshCurrent() {
     if (apiUrl.isBlank()) return
@@ -357,6 +359,10 @@ private fun DriverCurrentTripCard() {
                 message = "Trip started. Drive safely."
               } else {
                 ChaufrApi.completeTrip(apiUrl, token, id)
+                if (current.optBoolean("rewardRedemption")) {
+                  completedRewardTripId = id
+                  commissionRequested = false
+                }
                 message = "Trip completed. Your trip has been recorded."
               }
               refreshCurrent()
@@ -366,6 +372,24 @@ private fun DriverCurrentTripCard() {
           }
         }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
           Text(if (busy) "Updating trip…" else if (status == "accepted") "Start trip" else "Complete trip")
+        }
+      }
+      if (completedRewardTripId != null) {
+        Text("Reward ride completed. You can request the platform-funded 50% driver payout.", color = Navy, fontSize = 12.sp)
+        Button(onClick = {
+          scope.launch {
+            busy = true
+            try {
+              val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
+              val result = ChaufrApi.requestRewardCommission(apiUrl, token, completedRewardTripId!!)
+              commissionRequested = true
+              message = "Payout request recorded: R " + String.format(Locale.US, "%.2f", result.optDouble("amount"))
+            } catch (error: Exception) {
+              message = error.message ?: "Unable to submit payout request."
+            } finally { busy = false }
+          }
+        }, enabled = !busy && !commissionRequested, modifier = Modifier.fillMaxWidth()) {
+          Text(if (commissionRequested) "Commission requested" else "Request commission")
         }
       }
       if (message.isNotBlank()) Text(message, color = if (message.contains("started") || message.contains("completed")) Green else Color(0xFFB42318), fontSize = 11.sp, lineHeight = 16.sp)
