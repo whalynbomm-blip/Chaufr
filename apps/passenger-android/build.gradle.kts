@@ -13,6 +13,10 @@ android {
     versionCode = 1
     versionName = "0.1.0"
     buildConfigField("String", "CHAUFR_API_BASE_URL", "\"${providers.gradleProperty("chaufrApiBaseUrl").orNull ?: ""}\"")
+    buildConfigField("String", "FIREBASE_API_KEY", "\"${providers.gradleProperty("firebaseApiKey").orNull ?: ""}\"")
+    buildConfigField("String", "FIREBASE_APP_ID", "\"${providers.gradleProperty("firebaseAppId").orNull ?: ""}\"")
+    buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${providers.gradleProperty("firebaseProjectId").orNull ?: ""}\"")
+    buildConfigField("String", "FIREBASE_SENDER_ID", "\"${providers.gradleProperty("firebaseSenderId").orNull ?: ""}\"")
     val mapsKey = providers.gradleProperty("chaufrGoogleMapsApiKey").orNull ?: ""
     manifestPlaceholders["MAPS_API_KEY"] = mapsKey
     buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$mapsKey\"")
@@ -36,5 +40,7 @@ dependencies {
   implementation("com.google.maps.android:maps-compose:6.4.1")
   implementation("com.google.android.libraries.places:places:3.5.0")
   implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+  implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
+  implementation("com.google.firebase:firebase-messaging:24.1.0")
   debugImplementation("androidx.compose.ui:ui-tooling")
 }
