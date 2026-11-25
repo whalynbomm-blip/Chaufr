@@ -8,6 +8,15 @@ import java.net.URL
 
 /** Calls the shared Chaufr API. Fare coefficients are never sent by the app. */
 object ChaufrApi {
+    suspend fun currentDriverTrip(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/trips/current", token = token)
+
+    suspend fun startTrip(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/start", token = token)
+
+    suspend fun completeTrip(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/complete", token = token)
+
     suspend fun availableTrips(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/available", token = token)
 
