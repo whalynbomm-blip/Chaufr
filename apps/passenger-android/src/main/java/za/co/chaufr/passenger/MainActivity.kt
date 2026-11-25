@@ -75,6 +75,14 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private data class RewardHistoryEntry(
+    val type: String,
+    val ticketsDelta: Int,
+    val date: String,
+    val pickup: String,
+    val destination: String
+)
+
 private data class FarePreview(
     val total: Double,
     val distanceKm: Double,
@@ -106,13 +114,18 @@ private fun PassengerHome() {
     var bookingLoading by remember { mutableStateOf(false) }
     var bookingMessage by remember { mutableStateOf("") }
     var rewardsTickets by remember { mutableStateOf(0) }
+    var rewardsHistory by remember { mutableStateOf<List<RewardHistoryEntry>>(emptyList()) }
     var redeemReward by remember { mutableStateOf(false) }
     var rewardsMessage by remember { mutableStateOf("") }
 
     LaunchedEffect(BuildConfig.CHAUFR_API_BASE_URL) {
         val savedToken = SecureTokenStore.load(context)
         if (!savedToken.isNullOrBlank() && BuildConfig.CHAUFR_API_BASE_URL.isNotBlank()) {
-            try { rewardsTickets = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, savedToken).optInt("tickets", 0) } catch (_: Exception) { }
+            try {
+                val rewards = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, savedToken)
+                rewardsTickets = rewards.optInt("tickets", 0)
+                rewardsHistory = parseRewardsHistory(rewards)
+            } catch (_: Exception) { }
         }
     }
 
@@ -120,7 +133,9 @@ private fun PassengerHome() {
         if (BuildConfig.CHAUFR_API_BASE_URL.isBlank()) return
         scope.launch {
             try {
-                rewardsTickets = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, token).optInt("tickets", 0)
+                val rewards = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, token)
+                rewardsTickets = rewards.optInt("tickets", 0)
+                rewardsHistory = parseRewardsHistory(rewards)
                 rewardsMessage = ""
             } catch (error: Exception) { rewardsMessage = error.message ?: "Unable to refresh reward tickets." }
         }
@@ -375,6 +390,38 @@ private fun PassengerHome() {
                             else refreshRewards(savedToken)
                         }, modifier = Modifier.fillMaxWidth()) { Text("Refresh my tickets") }
                         if (rewardsMessage.isNotBlank()) Text(rewardsMessage, color = ChaufrMuted, fontSize = 11.sp)
+                        if (rewardsHistory.isNotEmpty()) {
+                            Spacer(Modifier.height(14.dp))
+                            Divider(color = Color(0xFFE8ECF2))
+                            Spacer(Modifier.height(10.dp))
+                            Text("TICKET HISTORY", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp)
+                            Spacer(Modifier.height(6.dp))
+                            rewardsHistory.forEach { entry ->
+                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            when (entry.type) {
+                                                "earned" -> "Trip completed · ticket earned"
+                                                "redeemed" -> "Free ride reward redeemed"
+                                                "released" -> "Tickets returned"
+                                                else -> "Rewards update"
+                                            },
+                                            color = ChaufrNavy, fontWeight = FontWeight.Medium, fontSize = 12.sp
+                                        )
+                                        Text("${entry.pickup} → ${entry.destination}", color = ChaufrMuted, fontSize = 10.sp, maxLines = 1)
+                                        Text(entry.date, color = ChaufrMuted, fontSize = 10.sp)
+                                    }
+                                    Text(
+                                        if (entry.ticketsDelta > 0) "+${entry.ticketsDelta}" else entry.ticketsDelta.toString(),
+                                        color = if (entry.ticketsDelta > 0) ChaufrGreen else Color(0xFFB42318),
+                                        fontWeight = FontWeight.Bold, fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        } else {
+                            Spacer(Modifier.height(8.dp))
+                            Text("Your ticket activity will appear here after your first completed trip.", color = ChaufrMuted, fontSize = 11.sp)
+                        }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
@@ -426,6 +473,20 @@ private fun FareLine(label: String, amount: Double, emphasized: Boolean = false)
             color = ChaufrNavy,
             fontSize = 12.sp,
             fontWeight = if (emphasized) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+}
+
+private fun parseRewardsHistory(rewards: org.json.JSONObject): List<RewardHistoryEntry> {
+    val history = rewards.optJSONArray("history") ?: return emptyList()
+    return (0 until history.length()).mapNotNull { index ->
+        val item = history.optJSONObject(index) ?: return@mapNotNull null
+        RewardHistoryEntry(
+            type = item.optString("type", "unknown"),
+            ticketsDelta = item.optInt("ticketsDelta", 0),
+            date = item.optString("createdAt", "").replace("T", " ").take(16),
+            pickup = item.optString("pickupLabel", "Trip"),
+            destination = item.optString("destinationLabel", "Trip")
         )
     }
 }
