@@ -451,21 +451,39 @@ private fun AvailableTripsCard() {
             Text("↓ " + trip.optString("destinationLabel", "Destination"), color = Muted, fontSize = 12.sp)
             Text(String.format(Locale.US, "%.1f km · %d min", trip.optDouble("distanceKm", 0.0), trip.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
             Text("Expected earnings: R " + String.format(Locale.US, "%.2f", trip.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Button(onClick = {
-              scope.launch {
-                acceptingId = id
-                message = ""
-                try {
-                  val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to accept trips.")
-                  val accepted = ChaufrApi.acceptTrip(apiUrl, token, id)
-                  message = "Trip accepted. Pickup: " + accepted.optString("pickupLabel") + ". Fare locked."
-                  trips = trips.filterNot { it.optString("tripId") == id }
-                  refresh()
-                } catch (error: Exception) { message = error.message ?: "Unable to accept trip." }
-                finally { acceptingId = null }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              Button(onClick = {
+                scope.launch {
+                  acceptingId = id
+                  message = ""
+                  try {
+                    val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to accept trips.")
+                    val accepted = ChaufrApi.acceptTrip(apiUrl, token, id)
+                    message = "Trip accepted. Pickup: " + accepted.optString("pickupLabel") + ". Fare locked."
+                    trips = trips.filterNot { it.optString("tripId") == id }
+                    refresh()
+                  } catch (error: Exception) { message = error.message ?: "Unable to accept trip." }
+                  finally { acceptingId = null }
+                }
+              }, enabled = acceptingId == null, modifier = Modifier.weight(1f)) {
+                Text(if (acceptingId == id) "Accepting…" else "Accept")
               }
-            }, enabled = acceptingId == null, modifier = Modifier.fillMaxWidth()) {
-              Text(if (acceptingId == id) "Accepting…" else "Accept trip")
+              OutlinedButton(onClick = {
+                scope.launch {
+                  acceptingId = id
+                  message = ""
+                  try {
+                    val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to decline trips.")
+                    ChaufrApi.declineTrip(apiUrl, token, id)
+                    message = "Offer declined. Chaufr will find the next eligible driver."
+                    trips = trips.filterNot { it.optString("tripId") == id }
+                    refresh()
+                  } catch (error: Exception) { message = error.message ?: "Unable to decline offer." }
+                  finally { acceptingId = null }
+                }
+              }, enabled = acceptingId == null, modifier = Modifier.weight(1f)) {
+                Text("Decline")
+              }
             }
           }
         }
