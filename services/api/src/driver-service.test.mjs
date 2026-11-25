@@ -277,6 +277,35 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.deepEqual(afterRewardTrip.history.map((entry) => entry.type), ["earned", "redeemed", "earned"]);
     assert.equal(afterRewardTrip.history[1].ticketsDelta, -9);
     assert.equal(afterRewardTrip.history[1].destinationLabel, "V&A Waterfront");
+    await pool.query("UPDATE passenger_reward_accounts SET tickets_balance = 9 WHERE passenger_user_id = $1", [passenger.user.id]);
+    const cancellableReward = await fetch(base + "/v1/trips", {
+      method: "POST",
+      headers: { ...passengerHeader, "content-type": "application/json" },
+      body: JSON.stringify({
+        pickupLabel: "Cape Town Station",
+        destinationLabel: "V&A Waterfront",
+        routeQuoteToken: "test-route-quote",
+        origin: { latitude: -33.9, longitude: 18.4 },
+        destination: { latitude: -33.91, longitude: 18.42 },
+        vehicleCategory: "standard",
+        redeemReward: true,
+      }),
+    });
+    assert.equal(cancellableReward.status, 201);
+    const cancellableTrip = await cancellableReward.json();
+    const cancelResponse = await fetch(base + "/v1/passenger/trips/" + cancellableTrip.tripId + "/cancel", {
+      method: "POST",
+      headers: passengerHeader,
+    });
+    assert.equal(cancelResponse.status, 200);
+    const cancellation = await cancelResponse.json();
+    assert.equal(cancellation.status, "cancelled");
+    assert.equal(cancellation.rewardTicketsReleased, 9);
+    const cancelledStatusResponse = await fetch(base + "/v1/passenger/trips/" + cancellableTrip.tripId + "/status", { headers: passengerHeader });
+    assert.equal((await cancelledStatusResponse.json()).status, "cancelled");
+    const afterCancellation = await trips.getPassengerRewards(passenger.user);
+    assert.equal(afterCancellation.tickets, 9);
+    assert.ok(afterCancellation.history.some((entry) => entry.type === "released" && entry.ticketsDelta === 9));
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     await pool.end();
