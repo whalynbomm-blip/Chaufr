@@ -79,10 +79,10 @@ export const developmentFareConfig = () => ({
 export function createAppServer({ fareConfig = developmentFareConfig(), database = null, routesService = createGoogleRoutesService() } = {}) {
   const authService = database ? createAuthService(database) : null;
   const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
-  const tripService = database ? createTripService(database, fareConfig, routesService) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const fcmSender = createFcmSender();
   const pushService = database ? createPushService(database, fcmSender) : null;
+  const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
