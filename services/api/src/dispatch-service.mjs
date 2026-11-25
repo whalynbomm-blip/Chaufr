@@ -76,7 +76,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
          )
        ORDER BY distance_km ASC
        LIMIT 10
-       FOR UPDATE OF p SKIP LOCKED`
+       FOR UPDATE OF p SKIP LOCKED`,
       [latitude, longitude, trip.vehicle_category, tripId],
     );
 
