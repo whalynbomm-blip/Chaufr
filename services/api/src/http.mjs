@@ -7,6 +7,7 @@ import { createDriverService } from "./driver-service.mjs";
 import { createTripService } from "./trip-service.mjs";
 import { createOwnerService } from "./owner-service.mjs";
 import { createGoogleRoutesService } from "./google-routes.mjs";
+import { createPushService } from "./push-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -79,6 +80,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const driverService = database ? createDriverService(database, undefined, fareConfig) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService) : null;
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
+  const pushService = database ? createPushService(database) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
@@ -134,7 +136,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           endpoints: [
             "GET /health", "GET /v1", "POST /v1/fare-quotes", "POST /v1/routes/preview",
             "POST /v1/auth/register", "POST /v1/auth/login",
-            "GET /v1/auth/me", "POST /v1/auth/logout",
+            "GET /v1/auth/me", "POST /v1/auth/logout", "POST/DELETE /v1/push-devices",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
@@ -176,6 +178,19 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "PUT" && url.pathname === "/v1/owner/pricing") {
           return json(response, 200, await ownerService.updatePricing(user, await readJson(request)));
         }
+      }
+
+      if (url.pathname === "/v1/push-devices") {
+        if (!authService || !pushService) {
+          return json(response, 503, { error: "Push-device services are unavailable until the database is configured", requestId });
+        }
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        const body = await readJson(request);
+        if (request.method === "POST") return json(response, 200, await pushService.registerDevice(user, body));
+        if (request.method === "DELETE") return json(response, 200, await pushService.unregisterDevice(user, body));
       }
 
       if (url.pathname.startsWith("/v1/driver/")) {
