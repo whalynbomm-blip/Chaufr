@@ -76,6 +76,17 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private data class PassengerTripHistoryEntry(
+    val tripId: String,
+    val status: String,
+    val pickup: String,
+    val destination: String,
+    val farePaid: Double,
+    val distanceKm: Double,
+    val durationMinutes: Double,
+    val requestedAt: String
+)
+
 private data class RewardHistoryEntry(
     val type: String,
     val ticketsDelta: Int,
@@ -119,6 +130,8 @@ private fun PassengerHome() {
     var tripCancellationLoading by remember { mutableStateOf(false) }
     var rewardsTickets by remember { mutableStateOf(0) }
     var rewardsHistory by remember { mutableStateOf<List<RewardHistoryEntry>>(emptyList()) }
+    var passengerTripHistory by remember { mutableStateOf<List<PassengerTripHistoryEntry>>(emptyList()) }
+    var tripHistoryMessage by remember { mutableStateOf("") }
     var redeemReward by remember { mutableStateOf(false) }
     var rewardsMessage by remember { mutableStateOf("") }
 
@@ -129,6 +142,8 @@ private fun PassengerHome() {
                 val rewards = ChaufrApi.passengerRewards(BuildConfig.CHAUFR_API_BASE_URL, savedToken)
                 rewardsTickets = rewards.optInt("tickets", 0)
                 rewardsHistory = parseRewardsHistory(rewards)
+                val tripHistory = ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, savedToken)
+                passengerTripHistory = parsePassengerTripHistory(tripHistory)
             } catch (_: Exception) { }
         }
     }
@@ -143,7 +158,15 @@ private fun PassengerHome() {
                 val snapshot = ChaufrApi.passengerTripStatus(apiBase, token, tripId)
                 tripStatusSnapshot = snapshot
                 val status = snapshot.optString("status")
-                if (status in listOf("completed", "cancelled", "expired")) return@LaunchedEffect
+                if (status in listOf("completed", "cancelled", "expired")) {
+                    try {
+                        val rewards = ChaufrApi.passengerRewards(apiBase, token)
+                        rewardsTickets = rewards.optInt("tickets", rewardsTickets)
+                        rewardsHistory = parseRewardsHistory(rewards)
+                        passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(apiBase, token))
+                    } catch (_: Exception) { }
+                    return@LaunchedEffect
+                }
             } catch (_: Exception) {
                 // Keep the last successful status visible; retry while this trip is active.
             }
@@ -437,6 +460,7 @@ private fun PassengerHome() {
                                                             tripStatusSnapshot = org.json.JSONObject(snapshot.toString()).put("status", cancelled.optString("status", "cancelled"))
                                                             bookingMessage = if (cancelled.optInt("rewardTicketsReleased", 0) > 0) "Ride cancelled. Your 9 reward tickets have been returned." else "Ride request cancelled."
                                                             refreshRewards(token)
+                                                            passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, token))
                                                         } catch (error: Exception) {
                                                             bookingMessage = error.message ?: "Unable to cancel this request."
                                                         } finally { tripCancellationLoading = false }
@@ -513,7 +537,51 @@ private fun PassengerHome() {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                PassengerAccountCard(onSignedIn = { refreshRewards(it) })
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("MY TRIPS", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
+                                Text("Your recent Chaufr journeys", color = ChaufrMuted, fontSize = 11.sp)
+                            }
+                            Button(onClick = {
+                                val token = SecureTokenStore.load(context)
+                                if (token == null) tripHistoryMessage = "Sign in to see your trips."
+                                else scope.launch {
+                                    try {
+                                        passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, token))
+                                        tripHistoryMessage = ""
+                                    } catch (error: Exception) { tripHistoryMessage = error.message ?: "Unable to refresh trips" }
+                                }
+                            }) { Text("Refresh") }
+                        }
+                        if (tripHistoryMessage.isNotBlank()) Text(tripHistoryMessage, color = ChaufrMuted, fontSize = 11.sp)
+                        if (passengerTripHistory.isEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("Your trips will appear here after you book a ride.", color = ChaufrMuted, fontSize = 12.sp)
+                        } else {
+                            passengerTripHistory.take(8).forEach { trip ->
+                                Divider(color = Color(0xFFE8ECF2), modifier = Modifier.padding(vertical = 8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("${trip.pickup} → ${trip.destination}", color = ChaufrNavy, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 2)
+                                        Text("${trip.status.replace("_", " ").uppercase()} · ${trip.distanceKm} km · ${trip.durationMinutes.toInt()} min", color = ChaufrMuted, fontSize = 10.sp)
+                                        Text(trip.requestedAt.replace("T", " ").take(16), color = ChaufrMuted, fontSize = 10.sp)
+                                    }
+                                    Text(if (trip.farePaid == 0.0) "FREE" else money(trip.farePaid), color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                PassengerAccountCard(onSignedIn = { refreshRewards(it); scope.launch {
+                    try { passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, it)) } catch (_: Exception) { }
+                } })
                 Spacer(Modifier.height(16.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -561,6 +629,23 @@ private fun FareLine(label: String, amount: Double, emphasized: Boolean = false)
             color = ChaufrNavy,
             fontSize = 12.sp,
             fontWeight = if (emphasized) FontWeight.Bold else FontWeight.Medium
+        )
+    }
+}
+
+private fun parsePassengerTripHistory(response: org.json.JSONObject): List<PassengerTripHistoryEntry> {
+    val trips = response.optJSONArray("trips") ?: return emptyList()
+    return (0 until trips.length()).mapNotNull { index ->
+        val item = trips.optJSONObject(index) ?: return@mapNotNull null
+        PassengerTripHistoryEntry(
+            tripId = item.optString("tripId"),
+            status = item.optString("status", "unknown"),
+            pickup = item.optString("pickupLabel", "Pickup"),
+            destination = item.optString("destinationLabel", "Destination"),
+            farePaid = item.optDouble("passengerPayable", item.optDouble("quotedFare", 0.0)),
+            distanceKm = item.optDouble("distanceKm", 0.0),
+            durationMinutes = item.optDouble("durationMinutes", 0.0),
+            requestedAt = item.optString("requestedAt", "")
         )
     }
 }
