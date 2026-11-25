@@ -117,9 +117,24 @@ export function createTripService(pool, fareConfig, routesService = null) {
           "SELECT tickets_balance, tickets_earned_total FROM passenger_reward_accounts WHERE passenger_user_id = $1",
           [passenger.id],
         );
+        const history = await client.query(
+          "SELECT l.entry_type, l.tickets_delta, l.created_at, l.trip_id, t.pickup_label, t.destination_label, t.status " +
+          "FROM passenger_reward_ledger l JOIN trips t ON t.id = l.trip_id " +
+          "WHERE l.passenger_user_id = $1 ORDER BY l.created_at DESC LIMIT 50",
+          [passenger.id],
+        );
         await client.query("COMMIT");
         return {
           tickets: Number(result.rows[0]?.tickets_balance ?? 0),
+          history: history.rows.map((entry) => ({
+            tripId: entry.trip_id,
+            type: entry.entry_type,
+            ticketsDelta: Number(entry.tickets_delta),
+            createdAt: entry.created_at,
+            pickupLabel: entry.pickup_label,
+            destinationLabel: entry.destination_label,
+            tripStatus: entry.status,
+          })),
           ticketsEarnedTotal: Number(result.rows[0]?.tickets_earned_total ?? 0),
           ticketsRequired: 9,
           ticketsUntilFreeRide: Math.max(0, 9 - Number(result.rows[0]?.tickets_balance ?? 0)),
