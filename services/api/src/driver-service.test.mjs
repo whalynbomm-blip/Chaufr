@@ -179,7 +179,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(accepted.status, "accepted");
     assert.equal(accepted.fareLocked, true);
     assert.equal(accepted.passengerFare, 40);
-    assert.equal(accepted.expectedDriverEarnings, 35.2);
+    assert.equal(accepted.expectedDriverEarnings, 38);
     assert.equal("platformCommission" in accepted, false);
     const acceptedPassengerStatus = await fetch(passengerStatusUrl, { headers: passengerHeader });
     const acceptedStatusBody = await acceptedPassengerStatus.json();
@@ -214,7 +214,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     const completed = await completedResponse.json();
     assert.equal(completed.status, "completed");
     assert.equal(completed.commissionRecorded, true);
-    assert.equal(completed.driverEarnings, 35.2);
+    assert.equal(completed.driverEarnings, 38);
     assert.equal("platformCommission" in completed, false);
 
     const locked = await pool.query(
@@ -266,7 +266,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     );
     assert.equal(Number(rewardTripRecord.rows[0].quoted_total), 40);
     assert.equal(Number(rewardTripRecord.rows[0].passenger_payable), 0);
-    assert.equal(Number(rewardTripRecord.rows[0].driver_earnings), 35.2);
+    assert.equal(Number(rewardTripRecord.rows[0].driver_earnings), 38);
     const remainingRewardsResponse = await fetch(base + "/v1/passenger/rewards", { headers: passengerHeader });
     assert.equal((await remainingRewardsResponse.json()).tickets, 0);
 
@@ -274,7 +274,7 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     const rewardOffers = (await rewardOfferResponse.json()).trips;
     assert.equal(rewardOffers.length, 1);
     assert.equal(rewardOffers[0].passengerFare, 40);
-    assert.equal(rewardOffers[0].expectedDriverEarnings, 35.2);
+    assert.equal(rewardOffers[0].expectedDriverEarnings, 38);
     const rewardAccepted = await trips.acceptTrip(account.user, rewardTrip.tripId);
     assert.equal(rewardAccepted.passengerFare, 40);
     await trips.startTrip(account.user, rewardTrip.tripId);
