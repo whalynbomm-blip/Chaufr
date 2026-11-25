@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -216,7 +217,9 @@ private fun DriverAvailabilityCard() {
   val permissionLauncher = rememberLauncherForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions()
   ) { results ->
-    if (results.values.any { it }) sendPresence(true)
+    val locationGranted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+      results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+    if (locationGranted) sendPresence(true)
     else message = "Location permission is needed before you can go online."
   }
 
@@ -225,7 +228,9 @@ private fun DriverAvailabilityCard() {
       val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
       val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
       if (!fine && !coarse) {
-        permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        val permissions = arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION) +
+          if (Build.VERSION.SDK_INT >= 33) arrayOf(Manifest.permission.POST_NOTIFICATIONS) else emptyArray()
+        permissionLauncher.launch(permissions)
         return
       }
     }
