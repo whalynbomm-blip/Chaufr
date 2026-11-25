@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +41,7 @@ fun GoogleMapsRoutePicker(
     pickup: LatLng?,
     destination: LatLng?,
     encodedRoute: String?,
+    driverLocation: LatLng? = null,
     onPickupSelected: (String, LatLng) -> Unit,
     onDestinationSelected: (String, LatLng) -> Unit
 ) {
@@ -49,6 +51,9 @@ fun GoogleMapsRoutePicker(
     val capeTown = LatLng(-33.9249, 18.4241)
     val camera = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(capeTown, 11f)
+    }
+    LaunchedEffect(driverLocation) {
+        driverLocation?.let { camera.animate(CameraUpdateFactory.newLatLngZoom(it, 14f)) }
     }
 
     fun openPlaceSearch(launcher: (Intent) -> Unit) {
@@ -103,6 +108,7 @@ fun GoogleMapsRoutePicker(
                 ) {
                     pickup?.let { Marker(state = MarkerState(it), title = "Pickup") }
                     destination?.let { Marker(state = MarkerState(it), title = "Destination") }
+                    driverLocation?.let { Marker(state = MarkerState(it), title = "Your driver", snippet = "Recent location update") }
                     encodedRoute?.let { encoded ->
                         val routePoints = decodeGooglePolyline(encoded)
                         if (routePoints.size > 1) Polyline(points = routePoints, color = Color(0xFF2878F0), width = 8f)
