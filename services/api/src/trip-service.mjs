@@ -587,8 +587,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
       try {
         await client.query("BEGIN");
         const result = await client.query(
-          "UPDATE trips SET status = 'completed', completed_at = now(), " +
-          "commission_earned_at = CASE WHEN fare_snapshot->>'rewardRedemption' = 'true' THEN NULL ELSE now() END " +
+          "UPDATE trips SET status = 'completed', completed_at = now(), commission_earned_at = now() " +
           "WHERE id = $1 AND driver_user_id = $2 AND status = 'in_progress' " +
           "RETURNING id, quoted_total, driver_earnings, completed_at, commission_earned_at",
           [tripId, driver.id],
