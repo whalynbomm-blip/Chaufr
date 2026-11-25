@@ -114,6 +114,13 @@ fun GoogleMapsRoutePicker(
                         if (routePoints.size > 1) Polyline(points = routePoints, color = Color(0xFF2878F0), width = 8f)
                     }
                 }
+                if (driverLocation != null) {
+                    Text(
+                        "Your driver’s location is updating automatically while they are online.",
+                        color = Color(0xFF16865B),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         modifier = Modifier.weight(1f),
