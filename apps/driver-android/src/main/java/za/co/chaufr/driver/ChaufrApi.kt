@@ -17,6 +17,9 @@ object ChaufrApi {
     suspend fun completeTrip(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/complete", token = token)
 
+    suspend fun requestRewardCommission(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/reward-commission-request", token = token)
+
     suspend fun availableTrips(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/available", token = token)
 
