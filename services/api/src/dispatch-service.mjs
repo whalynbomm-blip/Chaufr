@@ -2,7 +2,7 @@ import { AuthError } from "./auth-service.mjs";
 
 const OFFER_SECONDS = 25;
 
-export async function offerTripToNextDriver(pool, tripId, pickup) {
+export async function offerTripToNextDriver(pool, tripId, pickup, routesService = null) {
   const latitude = Number(pickup?.latitude);
   const longitude = Number(pickup?.longitude);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
@@ -41,7 +41,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup) {
     }
 
     const candidate = await client.query(
-      `SELECT p.driver_user_id,
+      `SELECT p.driver_user_id, p.latitude, p.longitude,
               (6371 * acos(LEAST(1, GREATEST(-1,
                 cos(radians($1)) * cos(radians(p.latitude)) *
                 cos(radians(p.longitude) - radians($2)) +
@@ -75,8 +75,8 @@ export async function offerTripToNextDriver(pool, tripId, pickup) {
              AND busy_offer.trip_id <> $4
          )
        ORDER BY distance_km ASC
-       LIMIT 1
-       FOR UPDATE OF p SKIP LOCKED`,
+       LIMIT 10
+       FOR UPDATE OF p SKIP LOCKED`
       [latitude, longitude, trip.vehicle_category, tripId],
     );
 
@@ -86,22 +86,66 @@ export async function offerTripToNextDriver(pool, tripId, pickup) {
       return { status: "waiting_for_driver", reason: "no_eligible_driver" };
     }
 
+    // Start with nearby candidates, then prefer the shortest live traffic-aware
+    // driving ETA when the server has a Google Routes key. Distance remains a safe fallback.
+    let rankedCandidates = candidate.rows.map((row) => ({
+      ...row,
+      distance_km: Number(row.distance_km),
+      eta_seconds: null,
+    }));
+    let rankingMethod = "straight_line_distance";
+    if (routesService?.computeRouteMatrix) {
+      try {
+        const matrix = await routesService.computeRouteMatrix(
+          { latitude, longitude },
+          rankedCandidates.map((row) => ({
+            latitude: Number(row.latitude),
+            longitude: Number(row.longitude),
+          })),
+        );
+        if (Array.isArray(matrix)) {
+          for (const item of matrix) {
+            const index = Number(item.destinationIndex);
+            if (Number.isInteger(index) && rankedCandidates[index] && item.hasRoute) {
+              rankedCandidates[index].eta_seconds = Number(item.durationSeconds);
+            }
+          }
+          if (rankedCandidates.some((row) => Number.isFinite(row.eta_seconds))) {
+            rankingMethod = "google_routes_traffic_eta";
+          }
+        }
+      } catch {
+        // Dispatch must continue if Google Routes is temporarily unavailable.
+      }
+    }
+    rankedCandidates.sort((a, b) => {
+      if (rankingMethod === "google_routes_traffic_eta") {
+        const aEta = Number.isFinite(a.eta_seconds) ? a.eta_seconds : Number.POSITIVE_INFINITY;
+        const bEta = Number.isFinite(b.eta_seconds) ? b.eta_seconds : Number.POSITIVE_INFINITY;
+        if (aEta !== bEta) return aEta - bEta;
+      }
+      return a.distance_km - b.distance_km;
+    });
+    const selectedCandidate = rankedCandidates[0];
+
     const offer = await client.query(
       "INSERT INTO trip_offers (trip_id, driver_user_id, status, expires_at) " +
       "VALUES ($1, $2, 'pending', now() + ($3 * interval '1 second')) " +
       "RETURNING id, driver_user_id, expires_at",
-      [tripId, candidate.rows[0].driver_user_id, OFFER_SECONDS],
+      [tripId, selectedCandidate.driver_user_id, OFFER_SECONDS],
     );
     await client.query(
       "INSERT INTO trip_events (trip_id, event_type, details) VALUES ($1, 'dispatch_offered', $2::jsonb)",
-      [tripId, JSON.stringify({ driverUserId: offer.rows[0].driver_user_id, distanceKm: Number(candidate.rows[0].distance_km), expiresAt: offer.rows[0].expires_at })],
+      [tripId, JSON.stringify({ driverUserId: offer.rows[0].driver_user_id, distanceKm: selectedCandidate.distance_km, etaSeconds: selectedCandidate.eta_seconds, rankingMethod, expiresAt: offer.rows[0].expires_at })],
     );
     await client.query("COMMIT");
     return {
       status: "offered",
       driverUserId: offer.rows[0].driver_user_id,
       expiresAt: offer.rows[0].expires_at,
-      distanceKm: Number(candidate.rows[0].distance_km),
+      distanceKm: selectedCandidate.distance_km,
+      estimatedPickupMinutes: Number.isFinite(selectedCandidate.eta_seconds) ? Math.ceil(selectedCandidate.eta_seconds / 60) : null,
+      rankingMethod,
     };
   } catch (error) {
     await client.query("ROLLBACK");
