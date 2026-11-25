@@ -136,7 +136,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/auth/register", "POST /v1/auth/login",
             "GET /v1/auth/me", "POST /v1/auth/logout",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
-            "GET /v1/driver/activation", "GET /v1/driver/trips/available",
+            "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
@@ -199,6 +199,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         }
         if (request.method === "GET" && url.pathname === "/v1/driver/activation") {
           return json(response, 200, await tripService.getActivationStatus(user));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/driver/trips/current") {
+          return json(response, 200, await tripService.getCurrentDriverTrip(user));
         }
         if (request.method === "GET" && url.pathname === "/v1/driver/trips/available") {
           return json(response, 200, await tripService.listAvailableTrips(user));
