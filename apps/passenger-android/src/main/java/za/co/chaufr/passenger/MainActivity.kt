@@ -48,6 +48,7 @@ import java.util.Locale
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.libraries.places.api.Places
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private val ChaufrNavy = Color(0xFF101C2C)
 private val ChaufrBlue = Color(0xFF2878F0)
@@ -113,6 +114,8 @@ private fun PassengerHome() {
     val context = LocalContext.current
     var bookingLoading by remember { mutableStateOf(false) }
     var bookingMessage by remember { mutableStateOf("") }
+    var activePassengerTripId by remember { mutableStateOf<String?>(null) }
+    var tripStatusSnapshot by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var rewardsTickets by remember { mutableStateOf(0) }
     var rewardsHistory by remember { mutableStateOf<List<RewardHistoryEntry>>(emptyList()) }
     var redeemReward by remember { mutableStateOf(false) }
@@ -126,6 +129,24 @@ private fun PassengerHome() {
                 rewardsTickets = rewards.optInt("tickets", 0)
                 rewardsHistory = parseRewardsHistory(rewards)
             } catch (_: Exception) { }
+        }
+    }
+
+    LaunchedEffect(activePassengerTripId) {
+        val tripId = activePassengerTripId ?: return@LaunchedEffect
+        val token = SecureTokenStore.load(context) ?: return@LaunchedEffect
+        val apiBase = BuildConfig.CHAUFR_API_BASE_URL
+        if (apiBase.isBlank()) return@LaunchedEffect
+        repeat(90) {
+            try {
+                val snapshot = ChaufrApi.passengerTripStatus(apiBase, token, tripId)
+                tripStatusSnapshot = snapshot
+                val status = snapshot.optString("status")
+                if (status in listOf("completed", "cancelled", "expired")) return@LaunchedEffect
+            } catch (_: Exception) {
+                // Keep the last successful status visible; retry while this trip is active.
+            }
+            delay(8_000)
         }
     }
 
@@ -345,6 +366,8 @@ private fun PassengerHome() {
                                                 routeQuoteToken ?: throw IllegalStateException("Calculate the fare again before requesting this ride."),
                                                 redeemReward
                                             )
+                                            activePassengerTripId = result.optString("tripId").takeIf { it.isNotBlank() }
+                                            tripStatusSnapshot = null
                                             if (redeemReward) rewardsTickets = (rewardsTickets - 9).coerceAtLeast(0)
                                             bookingMessage = if (redeemReward) "Free ride reward applied. 9 tickets reserved; your driver still receives normal earnings." else "Ride request submitted. You earn 1 reward ticket after the trip is completed."
                                         } catch (error: Exception) {
@@ -363,6 +386,46 @@ private fun PassengerHome() {
                             }
                             if (bookingMessage.isNotBlank()) {
                                 Text(bookingMessage, color = if (bookingMessage.startsWith("Ride request submitted")) ChaufrGreen else Color(0xFFB42318), fontSize = 12.sp)
+                            }
+                            tripStatusSnapshot?.let { snapshot ->
+                                Spacer(Modifier.height(12.dp))
+                                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF1FC))) {
+                                    Column(modifier = Modifier.padding(13.dp)) {
+                                        Text("YOUR RIDE STATUS", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp)
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            when (snapshot.optString("status")) {
+                                                "requested" -> "Finding a driver for your ride…"
+                                                "accepted" -> "Driver accepted your ride"
+                                                "driver_arriving" -> "Your driver is on the way"
+                                                "in_progress" -> "Your journey is in progress"
+                                                "completed" -> "Trip completed"
+                                                "cancelled" -> "Trip cancelled"
+                                                "expired" -> "Request expired"
+                                                else -> snapshot.optString("status").replace("_", " ").capitalize()
+                                            },
+                                            color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp
+                                        )
+                                        val driver = snapshot.optJSONObject("driver")
+                                        if (driver != null) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Text("Driver: ${driver.optString("name", "Assigned")}", color = ChaufrNavy, fontSize = 12.sp)
+                                            val vehicleInfo = driver.optJSONObject("vehicle")
+                                            if (vehicleInfo != null) Text(
+                                                "${vehicleInfo.optString("make")} ${vehicleInfo.optString("model")} · ${vehicleInfo.optString("category")}",
+                                                color = ChaufrMuted, fontSize = 11.sp
+                                            )
+                                            val location = driver.optJSONObject("location")
+                                            if (location != null) Text(
+                                                "Driver location updated · ${location.optDouble("latitude")} / ${location.optDouble("longitude")}",
+                                                color = ChaufrMuted, fontSize = 10.sp
+                                            )
+                                        }
+                                        if (snapshot.optString("status") in listOf("completed", "cancelled", "expired")) {
+                                            Button(onClick = { activePassengerTripId = null; tripStatusSnapshot = null }, modifier = Modifier.fillMaxWidth()) { Text("Dismiss trip status") }
+                                        }
+                                    }
+                                }
                             }
                             Text(
                                 "Server-calculated fare using a traffic-aware Google driving route. This price is locked when your ride request is submitted.",
