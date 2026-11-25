@@ -205,6 +205,10 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     const earnedRewards = await earnedRewardsResponse.json();
     assert.equal(earnedRewards.tickets, 1);
     assert.equal(earnedRewards.ticketsUntilFreeRide, 8);
+    assert.equal(earnedRewards.history.length, 1);
+    assert.equal(earnedRewards.history[0].type, "earned");
+    assert.equal(earnedRewards.history[0].ticketsDelta, 1);
+    assert.equal(earnedRewards.history[0].pickupLabel, "Cape Town Station");
 
     await pool.query(
       "UPDATE passenger_reward_accounts SET tickets_balance = 9 WHERE passenger_user_id = $1",
@@ -254,6 +258,10 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(Number(rewardAccounting.rows[0].passenger_payable), 0);
     const afterRewardTrip = await trips.getPassengerRewards(passenger.user);
     assert.equal(afterRewardTrip.tickets, 1);
+    assert.equal(afterRewardTrip.history.length, 3);
+    assert.deepEqual(afterRewardTrip.history.map((entry) => entry.type), ["earned", "redeemed", "earned"]);
+    assert.equal(afterRewardTrip.history[1].ticketsDelta, -9);
+    assert.equal(afterRewardTrip.history[1].destinationLabel, "V&A Waterfront");
   } finally {
     if (server) await new Promise((resolve) => server.close(resolve));
     await pool.end();
