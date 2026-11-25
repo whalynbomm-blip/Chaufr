@@ -153,7 +153,7 @@ private fun PassengerHome() {
         val token = SecureTokenStore.load(context) ?: return@LaunchedEffect
         val apiBase = BuildConfig.CHAUFR_API_BASE_URL
         if (apiBase.isBlank()) return@LaunchedEffect
-        repeat(90) {
+        while (true) {
             try {
                 val snapshot = ChaufrApi.passengerTripStatus(apiBase, token, tripId)
                 tripStatusSnapshot = snapshot
