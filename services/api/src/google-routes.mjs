@@ -70,6 +70,43 @@ export function createGoogleRoutesService({
   return {
     signRouteQuote,
     verifyRouteQuote,
+    async computeRouteMatrix(originInput, destinationsInput) {
+      if (!apiKey) return null;
+      const origin = validPoint(originInput, "Pickup");
+      if (!Array.isArray(destinationsInput) || destinationsInput.length === 0) return [];
+      const destinations = destinationsInput.slice(0, 10).map((point) => validPoint(point, "Driver"));
+      const response = await fetchImpl("https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": apiKey,
+          "X-Goog-FieldMask": "originIndex,destinationIndex,duration,distanceMeters,condition",
+        },
+        body: JSON.stringify({
+          origins: [{ waypoint: { location: { latLng: { latitude: origin.latitude, longitude: origin.longitude } } } }],
+          destinations: destinations.map((point) => ({
+            waypoint: { location: { latLng: { latitude: point.latitude, longitude: point.longitude } } },
+          })),
+          travelMode: "DRIVE",
+          routingPreference: "TRAFFIC_AWARE",
+          languageCode: "en-ZA",
+          units: "METRIC",
+        }),
+      });
+      if (!response.ok) throw Object.assign(new Error("Google Routes could not rank nearby drivers"), { status: response.status >= 500 ? 502 : 400 });
+      const elements = await response.json();
+      if (!Array.isArray(elements)) throw Object.assign(new Error("Google Routes returned an invalid driver matrix"), { status: 502 });
+      return elements.map((element) => {
+        const seconds = Number.parseFloat(String(element.duration ?? "").replace(/s$/, ""));
+        const meters = Number(element.distanceMeters);
+        return {
+          destinationIndex: Number(element.destinationIndex),
+          durationSeconds: Number.isFinite(seconds) ? seconds : null,
+          distanceMeters: Number.isFinite(meters) ? meters : null,
+          hasRoute: element.condition === "ROUTE_EXISTS" && Number.isFinite(seconds) && seconds > 0,
+        };
+      });
+    },
     async computeRoute(originInput, destinationInput) {
       if (!apiKey) {
         throw Object.assign(new Error("Google Routes is not configured on the Chaufr server"), { status: 503 });
