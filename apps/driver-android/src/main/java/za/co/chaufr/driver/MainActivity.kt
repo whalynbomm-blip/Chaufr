@@ -91,6 +91,7 @@ private fun DriverHome() {
         DriverAccountCard()
         DriverAvailabilityCard()
         AvailableTripsCard()
+        DriverCurrentTripCard()
 
         Text("TODAY'S SUMMARY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -296,6 +297,78 @@ private fun SummaryCard(title: String, value: String, modifier: Modifier = Modif
       Text(title, color = Muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
       Spacer(Modifier.height(7.dp))
       Text(value, color = Navy, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+    }
+  }
+}
+
+
+@Composable
+private fun DriverCurrentTripCard() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var trip by remember { mutableStateOf<JSONObject?>(null) }
+  var busy by remember { mutableStateOf(false) }
+  var message by remember { mutableStateOf("") }
+
+  suspend fun refreshCurrent() {
+    if (apiUrl.isBlank()) return
+    val token = SecureTokenStore.load(context) ?: return
+    try {
+      val result = ChaufrApi.currentDriverTrip(apiUrl, token)
+      trip = result.optJSONObject("trip")
+    } catch (error: Exception) {
+      if (message.isBlank()) message = error.message ?: "Unable to check your current trip."
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    while (true) {
+      refreshCurrent()
+      delay(10_000)
+    }
+  }
+
+  val current = trip
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text("CURRENT TRIP", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+      if (current == null) {
+        Text("No accepted trip in progress.", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+      } else {
+        val status = current.optString("status")
+        Text(if (status == "accepted") "Trip accepted · Head to pickup" else "Trip in progress",
+          color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(current.optString("pickupLabel"), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text("↓ " + current.optString("destinationLabel"), color = Muted, fontSize = 12.sp)
+        Text(String.format(Locale.US, "%.1f km · %d min", current.optDouble("distanceKm", 0.0),
+          current.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
+        Text("Expected earnings: R " + String.format(Locale.US, "%.2f",
+          current.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Button(onClick = {
+          scope.launch {
+            busy = true
+            try {
+              val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
+              val id = current.optString("tripId")
+              if (status == "accepted") {
+                ChaufrApi.startTrip(apiUrl, token, id)
+                message = "Trip started. Drive safely."
+              } else {
+                ChaufrApi.completeTrip(apiUrl, token, id)
+                message = "Trip completed. Your trip has been recorded."
+              }
+              refreshCurrent()
+            } catch (error: Exception) {
+              message = error.message ?: "Unable to update trip status."
+            } finally { busy = false }
+          }
+        }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+          Text(if (busy) "Updating trip…" else if (status == "accepted") "Start trip" else "Complete trip")
+        }
+      }
+      if (message.isNotBlank()) Text(message, color = if (message.contains("started") || message.contains("completed")) Green else Color(0xFFB42318), fontSize = 11.sp, lineHeight = 16.sp)
     }
   }
 }
