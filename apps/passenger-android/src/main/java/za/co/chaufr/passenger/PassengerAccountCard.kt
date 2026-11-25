@@ -97,6 +97,7 @@ fun PassengerAccountCard(onSignedIn: (String) -> Unit = {}) {
                         if (!busy) scope.launch {
                             busy = true
                             try {
+                                runCatching { ChaufrPushSetup.unregister(context, apiUrl, token!!) }
                                 ChaufrApi.logoutAccount(apiUrl, token!!)
                                 SecureTokenStore.clear(context)
                                 token = null
