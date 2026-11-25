@@ -2,6 +2,7 @@ package za.co.chaufr.driver
 
 import android.app.Notification
 import android.app.NotificationChannel
+import android.app.PendingIntent
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
@@ -14,6 +15,8 @@ import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +31,8 @@ class DriverLocationService : Service(), LocationListener {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var locationManager: LocationManager
     private var lastSentAt = 0L
+    private var offerPollingJob: Job? = null
+    private val notifiedOfferIds = mutableSetOf<String>()
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +55,7 @@ class DriverLocationService : Service(), LocationListener {
         }
 
         startForeground(NOTIFICATION_ID, buildNotification())
+        startOfferPolling(token)
         try {
             if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED ||
@@ -111,12 +117,61 @@ class DriverLocationService : Service(), LocationListener {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Driver location sharing",
-                NotificationManager.IMPORTANCE_LOW
-            )
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            val manager = getSystemService(NotificationManager::class.java)
+            val channel = NotificationChannel(CHANNEL_ID, "Driver location sharing", NotificationManager.IMPORTANCE_LOW)
+            val offersChannel = NotificationChannel(OFFERS_CHANNEL_ID, "New Chaufr trip offers", NotificationManager.IMPORTANCE_HIGH)
+                .apply { description = "Alerts for trip requests while you are online." }
+            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(offersChannel)
+        }
+    }
+
+    private fun startOfferPolling(token: String) {
+        if (offerPollingJob?.isActive == true) return
+        offerPollingJob = serviceScope.launch {
+            while (true) {
+                try {
+                    val result = ChaufrApi.availableTrips(BuildConfig.CHAUFR_API_BASE_URL, token)
+                    val trips = result.optJSONArray("trips")
+                    for (index in 0 until (trips?.length() ?: 0)) {
+                        val trip = trips?.optJSONObject(index) ?: continue
+                        val tripId = trip.optString("tripId")
+                        if (tripId.isBlank() || !notifiedOfferIds.add(tripId)) continue
+                        showTripOfferNotification(
+                            tripId,
+                            trip.optString("pickupLabel", "Pickup location"),
+                            trip.optString("destinationLabel", "Destination")
+                        )
+                    }
+                } catch (_: Exception) {
+                    // Retry on the next interval; location sharing remains independent.
+                }
+                delay(15_000L)
+            }
+        }
+    }
+
+    private fun showTripOfferNotification(tripId: String, pickup: String, destination: String) {
+        val openApp = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, tripId.hashCode(), openApp,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, OFFERS_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentTitle("New Chaufr trip request")
+            .setContentText(pickup + " → " + destination)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("Pickup: " + pickup + "\nDestination: " + destination + "\nOpen Chaufr to accept or decline."))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        try {
+            getSystemService(NotificationManager::class.java).notify(tripId.hashCode(), notification)
+        } catch (_: SecurityException) {
+            // Android notification permission is controlled by the driver.
         }
     }
 
@@ -125,6 +180,7 @@ class DriverLocationService : Service(), LocationListener {
     }
 
     override fun onDestroy() {
+        offerPollingJob?.cancel()
         stopLocationUpdates()
         serviceScope.cancel()
         super.onDestroy()
@@ -134,6 +190,7 @@ class DriverLocationService : Service(), LocationListener {
 
     companion object {
         private const val CHANNEL_ID = "chaufr_driver_location"
+        private const val OFFERS_CHANNEL_ID = "chaufr_driver_offers"
         private const val NOTIFICATION_ID = 4102
         const val ACTION_START = "za.co.chaufr.driver.LOCATION_START"
         const val ACTION_STOP = "za.co.chaufr.driver.LOCATION_STOP"
