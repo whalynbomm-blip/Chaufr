@@ -25,9 +25,14 @@ async function hasPaidActivation(queryable, driverUserId) {
   return result.rows[0] ?? null;
 }
 
-export function createTripService(pool, fareConfig, routesService = null) {
+export function createTripService(pool, fareConfig, routesService = null, pushService = null) {
   if (!pool || typeof pool.connect !== "function") throw new TypeError("A PostgreSQL pool is required");
   if (!fareConfig) throw new TypeError("Server fare configuration is required");
+
+  const notify = async (userId, title, body, data) => {
+    if (!pushService || !userId) return;
+    try { await pushService.sendToUser(userId, { title, body, data }); } catch { /* push delivery must not block trip state changes */ }
+  };
 
   return {
     async getActivationStatus(driver) {
@@ -368,6 +373,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         }
         await client.query("COMMIT");
         const dispatch = await offerTripToNextDriver(pool, trip.id, input.origin, routesService);
+        if (dispatch.driverUserId) await notify(dispatch.driverUserId, "New Chaufr trip request", trip.pickup_label + " → " + trip.destination_label, { type: "trip_offer", tripId: trip.id });
         return {
           tripId: trip.id,
           status: trip.status,
@@ -435,7 +441,12 @@ export function createTripService(pool, fareConfig, routesService = null) {
         "AND (o.id IS NULL OR o.expires_at <= now()) ORDER BY t.id LIMIT 25",
       );
       for (const pendingTrip of redispatchable.rows) {
-        await offerTripToNextDriver(pool, pendingTrip.id, pendingTrip.pickup_location, routesService);
+        const dispatch = await offerTripToNextDriver(pool, pendingTrip.id, pendingTrip.pickup_location, routesService);
+        if (dispatch.driverUserId) {
+          const labels = await pool.query("SELECT pickup_label, destination_label FROM trips WHERE id = $1", [pendingTrip.id]);
+          const row = labels.rows[0];
+          if (row) await notify(dispatch.driverUserId, "New Chaufr trip request", row.pickup_label + " → " + row.destination_label, { type: "trip_offer", tripId: pendingTrip.id });
+        }
       }
       const result = await pool.query(
         "SELECT t.id, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
@@ -529,6 +540,8 @@ export function createTripService(pool, fareConfig, routesService = null) {
         );
         await client.query("COMMIT");
         const accepted = updated.rows[0];
+        const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
+        await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
         return {
           tripId: accepted.id,
           status: "accepted",
@@ -567,6 +580,8 @@ export function createTripService(pool, fareConfig, routesService = null) {
         );
         await client.query("COMMIT");
         const trip = result.rows[0];
+        const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
+        await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr trip has started", "Your driver has started the trip.", { type: "trip_started", tripId });
         return {
           tripId: trip.id,
           status: "in_progress",
@@ -592,6 +607,11 @@ export function createTripService(pool, fareConfig, routesService = null) {
         [tripId],
       );
       const dispatch = await offerTripToNextDriver(pool, tripId, trip.rows[0]?.pickup_location, routesService);
+      if (dispatch.driverUserId) {
+        const labels = await pool.query("SELECT pickup_label, destination_label FROM trips WHERE id = $1", [tripId]);
+        const row = labels.rows[0];
+        if (row) await notify(dispatch.driverUserId, "New Chaufr trip request", row.pickup_label + " → " + row.destination_label, { type: "trip_offer", tripId });
+      }
       return { ...declined, nextDispatchStatus: dispatch.status };
     },
 
@@ -662,6 +682,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         );
         await client.query("COMMIT");
         const trip = result.rows[0];
+        await notify(passengerId, "Your Chaufr trip is complete", "Your trip is complete. Your reward ticket has been added.", { type: "trip_completed", tripId });
         return {
           tripId: trip.id,
           status: "completed",
