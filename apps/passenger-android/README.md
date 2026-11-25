@@ -2,7 +2,9 @@
 
 ## Chaufr Rewards
 
-Passengers earn one reward ticket after each completed trip. Nine available tickets can be redeemed for a free passenger fare on a traffic-aware route between 5 and 20 minutes. Redemption is checked and reserved by the API, and the normal trip fare and driver earnings remain intact so the reward is funded by Chaufr. Unaccepted reward bookings release their reserved tickets after the request expires. Passengers can view their ticket balance from the Rewards card in the app.
+Passengers earn one reward ticket after each completed trip. Nine available tickets can be redeemed for a free passenger fare on a traffic-aware route between 5 and 20 minutes. Redemption is checked and reserved by the API, and the normal trip fare and driver earnings remain intact so the reward is funded by Chaufr. Unaccepted reward bookings release their reserved tickets after the request expires. The Rewards card displays the ticket balance and up to 50 recent ledger entries (earned, redeemed, or released), including trip labels and dates.
+
+The passenger app also polls the authenticated trip-status endpoint while a submitted ride is active and displays the current status and assigned driver's name and approved vehicle details when available. The API only returns a trip to its owning passenger. Driver location is included only when a recent location update exists; continuous driver GPS updates and map-based live tracking are still pending.
 
 ## Google Maps and address search
 
