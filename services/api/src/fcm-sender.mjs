@@ -72,7 +72,7 @@ export function createFcmSender({ credentialsJson = process.env.FIREBASE_SERVICE
         if (response.ok) sent += 1;
         else {
           const error = await response.json().catch(() => ({}));
-          if (["UNREGISTERED", "INVALID_ARGUMENT"].includes(error.error?.details?.find((item) => item.errorCode)?.errorCode)) {
+          if (["UNREGISTERED"].includes(error.error?.details?.find((item) => item.errorCode)?.errorCode)) {
             invalidTokens.push(token);
           }
         }
