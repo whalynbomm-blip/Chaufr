@@ -84,7 +84,6 @@ export async function offerTripToNextDriver(pool, tripId, pickup) {
       "RETURNING id, driver_user_id, expires_at",
       [tripId, candidate.rows[0].driver_user_id, OFFER_SECONDS],
     );
-    await client.query("UPDATE trips SET status = 'offered' WHERE id = $1 AND status = 'requested'", [tripId]);
     await client.query(
       "INSERT INTO trip_events (trip_id, event_type, details) VALUES ($1, 'dispatch_offered', $2::jsonb)",
       [tripId, JSON.stringify({ driverUserId: offer.rows[0].driver_user_id, distanceKm: Number(candidate.rows[0].distance_km), expiresAt: offer.rows[0].expires_at })],
