@@ -7,6 +7,12 @@ import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 
 object ChaufrPushSetup {
+    suspend fun unregister(context: Context, apiUrl: String, accessToken: String) {
+        if (apiUrl.isBlank() || accessToken.isBlank() || FirebaseApp.getApps(context).isEmpty()) return
+        val fcmToken = FirebaseMessaging.getInstance().token.await()
+        ChaufrApi.unregisterPushDevice(apiUrl, accessToken, fcmToken)
+    }
+
     suspend fun register(context: Context, apiUrl: String, accessToken: String) {
         if (apiUrl.isBlank() || accessToken.isBlank()) return
         if (FirebaseApp.getApps(context).isEmpty()) {
