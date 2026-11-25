@@ -150,6 +150,16 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal((await initialPassengerStatus.json()).status, "requested");
     const unauthorizedStatus = await fetch(passengerStatusUrl, { headers: authHeader });
     assert.equal(unauthorizedStatus.status, 403);
+    const tripHistoryResponse = await fetch(base + "/v1/passenger/trips/history", { headers: passengerHeader });
+    assert.equal(tripHistoryResponse.status, 200);
+    const passengerTripHistory = await tripHistoryResponse.json();
+    assert.equal(passengerTripHistory.trips.length, 1);
+    assert.equal(passengerTripHistory.trips[0].tripId, trip.tripId);
+    assert.equal(passengerTripHistory.trips[0].status, "requested");
+    assert.equal(passengerTripHistory.trips[0].passengerPayable, 40);
+    assert.equal(passengerTripHistory.trips[0].pickupLabel, "Cape Town Station");
+    const driverTripHistory = await fetch(base + "/v1/passenger/trips/history", { headers: authHeader });
+    assert.equal(driverTripHistory.status, 403);
 
     const available = await fetch(base + "/v1/driver/trips/available", { headers: authHeader });
     assert.equal(available.status, 200);
