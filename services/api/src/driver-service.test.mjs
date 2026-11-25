@@ -280,9 +280,9 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     await trips.startTrip(account.user, rewardTrip.tripId);
     const rewardCompleted = await trips.completeTrip(account.user, rewardTrip.tripId);
     assert.equal(rewardCompleted.status, "completed");
-    assert.equal(rewardCompleted.commissionRecorded, false);
+    assert.equal(rewardCompleted.commissionRecorded, true);
     const rewardAccounting = await pool.query("SELECT commission_earned_at, passenger_payable FROM trips WHERE id = $1", [rewardTrip.tripId]);
-    assert.equal(rewardAccounting.rows[0].commission_earned_at, null);
+    assert.ok(rewardAccounting.rows[0].commission_earned_at);
     assert.equal(Number(rewardAccounting.rows[0].passenger_payable), 0);
     const afterRewardTrip = await trips.getPassengerRewards(passenger.user);
     assert.equal(afterRewardTrip.tickets, 1);
