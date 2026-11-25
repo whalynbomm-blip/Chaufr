@@ -97,6 +97,15 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 See `../../docs/deployment.md` before deploying.
 
 
+## Owner operations and reward-ride payouts
+
+The private owner console at `/owner` provides platform overview metrics, central fare controls, driver verification and vehicle approval actions. Owner-only payout endpoints list completed free-reward-ride commission requests and support the audited status sequence `requested → approved → paid` or `requested → rejected`. Mark a request as paid only after the platform has independently confirmed the real payment; this review ledger does not transfer money.
+
+- `GET /v1/owner/reward-commission-requests` — list payout requests for owner review.
+- `PATCH /v1/owner/reward-commission-requests/:requestId` with `{"status":"approved"}`, `{"status":"rejected"}`, or `{"status":"paid"}` — apply a permitted status transition. Every decision is recorded in `audit_events`.
+
+The 50% reward-ride payout remains a platform liability until a real payment rail and reconciliation process are connected. This owner workflow records review and settlement status only.
+
 ## Firebase push notifications
 
 The API can deliver Firebase Cloud Messaging (FCM) HTTP v1 notifications to registered Android passenger and driver devices. Configure `FIREBASE_SERVICE_ACCOUNT_JSON` in the API host's secret manager with the full JSON contents of a Firebase service-account key. The service account must belong to the Firebase project used by both Android apps and have permission to send Firebase Cloud Messaging messages. Never commit this JSON, paste it into the Android app, or expose it in logs.
