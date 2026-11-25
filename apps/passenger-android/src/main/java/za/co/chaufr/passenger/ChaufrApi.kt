@@ -107,6 +107,9 @@ object ChaufrApi {
     suspend fun passengerTripStatus(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/passenger/trips/$tripId/status", token = token)
 
+    suspend fun cancelPassengerTrip(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/passenger/trips/$tripId/cancel", token = token)
+
     suspend fun requestFareQuote(
         baseUrl: String,
         distanceKm: Double,
