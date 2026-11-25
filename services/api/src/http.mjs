@@ -138,7 +138,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
             "GET /v1/driver/activation", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
-            "POST /v1/driver/trips/:tripId/complete", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
+            "POST /v1/driver/trips/:tripId/complete", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
           ],
           database: database ? "connected" : "not_configured",
@@ -256,6 +256,16 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
         return json(response, 200, await tripService.cancelPassengerTrip(user, passengerTripCancelMatch[1]));
+      }
+
+      if (request.method === "GET" && url.pathname === "/v1/passenger/trips/history") {
+        if (!authService || !tripService) return json(response, 503, { error: "Passenger trip services are unavailable until the database is configured", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
+        return json(response, 200, { trips: await tripService.getPassengerTripHistory(user) });
       }
 
       const passengerTripStatusMatch = /^\/v1\/passenger\/trips\/([0-9a-f-]{36})\/status$/i.exec(url.pathname);
