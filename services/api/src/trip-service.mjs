@@ -201,6 +201,30 @@ export function createTripService(pool, fareConfig, routesService = null) {
       }
     },
 
+    async getPassengerTripHistory(passenger) {
+      requireRole(passenger, "passenger");
+      const result = await pool.query(
+        "SELECT id, status, pickup_label, destination_label, quoted_total, passenger_payable, " +
+        "distance_km, duration_minutes, requested_at, accepted_at, started_at, completed_at " +
+        "FROM trips WHERE passenger_user_id = $1 ORDER BY requested_at DESC LIMIT 100",
+        [passenger.id],
+      );
+      return result.rows.map((trip) => ({
+        tripId: trip.id,
+        status: trip.status,
+        pickupLabel: trip.pickup_label,
+        destinationLabel: trip.destination_label,
+        quotedFare: Number(trip.quoted_total),
+        passengerPayable: Number(trip.passenger_payable ?? trip.quoted_total),
+        distanceKm: Number(trip.distance_km),
+        durationMinutes: Number(trip.duration_minutes),
+        requestedAt: trip.requested_at,
+        acceptedAt: trip.accepted_at,
+        startedAt: trip.started_at,
+        completedAt: trip.completed_at,
+      }));
+    },
+
     async getPassengerTripStatus(passenger, tripId) {
       requireRole(passenger, "passenger");
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
