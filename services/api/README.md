@@ -122,3 +122,12 @@ Use the matching Android app's Firebase project configuration values. Supply the
 After a user signs in, the app requests an FCM token and registers it through authenticated `POST /v1/push-devices`. Tokens can be disabled through authenticated `DELETE /v1/push-devices`. The API sends driver-offer alerts and passenger acceptance, trip-start and trip-completion updates. Push delivery failures do not roll back trip state changes. Invalid/unregistered tokens are deactivated.
 
 Android 13 and later require notification permission. The passenger app requests it after sign-in; the driver app requests it as part of going online. Device-level notification settings can still suppress alerts. Test on physical devices with Firebase configured before enabling production dispatch.
+
+
+## Payment ledger foundation
+
+Migration `0012_payment_ledger.sql` adds provider-neutral ZAR payment intents, provider-event idempotency and an append-only financial ledger. Amounts are stored in integer cents. The service supports two inbound purposes: passenger trip payments and the daily driver activation fee. A verified activation payment is linked to the owning driver and marks that day's activation as paid; a verified passenger payment marks the matching passenger trip as paid.
+
+`src/payment-service.mjs` exposes internal `createIntent` and `recordVerifiedInboundPayment` methods. The latter must only be called after a future provider-specific webhook adapter has verified the provider signature, merchant account and event authenticity. Duplicate provider event IDs are ignored, and amount/currency mismatches are rejected. No public payment-confirmation route is exposed, and no card data is stored.
+
+This is a ledger and settlement foundation, not a live checkout integration. Payment-provider selection, hosted checkout creation, signed webhook verification, failed-payment handling, refunds, payout transfers and reconciliation reports remain to be connected. Do not mark reward-ride commission requests as paid until an actual transfer is confirmed.
