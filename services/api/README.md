@@ -96,3 +96,21 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
 See `../../docs/deployment.md` before deploying.
+
+
+## Firebase push notifications
+
+The API can deliver Firebase Cloud Messaging (FCM) HTTP v1 notifications to registered Android passenger and driver devices. Configure `FIREBASE_SERVICE_ACCOUNT_JSON` in the API host's secret manager with the full JSON contents of a Firebase service-account key. The service account must belong to the Firebase project used by both Android apps and have permission to send Firebase Cloud Messaging messages. Never commit this JSON, paste it into the Android app, or expose it in logs.
+
+Both Android apps accept these Gradle properties at build time:
+
+- `firebaseApiKey`
+- `firebaseAppId`
+- `firebaseProjectId`
+- `firebaseSenderId`
+
+Use the matching Android app's Firebase project configuration values. Supply them as protected CI secrets or local Gradle properties; do not commit credentials or private keys. If these values are absent, the apps continue to build, but FCM registration is skipped and push delivery is unavailable.
+
+After a user signs in, the app requests an FCM token and registers it through authenticated `POST /v1/push-devices`. Tokens can be disabled through authenticated `DELETE /v1/push-devices`. The API sends driver-offer alerts and passenger acceptance, trip-start and trip-completion updates. Push delivery failures do not roll back trip state changes. Invalid/unregistered tokens are deactivated.
+
+Android 13 and later require notification permission. The passenger app requests it after sign-in; the driver app requests it as part of going online. Device-level notification settings can still suppress alerts. Test on physical devices with Firebase configured before enabling production dispatch.
