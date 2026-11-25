@@ -137,7 +137,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/auth/me", "POST /v1/auth/logout",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
-            "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
+            "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
           ],
@@ -209,6 +209,10 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const acceptMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/accept$/i.exec(url.pathname);
         if (request.method === "POST" && acceptMatch) {
           return json(response, 200, await tripService.acceptTrip(user, acceptMatch[1]));
+        }
+        const declineMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/decline$/i.exec(url.pathname);
+        if (request.method === "POST" && declineMatch) {
+          return json(response, 200, await tripService.declineTripOffer(user, declineMatch[1]));
         }
         const startMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/start$/i.exec(url.pathname);
         if (request.method === "POST" && startMatch) {
