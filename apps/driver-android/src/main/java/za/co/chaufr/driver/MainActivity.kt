@@ -173,29 +173,11 @@ private fun DriverAvailabilityCard() {
     } catch (_: Exception) { null }
   }
 
-  // While online, refresh driver coordinates every 30 seconds while this screen is active.
-  // Location is only shared while the driver has explicitly enabled online availability.
-  LaunchedEffect(available, apiUrl) {
-    if (!available || apiUrl.isBlank()) return@LaunchedEffect
-    val token = SecureTokenStore.load(context) ?: return@LaunchedEffect
-    while (available) {
-      delay(30_000)
-      val location = lastKnownLocation()
-      if (location == null || System.currentTimeMillis() - location.time > 90_000) {
-        message = "Online, but location is stale. Please enable GPS and keep Chaufr open to refresh your location."
-        continue
-      }
-      try {
-        val update = ChaufrApi.setDriverPresence(
-          apiUrl, token, true, location.latitude, location.longitude,
-          if (location.hasAccuracy()) location.accuracy.toDouble() else null
-        )
-        available = update.optBoolean("isOnline", true)
-        message = "Online · location refreshed."
-      } catch (error: Exception) {
-        message = "Online status remains selected; location refresh failed. Check your connection."
-      }
-    }
+  // A visible foreground service keeps location updates running after the driver leaves this screen.
+  // It is started only while the driver has explicitly chosen to be online.
+  LaunchedEffect(available) {
+    if (available) DriverLocationService.start(context)
+    else DriverLocationService.stop(context)
   }
 
   fun sendPresence(online: Boolean) {
@@ -223,7 +205,8 @@ private fun DriverAvailabilityCard() {
           ChaufrApi.setDriverPresence(apiUrl, token, false)
         }
         available = result.optBoolean("isOnline", online)
-        message = if (available) "Your availability has been sent to Chaufr." else "You are now offline."
+        if (available) DriverLocationService.start(context) else DriverLocationService.stop(context)
+        message = if (available) "Online · background location sharing is active." else "You are now offline. Location sharing has stopped."
       } catch (error: Exception) {
         message = error.message ?: "Unable to update driver availability."
       } finally { busy = false }
