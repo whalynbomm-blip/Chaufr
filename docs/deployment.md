@@ -25,25 +25,30 @@ Choose a provider that supports:
 
 ## Required environment variables
 
-Set fare configuration only in the hosting provider's private environment settings. Do not commit production values or credentials.
+Set secrets and fare configuration only in the hosting provider's private environment settings. Never commit credentials or production values.
 
 | Variable | Purpose |
 |---|---|
 | `PORT` | Port supplied by the host (usually injected automatically) |
+| `DATABASE_URL` | Managed PostgreSQL connection string |
+| `DB_SSL` | Set `true` when the database provider requires TLS |
+| `VEHICLE_DATA_ENCRYPTION_KEY` | Private base64-encoded 32-byte key for encrypted driver vehicle/licence data |
+| `FARE_QUOTE_SIGNING_SECRET` | Private random signing key for server-issued route quotes |
+| `GOOGLE_MAPS_SERVER_API_KEY` | Server-restricted key with Google Routes API enabled |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Full Firebase service-account JSON used by the API to send FCM notifications |
 | `FARE_RULE_VERSION` | Identifier for the active fare rules |
-| `FARE_CURRENCY` | Currency code, currently `ZAR` in development |
-| `FARE_BASE` | Base fare |
-| `FARE_PER_KM` | Per-kilometre charge |
-| `FARE_PER_MINUTE` | Per-minute charge |
+| `FARE_CURRENCY` | Currency code; use `ZAR` for South Africa |
+| `FARE_BASE`, `FARE_PER_KM`, `FARE_PER_MINUTE` | Fare calculation inputs |
 | `FARE_OPERATING_PER_KM` | Operating-cost allowance per kilometre |
-| `FARE_COMMISSION_RATE` | Platform commission as a decimal fraction (default 0.12) |\n| `DAILY_ACTIVATION_FEE` | Driver daily activation fee in ZAR (default 30; owner dashboard can update it) |
+| `FARE_COMMISSION_RATE` | Standard platform commission as a decimal fraction (default 0.12) |
+| `DAILY_ACTIVATION_FEE` | Driver daily activation fee in ZAR (default 30) |
 | `FARE_MINIMUM` | Minimum passenger fare |
 | `FARE_FUEL_PRICE_PER_LITRE` | Configured fuel price per litre |
-| `FARE_FUEL_STANDARD_L100KM` | Standard vehicle consumption |
-| `FARE_FUEL_COMFORT_L100KM` | Comfort vehicle consumption |
-| `FARE_FUEL_XL_L100KM` | XL vehicle consumption |
+| `FARE_FUEL_STANDARD_L100KM`, `FARE_FUEL_COMFORT_L100KM`, `FARE_FUEL_XL_L100KM` | Fuel consumption assumptions by vehicle category |
 
-Do not use the sample values as live commercial pricing without approving and validating them.
+Generate private keys with `openssl rand -base64 32`. The Android Firebase configuration values are separate CI secrets: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, and `FIREBASE_SENDER_ID`. Android builds also need `chaufrApiBaseUrl` and passenger map key `chaufrGoogleMapsApiKey` as protected Gradle properties. Restrict the Android Maps key to the passenger app package and signing certificate, and restrict the server key to Routes API.
+
+Do not use sample values as live commercial pricing without approval and validation.
 
 ## Before public launch
 
@@ -55,4 +60,4 @@ Do not use the sample values as live commercial pricing without approving and va
 6. Configure monitoring, backups, privacy controls and incident response.
 7. Complete security and South African legal/compliance review.
 
-Deploying the current API alone does not create a complete ride-hailing service. Live dispatch, driver tracking, payment-provider integration and the remaining owner operations tools still need to be completed.
+Dispatch, driver foreground location updates, passenger trip tracking and FCM notification plumbing are implemented in the codebase, but require production configuration and real-device verification. Deploying the API alone does not create a complete ride-hailing service: payment-provider checkout/webhooks, driver verification workflows, refunds, ratings, support and financial reconciliation still need to be completed.
