@@ -428,6 +428,15 @@ export function createTripService(pool, fareConfig, routesService = null) {
       if (verification.rows[0]?.verification_status !== "verified") throw new AuthError("Your driver profile must be verified before accessing trip requests", 403);
       const presence = await pool.query("SELECT is_online FROM driver_presence WHERE driver_user_id = $1", [driver.id]);
       if (!presence.rows[0]?.is_online) throw new AuthError("Go online to access available trip requests", 403);
+      const redispatchable = await pool.query(
+        "SELECT DISTINCT t.id, t.fare_snapshot->'pickupLocation' AS pickup_location " +
+        "FROM trips t LEFT JOIN trip_offers o ON o.trip_id = t.id AND o.status = 'pending' " +
+        "WHERE t.status = 'requested' AND t.driver_user_id IS NULL AND t.quote_expires_at > now() " +
+        "AND (o.id IS NULL OR o.expires_at <= now()) ORDER BY t.id LIMIT 25",
+      );
+      for (const pendingTrip of redispatchable.rows) {
+        await offerTripToNextDriver(pool, pendingTrip.id, pendingTrip.pickup_location);
+      }
       const result = await pool.query(
         "SELECT t.id, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
         "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, " +
