@@ -138,7 +138,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/start",
-            "POST /v1/driver/trips/:tripId/complete", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
+            "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
           ],
           database: database ? "connected" : "not_configured",
@@ -213,6 +213,10 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const startMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/start$/i.exec(url.pathname);
         if (request.method === "POST" && startMatch) {
           return json(response, 200, await tripService.startTrip(user, startMatch[1]));
+        }
+        const rewardCommissionMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/reward-commission-request$/i.exec(url.pathname);
+        if (request.method === "POST" && rewardCommissionMatch) {
+          return json(response, 200, await tripService.requestRewardDriverCommission(user, rewardCommissionMatch[1]));
         }
         const completeMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/complete$/i.exec(url.pathname);
         if (request.method === "POST" && completeMatch) {
