@@ -384,7 +384,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
       if (!activation) throw activationRequired();
       const result = await pool.query(
         "SELECT id, status, pickup_label, destination_label, distance_km, duration_minutes, " +
-        "quoted_total, driver_earnings, accepted_at, started_at " +
+        "quoted_total, driver_earnings, accepted_at, started_at, fare_snapshot->>'rewardRedemption' AS reward_redemption " +
         "FROM trips WHERE driver_user_id = $1 AND status IN ('accepted', 'in_progress') " +
         "ORDER BY accepted_at DESC LIMIT 1",
         [driver.id],
@@ -399,6 +399,7 @@ export function createTripService(pool, fareConfig, routesService = null) {
         durationMinutes: Number(trip.duration_minutes),
         passengerFare: Number(trip.quoted_total),
         expectedDriverEarnings: Number(trip.driver_earnings),
+        rewardRedemption: trip.reward_redemption === "true",
         acceptedAt: trip.accepted_at,
         startedAt: trip.started_at,
       } : null };
