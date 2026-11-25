@@ -72,6 +72,7 @@ fun DriverAccountCard() {
         if (apiUrl.isNotBlank()) {
             try {
                 val profile = ChaufrApi.driverProfile(apiUrl, activeToken)
+                runCatching { ChaufrPushSetup.register(context, apiUrl, activeToken) }
                 verificationStatus = profile.optString("verificationStatus", "pending")
                 vehicleCount = profile.optJSONArray("vehicles")?.length() ?: 0
             } catch (error: Exception) {
