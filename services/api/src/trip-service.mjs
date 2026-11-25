@@ -149,6 +149,55 @@ export function createTripService(pool, fareConfig, routesService = null) {
       }
     },
 
+    async getPassengerTripStatus(passenger, tripId) {
+      requireRole(passenger, "passenger");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const result = await pool.query(
+        "SELECT t.id, t.status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
+        "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, " +
+        "u.display_name AS driver_name, dp.rating AS driver_rating, v.make AS vehicle_make, v.model AS vehicle_model, " +
+        "v.category AS vehicle_category, p.latitude AS driver_latitude, p.longitude AS driver_longitude, " +
+        "p.location_accuracy_m, p.last_seen_at " +
+        "FROM trips t LEFT JOIN users u ON u.id = t.driver_user_id " +
+        "LEFT JOIN driver_profiles dp ON dp.user_id = t.driver_user_id " +
+        "LEFT JOIN vehicles v ON v.id = t.vehicle_id " +
+        "LEFT JOIN driver_presence p ON p.driver_user_id = t.driver_user_id " +
+        "WHERE t.id = $1 AND t.passenger_user_id = $2 LIMIT 1",
+        [tripId, passenger.id],
+      );
+      const trip = result.rows[0];
+      if (!trip) throw new AuthError("Trip not found", 404);
+      const locationIsRecent = trip.last_seen_at && (Date.now() - new Date(trip.last_seen_at).getTime()) <= 90_000;
+      return {
+        tripId: trip.id,
+        status: trip.status,
+        pickupLabel: trip.pickup_label,
+        destinationLabel: trip.destination_label,
+        passengerPayable: Number(trip.passenger_payable ?? trip.quoted_total),
+        distanceKm: Number(trip.distance_km),
+        durationMinutes: Number(trip.duration_minutes),
+        requestedAt: trip.requested_at,
+        acceptedAt: trip.accepted_at,
+        startedAt: trip.started_at,
+        completedAt: trip.completed_at,
+        driver: trip.driver_name ? {
+          name: trip.driver_name,
+          rating: trip.driver_rating == null ? null : Number(trip.driver_rating),
+          vehicle: trip.vehicle_make ? {
+            make: trip.vehicle_make,
+            model: trip.vehicle_model,
+            category: trip.vehicle_category,
+          } : null,
+          location: locationIsRecent && trip.driver_latitude != null && trip.driver_longitude != null ? {
+            latitude: Number(trip.driver_latitude),
+            longitude: Number(trip.driver_longitude),
+            accuracyMeters: trip.location_accuracy_m == null ? null : Number(trip.location_accuracy_m),
+            lastSeenAt: trip.last_seen_at,
+          } : null,
+        } : null,
+      };
+    },
+
     async requestTrip(passenger, input = {}) {
       requireRole(passenger, "passenger");
       if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthError("Invalid trip details");
