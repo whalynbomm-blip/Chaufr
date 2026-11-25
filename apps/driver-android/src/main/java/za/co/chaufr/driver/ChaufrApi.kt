@@ -60,6 +60,20 @@ object ChaufrApi {
     }
 
 
+    suspend fun registerPushDevice(baseUrl: String, token: String, fcmToken: String, deviceLabel: String): JSONObject =
+        requestJson(
+            baseUrl, "POST", "/v1/push-devices",
+            JSONObject().put("fcmToken", fcmToken).put("platform", "android").put("deviceLabel", deviceLabel),
+            token
+        )
+
+    suspend fun unregisterPushDevice(baseUrl: String, token: String, fcmToken: String): JSONObject =
+        requestJson(
+            baseUrl, "DELETE", "/v1/push-devices",
+            JSONObject().put("fcmToken", fcmToken),
+            token
+        )
+
     suspend fun registerAccount(
         baseUrl: String, displayName: String, email: String, phone: String,
         password: String, role: String
