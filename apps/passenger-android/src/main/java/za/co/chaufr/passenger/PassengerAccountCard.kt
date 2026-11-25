@@ -13,6 +13,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +48,10 @@ fun PassengerAccountCard(onSignedIn: (String) -> Unit = {}) {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     LaunchedEffect(apiUrl) {
         val saved = SecureTokenStore.load(context)
         if (!saved.isNullOrBlank() && apiUrl.isNotBlank()) {
@@ -60,6 +70,12 @@ fun PassengerAccountCard(onSignedIn: (String) -> Unit = {}) {
         val activeToken = token ?: return@LaunchedEffect
         if (apiUrl.isNotBlank()) {
             runCatching { ChaufrPushSetup.register(context, apiUrl, activeToken) }
+        }
+    }
+    LaunchedEffect(token) {
+        if (token != null && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
