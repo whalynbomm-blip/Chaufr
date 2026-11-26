@@ -112,6 +112,17 @@ export function createOwnerService(pool, fareConfig) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        if (status === "verified") {
+          const evidence = await client.query(
+            "SELECT count(*) FILTER (WHERE document_type IN ('south_african_id','passport') AND status='approved') AS identity_count, " +
+            "count(*) FILTER (WHERE document_type='drivers_licence' AND status='approved') AS licence_count " +
+            "FROM driver_verification_documents WHERE driver_user_id=$1",
+            [driverId],
+          );
+          if (Number(evidence.rows[0]?.identity_count ?? 0) < 1 || Number(evidence.rows[0]?.licence_count ?? 0) < 1) {
+            throw new AuthError("Approve an identity document and a driver's licence before verifying this driver", 409);
+          }
+        }
         const updated = await client.query(
           "UPDATE driver_profiles SET verification_status = $1 WHERE user_id = $2 " +
           "RETURNING user_id, verification_status",
