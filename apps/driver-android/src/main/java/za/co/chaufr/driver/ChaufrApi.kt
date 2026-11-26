@@ -32,6 +32,12 @@ object ChaufrApi {
     suspend fun driverProfile(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/profile", token = token)
 
+    suspend fun driverAdvantageSettings(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/advantage-settings", token = token)
+
+    suspend fun updateDriverAdvantageSettings(baseUrl: String, token: String, settings: JSONObject): JSONObject =
+        requestJson(baseUrl, "PUT", "/v1/driver/advantage-settings", settings, token)
+
     suspend fun submitDriverVehicle(
         baseUrl: String, token: String, category: String, make: String, model: String,
         registration: String, licenceNumber: String, fuelConsumption: Double
