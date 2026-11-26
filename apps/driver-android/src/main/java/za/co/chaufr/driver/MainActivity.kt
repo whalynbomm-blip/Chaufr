@@ -29,6 +29,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -91,6 +92,7 @@ private fun DriverHome() {
 
       Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DriverAccountCard()
+        DriverAdvantageSettingsCard()
         DriverAvailabilityCard()
         AvailableTripsCard()
         DriverCurrentTripCard()
@@ -137,6 +139,77 @@ private fun DriverHome() {
           lineHeight = 15.sp
         )
       }
+    }
+  }
+}
+
+@Composable
+private fun DriverAdvantageSettingsCard() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var areas by remember { mutableStateOf("") }
+  var minNet by remember { mutableStateOf("0") }
+  var maxPickup by remember { mutableStateOf("15") }
+  var fuelPrice by remember { mutableStateOf("0") }
+  var operatingCost by remember { mutableStateOf("0") }
+  var loading by remember { mutableStateOf(false) }
+  var message by remember { mutableStateOf("Preferences are used by Chaufr FairMatch.") }
+
+  LaunchedEffect(apiUrl) {
+    val token = SecureTokenStore.load(context)
+    if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
+      loading = true
+      try {
+        val data = ChaufrApi.driverAdvantageSettings(apiUrl, token)
+        areas = data.optJSONArray("preferredAreaLabels")?.let { array ->
+          (0 until array.length()).map { array.optString(it) }.joinToString(", ")
+        } ?: ""
+        minNet = data.optDouble("minimumNetPerTrip", 0.0).toString()
+        maxPickup = data.optDouble("maximumPickupDistanceKm", 15.0).toString()
+        fuelPrice = data.optDouble("fuelPricePerLitre", 0.0).toString()
+        operatingCost = data.optDouble("operatingCostPerKm", 0.0).toString()
+        message = "Settings loaded."
+      } catch (_: Exception) {
+        message = "Connect to Chaufr to load your settings."
+      } finally { loading = false }
+    }
+  }
+
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text("CHA UFR ADVANTAGE".replace(" ",""), color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+      Text("Trip preferences & profit settings", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+      Text("Set your own pickup limit and minimum estimated net. Costs are estimates and will help FairMatch rank offers.", color = Muted, fontSize = 12.sp, lineHeight = 17.sp)
+      OutlinedTextField(areas, { areas = it }, label = { Text("Preferred areas (comma-separated)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+      OutlinedTextField(minNet, { minNet = it }, label = { Text("Minimum net per trip (R)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+      OutlinedTextField(maxPickup, { maxPickup = it }, label = { Text("Maximum pickup distance (km)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+      OutlinedTextField(fuelPrice, { fuelPrice = it }, label = { Text("Fuel price per litre (R)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+      OutlinedTextField(operatingCost, { operatingCost = it }, label = { Text("Other vehicle cost per km (R)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+      Button(onClick = {
+        scope.launch {
+          val token = SecureTokenStore.load(context)
+          if (token.isNullOrBlank() || apiUrl.isBlank()) { message = "Sign in and connect to the API to save settings."; return@launch }
+          val payload = try {
+            JSONObject()
+              .put("preferredAreaLabels", areas.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct())
+              .put("minimumNetPerTrip", minNet.toDouble())
+              .put("maximumPickupDistanceKm", maxPickup.toDouble())
+              .put("fuelPricePerLitre", fuelPrice.toDouble())
+              .put("operatingCostPerKm", operatingCost.toDouble())
+          } catch (_: Exception) { message = "Please enter valid numeric values."; return@launch }
+          loading = true
+          try {
+            ChaufrApi.updateDriverAdvantageSettings(apiUrl, token, payload)
+            message = "Saved. FairMatch will apply your minimum net and pickup limits."
+          } catch (e: Exception) { message = e.message ?: "Could not save settings." }
+          finally { loading = false }
+        }
+      }, enabled = !loading, modifier = Modifier.fillMaxWidth()) {
+        Text(if (loading) "Loading / saving…" else "Save Advantage settings")
+      }
+      Text(message, color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
     }
   }
 }
