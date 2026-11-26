@@ -132,11 +132,18 @@ export function createMobilityService(pool, routesService, pushService = null) {
         [scheduleId,user.id],
       );
       if (!result.rowCount) throw new AuthError("Active scheduled ride not found",404);
-      if (recurring) await pool.query("UPDATE scheduled_ride_occurrences SET status='cancelled' WHERE rule_id=$1 AND status='scheduled'",[scheduleId]);
+      if (recurring) await pool.query("UPDATE scheduled_rides SET status='cancelled',updated_at=now() WHERE recurring_rule_id=$1 AND status='scheduled'",[scheduleId]);
       return result.rows[0];
     },
 
     async processDueScheduledRides(limit = 25) {
+      await pool.query(
+        "INSERT INTO scheduled_rides (passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward,recurring_rule_id) " +
+        "SELECT r.passenger_user_id, ((d.day::date + r.local_time) AT TIME ZONE r.timezone), r.pickup_label,r.destination_label,r.origin,r.destination,r.route_quote_token,r.vehicle_category,r.service_tier,r.redeem_reward,r.id " +
+        "FROM recurring_ride_rules r CROSS JOIN LATERAL generate_series(GREATEST(r.starts_on,(now() AT TIME ZONE r.timezone)::date),LEAST(r.ends_on,(now() AT TIME ZONE r.timezone)::date + 30),interval '1 day') AS d(day) " +
+        "WHERE r.status='active' AND EXTRACT(ISODOW FROM d.day)=ANY(r.weekdays) AND ((d.day::date + r.local_time) AT TIME ZONE r.timezone)>now()+interval '15 minutes' " +
+        "ON CONFLICT (recurring_rule_id,scheduled_for) WHERE recurring_rule_id IS NOT NULL DO NOTHING"
+      );
       const due = await pool.query(
         "SELECT id,passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward " +
         "FROM scheduled_rides WHERE status='scheduled' AND scheduled_for <= now() + interval '2 minutes' ORDER BY scheduled_for LIMIT $1",
