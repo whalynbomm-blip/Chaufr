@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.net.Uri
+import android.util.Base64
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -95,6 +97,7 @@ private fun DriverHome() {
 
       Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         DriverAccountCard()
+        DriverComplianceCard()
         DriverAdvantageSettingsCard()
         DriverAvailabilityCard()
         AvailableTripsCard()
@@ -142,6 +145,109 @@ private fun DriverHome() {
           lineHeight = 15.sp
         )
       }
+    }
+  }
+}
+
+@Composable
+private fun DriverComplianceCard() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var accountNumber by remember { mutableStateOf("") }
+  var bankCode by remember { mutableStateOf("") }
+  var bankName by remember { mutableStateOf("") }
+  var accountMessage by remember { mutableStateOf("Add a bank account to receive completed-trip and reward-ride payouts.") }
+  var documentMessage by remember { mutableStateOf("") }
+  var documentSummary by remember { mutableStateOf("Identity and driver's licence documents are required before verification.") }
+  var busy by remember { mutableStateOf(false) }
+
+  suspend fun refreshDocuments(token: String) {
+    val response = ChaufrApi.verificationDocuments(apiUrl, token)
+    val docs = response.optJSONArray("documents")
+    if (docs != null && docs.length() > 0) {
+      documentSummary = (0 until docs.length()).joinToString(" · ") { index ->
+        val doc = docs.getJSONObject(index)
+        doc.optString("documentType").replace("_", " ") + ": " + doc.optString("status")
+      }
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    val token = SecureTokenStore.load(context)
+    if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
+      try { refreshDocuments(token) } catch (_: Exception) { }
+    }
+  }
+
+  fun uploadDocument(uri: Uri?, documentType: String) {
+    if (uri == null) return
+    val token = SecureTokenStore.load(context)
+    if (token.isNullOrBlank() || apiUrl.isBlank()) {
+      documentMessage = "Sign in and connect the Chaufr server before uploading."
+      return
+    }
+    scope.launch {
+      busy = true
+      documentMessage = ""
+      try {
+        val mime = context.contentResolver.getType(uri) ?: throw IllegalStateException("Unsupported file type.")
+        if (mime !in listOf("image/jpeg", "image/png", "application/pdf")) throw IllegalStateException("Choose a JPG, PNG or PDF document.")
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+          ?: throw IllegalStateException("Unable to read the selected document.")
+        if (bytes.isEmpty() || bytes.size > 6 * 1024 * 1024) throw IllegalStateException("Document must be smaller than 6 MB.")
+        val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        val result = ChaufrApi.uploadVerificationDocument(apiUrl, token, documentType, uri.lastPathSegment ?: "verification-document", mime, encoded)
+        documentMessage = "Document uploaded. Status: " + result.getJSONObject("document").optString("status")
+        refreshDocuments(token)
+      } catch (error: Exception) {
+        documentMessage = error.message ?: "Document upload failed."
+      } finally { busy = false }
+    }
+  }
+
+  val idPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    uploadDocument(uri, "south_african_id")
+  }
+  val licencePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    uploadDocument(uri, "drivers_licence")
+  }
+
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+      Text("PAYOUTS & VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+      Text("Bank account for payouts", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+      OutlinedTextField(value = accountNumber, onValueChange = { accountNumber = it.filter(Char::isDigit).take(20) },
+        modifier = Modifier.fillMaxWidth(), label = { Text("Bank account number") }, singleLine = true)
+      OutlinedTextField(value = bankCode, onValueChange = { bankCode = it.filter(Char::isDigit).take(12) },
+        modifier = Modifier.fillMaxWidth(), label = { Text("Bank code") }, singleLine = true)
+      OutlinedTextField(value = bankName, onValueChange = { bankName = it.take(100) },
+        modifier = Modifier.fillMaxWidth(), label = { Text("Bank name") }, singleLine = true)
+      Button(onClick = {
+        val token = SecureTokenStore.load(context)
+        if (token.isNullOrBlank()) accountMessage = "Sign in to save your payout account."
+        else scope.launch {
+          busy = true
+          try {
+            val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, bankCode, bankName)
+            accountMessage = "Bank account verified for ${result.optString("accountName")}."
+            accountNumber = ""
+          } catch (error: Exception) { accountMessage = error.message ?: "Could not verify bank account." }
+          finally { busy = false }
+        }
+      }, enabled = !busy && accountNumber.length >= 6 && bankCode.isNotBlank() && bankName.isNotBlank(),
+        modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Verify and save bank account") }
+      Text(accountMessage, color = Muted, fontSize = 10.sp)
+      Spacer(Modifier.height(4.dp))
+      Text("Driver identity documents", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+      Text("Upload a clear photo or PDF of your South African ID and driver's licence. Files are encrypted before storage.", color = Muted, fontSize = 11.sp)
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { idPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload ID") }
+        OutlinedButton(onClick = { licencePicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload licence") }
+      }
+      Text(documentSummary, color = Muted, fontSize = 10.sp)
+      if (documentMessage.isNotBlank()) Text(documentMessage, color = if (documentMessage.startsWith("Document uploaded")) Green else Color(0xFFB42318), fontSize = 10.sp)
     }
   }
 }
