@@ -512,7 +512,10 @@ private fun AvailableTripsCard() {
             Text(trip.optString("pickupLabel", "Pickup"), color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Text("↓ " + trip.optString("destinationLabel", "Destination"), color = Muted, fontSize = 12.sp)
             Text(String.format(Locale.US, "%.1f km · %d min", trip.optDouble("distanceKm", 0.0), trip.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
-            Text("Expected earnings: R " + String.format(Locale.US, "%.2f", trip.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("Driver earnings after commission: R " + String.format(Locale.US, "%.2f", trip.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Text("Estimated vehicle costs: R " + String.format(Locale.US, "%.2f", trip.optDouble("estimatedOperatingCost", 0.0)), color = Muted, fontSize = 12.sp)
+            Text("Estimated net: R " + String.format(Locale.US, "%.2f", trip.optDouble("estimatedNetEarnings", trip.optDouble("expectedDriverEarnings", 0.0))), color = Navy, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text("Estimate excludes pickup fuel/costs and may change with your actual route and vehicle expenses.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
               Button(onClick = {
                 scope.launch {
