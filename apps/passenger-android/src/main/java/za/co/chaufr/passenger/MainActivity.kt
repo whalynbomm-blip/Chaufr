@@ -683,7 +683,7 @@ private fun PassengerHome() {
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                         Text("Plan ahead", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("Use the selected route above to book a future pickup or repeat commute. Choose a route and calculate its fare first.", color = ChaufrMuted, fontSize = 11.sp)
+                        Text("Use the selected route above to book a future pickup or repeat commute. Choose a route and calculate its fare first. Reward tickets are currently for immediate bookings only.", color = ChaufrMuted, fontSize = 11.sp)
                         OutlinedTextField(
                             value = scheduledLocalDateTime,
                             onValueChange = { scheduledLocalDateTime = it },
@@ -711,7 +711,7 @@ private fun PassengerHome() {
                                             .put("origin", org.json.JSONObject().put("latitude", pickupPointValue.latitude).put("longitude", pickupPointValue.longitude))
                                             .put("destination", org.json.JSONObject().put("latitude", destinationPointValue.latitude).put("longitude", destinationPointValue.longitude))
                                             .put("vehicleCategory", vehicle.lowercase()).put("routeQuoteToken", routeToken)
-                                            .put("serviceTier", serviceTier).put("redeemReward", redeemReward)
+                                            .put("serviceTier", serviceTier).put("redeemReward", false)
                                             .put("scheduledFor", local + ":00+02:00")
                                         val result = ChaufrApi.createScheduledRide(BuildConfig.CHAUFR_API_BASE_URL, token, payload)
                                         schedulingMessage = "Ride scheduled for " + result.optString("scheduledFor")
