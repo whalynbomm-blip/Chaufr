@@ -16,6 +16,13 @@ if (process.env.DATABASE_URL) {
 }
 
 const server = createAppServer({ database, fareConfig });
+const scheduleWorker = setInterval(() => {
+  server.mobilityService?.processDueScheduledRides().catch((error) => {
+    console.error("Scheduled ride worker failed", error.message);
+  });
+}, 60_000);
+scheduleWorker.unref?.();
+
 server.listen(port, "0.0.0.0", () => {
   console.log(`Chaufr API listening on port ${port}`);
 });
