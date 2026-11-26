@@ -101,7 +101,8 @@ object ChaufrApi {
         destination: com.google.android.gms.maps.model.LatLng,
         vehicleCategory: String,
         routeQuoteToken: String,
-        redeemReward: Boolean = false
+        redeemReward: Boolean = false,
+        serviceTier: String = "standard"
     ): JSONObject = requestJson(
         baseUrl, "POST", "/v1/trips",
         JSONObject()
@@ -111,7 +112,8 @@ object ChaufrApi {
             .put("destination", JSONObject().put("latitude", destination.latitude).put("longitude", destination.longitude))
             .put("vehicleCategory", vehicleCategory)
             .put("routeQuoteToken", routeQuoteToken)
-            .put("redeemReward", redeemReward),
+            .put("redeemReward", redeemReward)
+            .put("serviceTier", serviceTier),
         token = token
     )
 
