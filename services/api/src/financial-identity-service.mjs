@@ -99,6 +99,13 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
             await client.query("UPDATE payment_intents SET status='paid',provider='paystack',provider_reference=$2,paid_at=now(),updated_at=now() WHERE id=$1", [intentId, verified.reference]);
             if (locked.rows[0].purpose === "passenger_trip") {
               await client.query("UPDATE trips SET payment_status='paid' WHERE id=$1 AND passenger_user_id=$2 AND status<>'cancelled'", [locked.rows[0].trip_id, locked.rows[0].user_id]);
+              await client.query(
+                "INSERT INTO financial_ledger(trip_id,account_type,direction,amount_minor,source_reference) " +
+                "SELECT id,'driver_earnings','credit',round(driver_earnings * 100)::bigint,'trip-earnings:' || id::text " +
+                "FROM trips WHERE id=$1 AND status='completed' AND COALESCE(fare_snapshot->>'rewardRedemption','false') <> 'true' " +
+                "ON CONFLICT(account_type,source_reference) DO NOTHING",
+                [locked.rows[0].trip_id],
+              );
               await client.query("INSERT INTO financial_ledger(payment_intent_id,trip_id,account_type,direction,amount_minor,source_reference) VALUES($1,$2,'passenger_payment','credit',$3,$4) ON CONFLICT DO NOTHING", [intentId, locked.rows[0].trip_id, verified.amount, "paystack:"+verified.reference]);
             } else {
               await client.query("UPDATE driver_daily_activations SET status='paid',payment_provider='paystack',provider_reference=$2,paid_at=now(),non_refundable_at=now(),updated_at=now() WHERE id=$1 AND driver_user_id=$3 AND status<>'paid'", [locked.rows[0].activation_id, verified.reference, locked.rows[0].user_id]);
