@@ -238,11 +238,11 @@ private fun DriverComplianceCard() {
             val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, accountHolderName, bankCode, bankName)
             accountMessage = "Payout recipient created for ${result.optString("accountName")}. Upload bank confirmation for owner approval."
             accountNumber = ""
-          } catch (error: Exception) { accountMessage = error.message ?: "Could not verify bank account." }
+          } catch (error: Exception) { accountMessage = error.message ?: "Could not save payout bank details." }
           finally { busy = false }
         }
       }, enabled = !busy && accountNumber.length >= 6 && accountHolderName.trim().length >= 3 && bankCode.isNotBlank() && bankName.isNotBlank(),
-        modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Verify and save bank account") }
+        modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Save payout bank details") }
       Text(accountMessage, color = Muted, fontSize = 10.sp)
       Spacer(Modifier.height(4.dp))
       Text("Driver identity documents", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
