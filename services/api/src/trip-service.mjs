@@ -304,6 +304,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const distanceKm = route.distanceKm;
       const durationMinutes = route.durationMinutes;
       const redeemReward = input.redeemReward === true;
+      const serviceTier = input.serviceTier ?? "standard";
+      if (!["saver", "standard", "priority"].includes(serviceTier)) throw new AuthError("Choose Saver, Standard or Priority", 400);
       if (redeemReward && (durationMinutes < 5 || durationMinutes > 20)) {
         throw new AuthError("A free ride reward can only be used on a journey lasting 5 to 20 minutes", 400);
       }
@@ -318,6 +320,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         encodedPolyline: route.encodedPolyline,
         trafficAware: route.trafficAware,
         vehicleCategory,
+        serviceTier,
         trafficLevel,
         passengerTotal: fare.passengerTotal,
         driverEarnings: fare.breakdown.driverEarnings,
@@ -395,6 +398,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           passengerTotal: Number(trip.passenger_payable),
           regularFare: Number(trip.quoted_total),
           rewardApplied: redeemReward,
+          serviceTier,
           rewardTicketsUsed: redeemReward ? 9 : 0,
           currency: fare.currency,
           fareRuleVersion: fare.fareRuleVersion,
