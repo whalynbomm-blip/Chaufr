@@ -217,6 +217,10 @@ export function createMobilityService(pool, routesService, pushService = null) {
         [tripId,user.id,JSON.stringify({note:typeof input.note==="string"?input.note.slice(0,300):"",contactCount:contacts.rowCount})]);
       const otherId=user.id===row.passenger_user_id?row.driver_user_id:row.passenger_user_id;
       await notify(otherId,"Chaufr Safety SOS","The other trip participant has triggered an SOS. Follow your emergency procedures.",{type:"safety_sos",tripId});
+      for (const contact of contacts.rows) {
+        const linked = await pool.query("SELECT id FROM users WHERE phone_e164=$1 AND status <> 'suspended' AND status <> 'closed' LIMIT 1",[contact.phone_e164]);
+        if (linked.rowCount) await notify(linked.rows[0].id,"Chaufr emergency alert","A person who listed you as a trusted contact has triggered an SOS.",{type:"trusted_contact_sos",tripId});
+      }
       return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,contacts:contacts.rows.map(c=>({name:c.contact_name,phoneE164:c.phone_e164})),message:"SOS recorded and the other trip participant was alerted where push delivery is available. Trusted-contact SMS/calling requires a configured messaging provider; if you are in immediate danger, call local emergency services."};
     },
 
