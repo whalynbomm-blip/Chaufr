@@ -11,7 +11,9 @@ import { createPushService } from "./push-service.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
 import { createMobilityService } from "./mobility-service.mjs";
-import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";\nimport { createRatingService } from "./rating-service.mjs";\nimport { createSupportService } from "./support-service.mjs";
+import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";
+import { createRatingService } from "./rating-service.mjs";
+import { createSupportService } from "./support-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -95,7 +97,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
   const paystackService = database ? createPaystackService(database) : null;
-  const verificationService = database ? createDriverVerificationService(database) : null;\n  const ratingService = database ? createRatingService(database) : null;\n  const supportService = database ? createSupportService(database) : null;
+  const verificationService = database ? createDriverVerificationService(database) : null;
+  const ratingService = database ? createRatingService(database) : null;
+  const supportService = database ? createSupportService(database) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
