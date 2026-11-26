@@ -274,13 +274,20 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         "VALUES($1,'driver_earnings',$2,$3,$4,$5)",
         [row.driver_user_id,tripId,amountMinor,reference,owner.id],
       );
-      const transfer = await call("/transfer","POST",{
-        source:"balance",amount:amountMinor,recipient:row.paystack_recipient_code,
-        reason:"Chaufr completed trip driver earnings",reference,
-      });
-      await pool.query("UPDATE driver_payouts SET status='processing',provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$1",
-        [reference,transfer.transfer_code]);
-      return { tripId, amount: amountMinor/100, status:"processing", transferCode:transfer.transfer_code };
+      try {
+        const transfer = await call("/transfer","POST",{
+          source:"balance",amount:amountMinor,recipient:row.paystack_recipient_code,
+          reason:"Chaufr completed trip driver earnings",reference,
+        });
+        await pool.query("UPDATE driver_payouts SET status='processing',provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$1",
+          [reference,transfer.transfer_code]);
+        return { tripId, amount: amountMinor/100, status:"processing", transferCode:transfer.transfer_code };
+      } catch (error) {
+        const definitiveFailure = error.status === 502;
+        await pool.query("UPDATE driver_payouts SET status=$2,failure_reason=$3,updated_at=now() WHERE provider_reference=$1",
+          [reference,definitiveFailure ? "failed" : "processing",String(error.message).slice(0,300)]);
+        throw error;
+      }
     },
     async payRewardCommission(owner, requestId) {
       if (owner?.role !== "owner") throw new AuthError("Owner access required", 403);
@@ -305,7 +312,12 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
           await pool.query("UPDATE driver_payouts SET status='processing',provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$1", [reference, transfer.transfer_code]);
           return { payoutId: requestId, status: "processing", transferCode: transfer.transfer_code };
         } catch (error) {
-          await pool.query("UPDATE driver_payouts SET status='failed',failure_reason=$2,updated_at=now() WHERE provider_reference=$1", [reference, error.message.slice(0,300)]);
+          const definitiveFailure = error.status === 502;
+          await pool.query("UPDATE driver_payouts SET status=$2,failure_reason=$3,updated_at=now() WHERE provider_reference=$1",
+            [reference, definitiveFailure ? "failed" : "processing", String(error.message).slice(0,300)]);
+          if (definitiveFailure) {
+            await pool.query("UPDATE reward_driver_commission_requests SET status='approved',updated_at=now() WHERE id=$1 AND status='processing'", [requestId]);
+          }
           throw error;
         }
       } catch (error) {
