@@ -158,7 +158,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
             "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
-            "POST /v1/payments/checkout", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
+            "POST /v1/payments/checkout", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "GET /v1/owner/driver-earnings/eligible", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
@@ -219,6 +219,17 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "PATCH" && docReviewMatch) {
           const body = await readJson(request);
           return json(response, 200, await verificationService.review(user, docReviewMatch[1], body.status, body.note));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/driver-earnings/eligible") {
+          const rows = await database.query(
+            "SELECT t.id AS trip_id,t.driver_user_id,u.display_name AS driver_name,u.phone_e164,u.email,t.driver_earnings AS amount,t.completed_at, " +
+            "COALESCE(a.status,'missing') AS payout_account_status " +
+            "FROM trips t JOIN users u ON u.id=t.driver_user_id LEFT JOIN driver_payout_accounts a ON a.driver_user_id=t.driver_user_id " +
+            "WHERE t.status='completed' AND t.payment_status='paid' AND COALESCE(t.fare_snapshot->>'rewardRedemption','false')<>'true' " +
+            "AND NOT EXISTS (SELECT 1 FROM driver_payouts p WHERE p.source_type='driver_earnings' AND p.source_id=t.id AND p.status IN ('queued','processing','paid')) " +
+            "ORDER BY t.completed_at DESC LIMIT 300",
+          );
+          return json(response, 200, { trips: rows.rows });
         }
         if (request.method === "GET" && url.pathname === "/v1/owner/refunds") {
           const rows = await database.query("SELECT r.id,r.trip_id,r.passenger_user_id,u.display_name AS passenger_name,r.amount_minor,r.currency,r.reason,r.status,r.created_at,r.updated_at FROM payment_refunds r JOIN users u ON u.id=r.passenger_user_id ORDER BY r.created_at DESC LIMIT 300");
