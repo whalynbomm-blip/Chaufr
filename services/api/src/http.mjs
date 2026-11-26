@@ -22,7 +22,9 @@ const json = (response, status, body) => {
   response.end(JSON.stringify(body));
 };
 
-const readRaw = async (request, maxBytes = 10 * 1024 * 1024) => {\n  const chunks = []; let size = 0;\n  for await (const chunk of request) { size += chunk.length; if (size > maxBytes) { const error = new Error("Request body too large"); error.status = 413; throw error; } chunks.push(chunk); }\n  return Buffer.concat(chunks);\n};\n\nconst readJson = async (request, maxBytes = 32_768) => {
+const readRaw = async (request, maxBytes = 10 * 1024 * 1024) => {\n  const chunks = []; let size = 0;\n  for await (const chunk of request) { size += chunk.length; if (size > maxBytes) { const error = new Error("Request body too large"); error.status = 413; throw error; } chunks.push(chunk); }\n  return Buffer.concat(chunks);\n};
+
+const readJson = async (request, maxBytes = 32_768) => {
   let raw = "";
   for await (const chunk of request) {
     raw += chunk;
