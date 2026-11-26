@@ -23,6 +23,16 @@ object ChaufrApi {
     suspend fun createTripShare(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/share", token = token)
 
+    suspend fun trustedContacts(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/trusted-contacts", token = token)
+
+    suspend fun addTrustedContact(baseUrl: String, token: String, name: String, phone: String, relationship: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trusted-contacts",
+            JSONObject().put("contactName", name).put("phoneE164", phone).put("relationship", relationship), token)
+
+    suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "DELETE", "/v1/driver/trusted-contacts/$id", token = token)
+
     suspend fun currentDriverTrip(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/current", token = token)
 
