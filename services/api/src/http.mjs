@@ -11,7 +11,7 @@ import { createPushService } from "./push-service.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
 import { createMobilityService } from "./mobility-service.mjs";
-import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";\nimport { createRatingService } from "./rating-service.mjs";\nimport { createSupportService } from "./support-service.mjs";\nimport { createSupportService } from "./support-service.mjs";
+import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";\nimport { createRatingService } from "./rating-service.mjs";\nimport { createSupportService } from "./support-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
