@@ -6,7 +6,7 @@ The first production adapter uses Paystack because its South African integration
 - Payments and hosted checkout: https://paystack.com/docs/v2/za/payments/
 - Verify a transaction: https://paystack.com/docs/v2/za/payments/online/verify-payments
 - Refunds: https://paystack.com/docs/api/refund/
-- Bank account resolution and transfer recipients: https://paystack.com/docs/v2/za/disbursements/transfers/verify-account
+- South African transfer onboarding and recipient creation: https://paystack.com/docs/v2/za/disbursements/get-started and https://paystack.com/docs/v2/za/disbursements/transfers/recipients
 - Transfers and transfer webhooks: https://paystack.com/docs/v2/za/disbursements/get-started
 
 ## Checkout and webhook
