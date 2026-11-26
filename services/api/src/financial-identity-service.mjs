@@ -54,6 +54,15 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       if (!email) throw new AuthError("Add and verify an email address before paying by card", 409);
       const amountMinor = minor(amount);
       if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) throw new AuthError("Invalid payment amount");
+      const existing = await pool.query(
+        "SELECT id,provider_reference,checkout_url,checkout_access_code FROM payment_intents " +
+        "WHERE user_id=$1 AND purpose=$2 AND COALESCE(trip_id,'00000000-0000-0000-0000-000000000000'::uuid)=COALESCE($3,'00000000-0000-0000-0000-000000000000'::uuid) " +
+        "AND status='pending' AND expires_at>now() ORDER BY created_at DESC LIMIT 1",
+        [user.id,purpose,purpose === "passenger_trip" ? tripId : null],
+      );
+      if (existing.rowCount && existing.rows[0].checkout_url) {
+        return { intentId:existing.rows[0].id,reference:existing.rows[0].provider_reference,checkoutUrl:existing.rows[0].checkout_url,accessCode:existing.rows[0].checkout_access_code,amount,currency:"ZAR" };
+      }
       const intent = await pool.query(
         "INSERT INTO payment_intents (user_id,purpose,trip_id,activation_id,amount_minor,currency,provider) " +
         "VALUES ($1,$2,$3,$4,$5,'ZAR','paystack') RETURNING id",
@@ -82,6 +91,19 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       const data = event.data || {};
       const eventId = String(data.id ?? data.reference ?? "");
       if (!eventId) throw new AuthError("Webhook event reference missing", 400);
+      if (event.event === "charge.failed") {
+        const reference = String(data.reference ?? "");
+        const failed = await pool.query(
+          "UPDATE payment_intents SET status='failed',updated_at=now() WHERE provider='paystack' AND provider_reference=$1 AND status='pending' RETURNING id,purpose,trip_id,activation_id",
+          [reference],
+        );
+        if (failed.rowCount && failed.rows[0].purpose === "passenger_trip") {
+          await pool.query("UPDATE trips SET payment_status='failed' WHERE id=$1 AND payment_status='pending'", [failed.rows[0].trip_id]);
+        }
+        if (failed.rowCount && failed.rows[0].purpose === "driver_activation") {
+          await pool.query("UPDATE driver_daily_activations SET status='failed',updated_at=now() WHERE id=$1 AND status='pending'", [failed.rows[0].activation_id]);
+        }
+      }
       if (event.event === "charge.success") {
         const verified = await call("/transaction/verify/" + encodeURIComponent(data.reference));
         if (verified.status !== "success" || verified.currency !== "ZAR") throw new AuthError("Payment has not been verified as successful", 409);
@@ -280,6 +302,10 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
       if (!allowed.has(input.documentType) || !types[input.mimeType] || typeof input.base64 !== "string") throw new AuthError("Unsupported document type or format");
       const bytes = Buffer.from(input.base64, "base64");
       if (!bytes.length || bytes.length > 6 * 1024 * 1024 || bytes.toString("base64").replace(/=+$/,"") !== input.base64.replace(/=+$/,"")) throw new AuthError("Document must be a valid file no larger than 6 MB");
+      const validSignature = input.mimeType === "image/jpeg" ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+        : input.mimeType === "image/png" ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+        : bytes.subarray(0,5).toString("ascii") === "%PDF-";
+      if (!validSignature) throw new AuthError("The uploaded file content does not match its declared file type");
       const fileName = String(input.fileName || "document." + types[input.mimeType]).replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,100);
       const iv = randomBytes(12);
       const cipher = createCipheriv("aes-256-gcm", key, iv);
