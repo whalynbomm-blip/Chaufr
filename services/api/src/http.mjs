@@ -147,7 +147,8 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
-            "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",\n            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
+            "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
+            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
@@ -307,7 +308,12 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           return json(response, 201, await driverService.submitVehicle(user, await readJson(request)));
         }
         if (request.method === "PUT" && url.pathname === "/v1/driver/presence") {
-          const presenceBody = await readJson(request);\n          const presenceResult = await driverService.setPresence(user, presenceBody);\n          if (mobilityService && Number.isFinite(Number(presenceBody.latitude)) && Number.isFinite(Number(presenceBody.longitude))) {\n            await mobilityService.evaluateDriverLocation(user, Number(presenceBody.latitude), Number(presenceBody.longitude));\n          }\n          return json(response, 200, presenceResult);
+          const presenceBody = await readJson(request);
+          const presenceResult = await driverService.setPresence(user, presenceBody);
+          if (mobilityService && Number.isFinite(Number(presenceBody.latitude)) && Number.isFinite(Number(presenceBody.longitude))) {
+            await mobilityService.evaluateDriverLocation(user, Number(presenceBody.latitude), Number(presenceBody.longitude));
+          }
+          return json(response, 200, presenceResult);
         }
         if (request.method === "GET" && url.pathname === "/v1/driver/activation") {
           return json(response, 200, await tripService.getActivationStatus(user));
