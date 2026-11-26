@@ -1,4 +1,4 @@
-import { createHmac, createHash, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual, createCipheriv, createDecipheriv } from "node:crypto";
 import { AuthError } from "./auth-service.mjs";
 
 const minor = (amount) => Math.round(Number(amount) * 100);
@@ -114,9 +114,15 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       if (event.event?.startsWith("transfer.")) {
         const status = event.event === "transfer.success" ? "paid" : event.event === "transfer.failed" ? "failed" : "reversed";
         const payout = await pool.query(
-          "UPDATE driver_payouts SET status=$1,provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$3 RETURNING id,source_type,source_id",
+          "UPDATE driver_payouts SET status=$1,provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$3 RETURNING id,source_type,source_id,driver_user_id,amount_minor",
           [status, data.transfer_code ?? null, data.reference],
         );
+        if (payout.rowCount && status === "paid") {
+          await pool.query(
+            "INSERT INTO financial_ledger(account_type,direction,amount_minor,source_reference) VALUES('driver_earnings','debit',$1,$2) ON CONFLICT(account_type,source_reference) DO NOTHING",
+            [payout.rows[0].amount_minor, "paystack-transfer:" + data.reference],
+          );
+        }
         if (payout.rowCount && payout.rows[0].source_type === "reward_commission") {
           if (status === "paid") await pool.query("UPDATE reward_driver_commission_requests SET status='paid',updated_at=now() WHERE id=$1 AND status='processing'", [payout.rows[0].source_id]);
           if (status === "failed" || status === "reversed") await pool.query("UPDATE reward_driver_commission_requests SET status='approved',updated_at=now() WHERE id=$1 AND status='processing'", [payout.rows[0].source_id]);
@@ -192,6 +198,33 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         [driver.id, bankCode, bankName, Buffer.concat([iv,tag,encrypted]), resolved.account_name, recipient.recipient_code],
       );
       return { status: "verified", accountName: resolved.account_name, bankName };
+    },
+    async payDriverEarnings(owner, tripId) {
+      if (owner?.role !== "owner") throw new AuthError("Owner access required", 403);
+      if (!uuid.test(tripId ?? "")) throw new AuthError("Invalid trip ID");
+      const trip = await pool.query(
+        "SELECT t.id,t.driver_user_id,t.driver_earnings,t.fare_snapshot->>'rewardRedemption' AS reward_redemption,a.paystack_recipient_code " +
+        "FROM trips t JOIN driver_payout_accounts a ON a.driver_user_id=t.driver_user_id AND a.status='verified' " +
+        "WHERE t.id=$1 AND t.status='completed' AND t.payment_status='paid'",
+        [tripId],
+      );
+      if (!trip.rowCount || trip.rows[0].reward_redemption === "true") throw new AuthError("A completed, paid standard trip and verified driver bank account are required", 409);
+      const row = trip.rows[0];
+      const amountMinor = minor(row.driver_earnings);
+      if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) throw new AuthError("Trip has no payable driver earnings", 409);
+      const reference = "chaufd_" + randomBytes(16).toString("hex");
+      await pool.query(
+        "INSERT INTO driver_payouts(driver_user_id,source_type,source_id,amount_minor,provider_reference,initiated_by) " +
+        "VALUES($1,'driver_earnings',$2,$3,$4,$5)",
+        [row.driver_user_id,tripId,amountMinor,reference,owner.id],
+      );
+      const transfer = await call("/transfer","POST",{
+        source:"balance",amount:amountMinor,recipient:row.paystack_recipient_code,
+        reason:"Chaufr completed trip driver earnings",reference,
+      });
+      await pool.query("UPDATE driver_payouts SET status='processing',provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$1",
+        [reference,transfer.transfer_code]);
+      return { tripId, amount: amountMinor/100, status:"processing", transferCode:transfer.transfer_code };
     },
     async payRewardCommission(owner, requestId) {
       if (owner?.role !== "owner") throw new AuthError("Owner access required", 403);
