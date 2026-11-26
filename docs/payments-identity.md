@@ -50,6 +50,6 @@ Generate each encryption key separately using `openssl rand -base64 32`. Never c
 
 ## Important launch gates
 
-The code is not live until the API is deployed, migrations 0018–0020 have run, Paystack has approved the Chaufr merchant account and transfer capability, test and live webhooks are configured, and the required secrets are installed in the host's secret manager. Paystack transfer balance/approval settings must be enabled. Some accounts may require transfer OTP/approval in the Paystack dashboard. Complete end-to-end sandbox testing before live mode.
+The code is not live until the API is deployed, migrations 0018–0021 have run, Paystack has approved the Chaufr merchant account and transfer capability, test and live webhooks are configured, and the required secrets are installed in the host's secret manager. Paystack transfer balance/approval settings must be enabled. Some accounts may require transfer OTP/approval in the Paystack dashboard. Complete end-to-end sandbox testing before live mode.
 
 Document uploads contain highly sensitive personal information. Restrict owner access, enable database encryption/backups, define a retention/deletion policy, secure the owner account and complete POPIA/legal review before collecting real identity documents. Do not use real identity documents in development or test environments.
