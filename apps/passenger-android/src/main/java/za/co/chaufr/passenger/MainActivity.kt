@@ -145,6 +145,9 @@ private fun PassengerHome() {
     var tripCancellationLoading by remember { mutableStateOf(false) }
     var paymentLoading by remember { mutableStateOf(false) }
     var paymentMessage by remember { mutableStateOf("") }
+    var refundLoading by remember { mutableStateOf(false) }
+    var refundMessage by remember { mutableStateOf("") }
+    var refundReason by remember { mutableStateOf("") }
     var rewardsTickets by remember { mutableStateOf(0) }
     var rewardsHistory by remember { mutableStateOf<List<RewardHistoryEntry>>(emptyList()) }
     var passengerTripHistory by remember { mutableStateOf<List<PassengerTripHistoryEntry>>(emptyList()) }
@@ -504,6 +507,38 @@ private fun PassengerHome() {
                                             if (paymentMessage.isNotBlank()) Text(paymentMessage, color = ChaufrMuted, fontSize = 10.sp)
                                         } else if (snapshot.optString("paymentStatus") == "paid") {
                                             Text("Payment confirmed", color = ChaufrGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            if (snapshot.optString("status") == "completed") {
+                                                OutlinedTextField(
+                                                    value = refundReason,
+                                                    onValueChange = { refundReason = it.take(300) },
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    label = { Text("Refund reason (optional)") },
+                                                    singleLine = true,
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                                Button(
+                                                    onClick = {
+                                                        val tripId = activePassengerTripId
+                                                        val token = SecureTokenStore.load(context)
+                                                        if (tripId != null && token != null && !refundLoading) scope.launch {
+                                                            refundLoading = true
+                                                            refundMessage = ""
+                                                            try {
+                                                                val result = ChaufrApi.requestPassengerRefund(
+                                                                    BuildConfig.CHAUFR_API_BASE_URL, token, tripId,
+                                                                    refundReason.ifBlank { "Passenger requested a completed-trip refund review" }
+                                                                )
+                                                                refundMessage = "Refund request " + result.optString("status", "submitted") + ". Chaufr will review it."
+                                                            } catch (error: Exception) {
+                                                                refundMessage = error.message ?: "Unable to request refund."
+                                                            } finally { refundLoading = false }
+                                                        }
+                                                    },
+                                                    enabled = !refundLoading,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) { Text(if (refundLoading) "Submitting refund request..." else "Request a refund review") }
+                                                if (refundMessage.isNotBlank()) Text(refundMessage, color = ChaufrMuted, fontSize = 10.sp)
+                                            }
                                         } else if (snapshot.optString("paymentStatus") == "refunded") {
                                             Text("Payment refunded", color = ChaufrGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                         }
