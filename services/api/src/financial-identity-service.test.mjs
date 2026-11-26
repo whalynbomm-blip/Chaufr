@@ -37,3 +37,13 @@ test("driver verification documents cannot be uploaded by a passenger", async ()
     (error) => error.status === 403,
   );
 });
+
+test("Paystack timestamped webhook signature uses the dedicated webhook secret", async () => {
+  const pool = { query: async () => ({ rows: [], rowCount: 1 }) };
+  const service = createPaystackService(pool, { secretKey: "api_secret", webhookSecret: "whsec_test" });
+  const raw = Buffer.from(JSON.stringify({ event: "charge.failed", data: { id: 456, reference: "chf_new" } }));
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const digest = createHmac("sha512", "whsec_test").update(timestamp + ".").update(raw).digest("hex");
+  const result = await service.handleWebhook(raw, `t=${timestamp},v1=whk_test:${digest}`);
+  assert.equal(result.received, true);
+});
