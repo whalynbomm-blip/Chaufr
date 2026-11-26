@@ -255,11 +255,16 @@ export function createMobilityService(pool, routesService, pushService = null) {
       if (coords.length<2) return {alerts:[]};
       const deviation=distanceToPolylineKm(Number(latitude),Number(longitude),coords);
       const elapsed=trip.started_at?Date.now()-new Date(trip.started_at).getTime():0;
+      await pool.query("INSERT INTO driver_trip_location_samples(trip_id,driver_user_id,latitude,longitude) VALUES($1,$2,$3,$4)",[trip.id,driver.id,Number(latitude),Number(longitude)]);
+      const recent=await pool.query("SELECT latitude,longitude,recorded_at FROM driver_trip_location_samples WHERE trip_id=$1 AND recorded_at>=now()-interval '6 minutes' ORDER BY recorded_at DESC LIMIT 4",[trip.id]);
       const alerts=[];
       if (trip.status==="in_progress" && deviation>0.8) alerts.push({type:"route_deviation",deviationKm:Number(deviation.toFixed(2))});
-      if (trip.status==="in_progress" && elapsed>12*60_000 && deviation<0.15) {
+      if (trip.status==="in_progress" && elapsed>5*60_000 && recent.rowCount>=3) {
+        const newest=recent.rows[0], oldest=recent.rows[recent.rowCount-1];
+        const span=Date.now()-new Date(oldest.recorded_at).getTime();
+        const movement=haversineKm(Number(oldest.latitude),Number(oldest.longitude),Number(newest.latitude),Number(newest.longitude));
         const last=await pool.query("SELECT created_at FROM trip_safety_events WHERE trip_id=$1 AND event_type='unusual_stop' ORDER BY created_at DESC LIMIT 1",[trip.id]);
-        if (!last.rowCount || Date.now()-new Date(last.rows[0].created_at).getTime()>10*60_000) alerts.push({type:"unusual_stop"});
+        if (span>=3*60_000 && movement<0.04 && (!last.rowCount || Date.now()-new Date(last.rows[0].created_at).getTime()>10*60_000)) alerts.push({type:"unusual_stop"});
       }
       for (const alert of alerts) {
         await pool.query("INSERT INTO trip_safety_events(trip_id,actor_user_id,event_type,details) VALUES($1,$2,$3,$4::jsonb)",[trip.id,driver.id,alert.type,JSON.stringify(alert)]);
@@ -284,6 +289,12 @@ function decodePolyline(encoded) {
     points.push({lat:lat/1e5,lng:lng/1e5});
   }
   return points;
+}
+function haversineKm(lat1,lon1,lat2,lon2) {
+  const rad=(value)=>value*Math.PI/180;
+  const dLat=rad(lat2-lat1),dLon=rad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(rad(lat1))*Math.cos(rad(lat2))*Math.sin(dLon/2)**2;
+  return 6371*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 function distanceToPolylineKm(lat,lng,points) {
   const meanLat=lat*Math.PI/180;
