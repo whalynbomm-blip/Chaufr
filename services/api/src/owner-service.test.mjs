@@ -79,3 +79,26 @@ test("owner reward payout review only allows requested-to-approved/rejected and 
   assert.equal(paid.request.status, "paid");
   assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 2);
 });
+
+
+test("owner financial ledger is private to owner accounts", async () => {
+  const pool = {
+    query: async () => { throw new Error("Database must not be queried for a rejected role"); },
+    connect: async () => { throw new Error("Database must not be connected for a rejected role"); },
+  };
+  const service = createOwnerService(pool, developmentFareConfig());
+  await assert.rejects(() => service.listFinancialLedger({ id: "driver-1", role: "driver" }), (error) => error.status === 403);
+});
+
+test("owner financial ledger converts integer cents to ZAR amounts", async () => {
+  const pool = {
+    query: async (sql) => {
+      assert.match(sql, /FROM financial_ledger/);
+      return { rows: [{ id: 1, amount_minor: "12550", currency: "ZAR", account_role: "passenger" }] };
+    },
+    connect: async () => { throw new Error("Ledger reads must not open transactions"); },
+  };
+  const service = createOwnerService(pool, developmentFareConfig());
+  const result = await service.listFinancialLedger({ id: "owner-1", role: "owner" });
+  assert.equal(result.entries[0].amount, 125.5);
+});
