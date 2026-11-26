@@ -15,7 +15,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
   try {
     await client.query("BEGIN");
     const tripResult = await client.query(
-      "SELECT id, status, driver_user_id, pickup_label, fare_snapshot->>'vehicleCategory' AS vehicle_category, " +
+      "SELECT id, status, driver_user_id, passenger_user_id, pickup_label, fare_snapshot->>'vehicleCategory' AS vehicle_category, " +
       "quoted_total, driver_earnings, platform_commission, distance_km, " +
       "(SELECT fuel_price_per_litre FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS fuel_price, " +
       "(SELECT operating_cost_per_km FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS operating_cost " +
@@ -68,6 +68,11 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
          AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
          AND p.last_seen_at >= now() - interval '90 seconds'
          AND dp.verification_status = 'verified'
+         AND NOT EXISTS (
+           SELECT 1 FROM user_blocks b
+           WHERE (b.blocker_user_id = p.driver_user_id AND b.blocked_user_id = (SELECT passenger_user_id FROM trips WHERE id = $4))
+              OR (b.blocker_user_id = (SELECT passenger_user_id FROM trips WHERE id = $4) AND b.blocked_user_id = p.driver_user_id)
+         )
          AND NOT EXISTS (
            SELECT 1 FROM trips busy
            WHERE busy.driver_user_id = p.driver_user_id
