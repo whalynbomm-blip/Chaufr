@@ -87,7 +87,7 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         if (verified.status !== "success" || verified.currency !== "ZAR") throw new AuthError("Payment has not been verified as successful", 409);
         const intentId = verified.metadata?.chaufrIntentId;
         if (!uuid.test(intentId ?? "")) throw new AuthError("Payment intent metadata is invalid", 409);
-        const intent = await pool.query("SELECT id,amount_minor,user_id,purpose,trip_id,activation_id,status FROM payment_intents WHERE id=$1", [intentId]);
+        const intent = await pool.query("SELECT id,amount_minor,user_id,purpose,trip_id,activation_id,status,provider_reference FROM payment_intents WHERE id=$1", [intentId]);
         if (!intent.rowCount || Number(intent.rows[0].amount_minor) !== Number(verified.amount) || intent.rows[0].provider_reference !== verified.reference) {
           throw new AuthError("Verified payment does not match Chaufr intent", 409);
         }
@@ -113,10 +113,14 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       }
       if (event.event?.startsWith("transfer.")) {
         const status = event.event === "transfer.success" ? "paid" : event.event === "transfer.failed" ? "failed" : "reversed";
-        await pool.query(
-          "UPDATE driver_payouts SET status=$1,provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$3",
+        const payout = await pool.query(
+          "UPDATE driver_payouts SET status=$1,provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$3 RETURNING id,source_type,source_id",
           [status, data.transfer_code ?? null, data.reference],
         );
+        if (payout.rowCount && payout.rows[0].source_type === "reward_commission") {
+          if (status === "paid") await pool.query("UPDATE reward_driver_commission_requests SET status='paid',updated_at=now() WHERE id=$1 AND status='processing'", [payout.rows[0].source_id]);
+          if (status === "failed" || status === "reversed") await pool.query("UPDATE reward_driver_commission_requests SET status='approved',updated_at=now() WHERE id=$1 AND status='processing'", [payout.rows[0].source_id]);
+        }
       }
       if (event.event?.startsWith("refund.")) {
         const status = event.event === "refund.processed" ? "processed" : event.event === "refund.failed" ? "failed" : "processing";
@@ -129,6 +133,25 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       }
       await pool.query("INSERT INTO payment_provider_events(provider,event_id,event_type) VALUES('paystack',$1,$2) ON CONFLICT(provider,event_id) DO NOTHING", [eventId,event.event]);
       return { received: true, event: event.event };
+    },
+    async createRefundRequest(passenger, tripId, reason = "Passenger cancellation") {
+      if (passenger?.role !== "passenger") throw new AuthError("Passenger account required", 403);
+      if (!uuid.test(tripId ?? "")) throw new AuthError("Invalid trip ID");
+      const result = await pool.query(
+        "SELECT p.id AS intent_id,p.amount_minor FROM payment_intents p JOIN trips t ON t.id=p.trip_id " +
+        "WHERE t.id=$1 AND t.passenger_user_id=$2 AND p.status='paid' LIMIT 1",
+        [tripId, passenger.id],
+      );
+      if (!result.rowCount) return { refundRequested: false, reason: "No settled payment exists for this trip" };
+      const existing = await pool.query("SELECT id,status FROM payment_refunds WHERE trip_id=$1 AND status NOT IN ('rejected','failed') LIMIT 1", [tripId]);
+      if (existing.rowCount) return { refundRequested: true, refundId: existing.rows[0].id, status: existing.rows[0].status };
+      const row = result.rows[0];
+      const inserted = await pool.query(
+        "INSERT INTO payment_refunds(trip_id,payment_intent_id,passenger_user_id,amount_minor,reason,requested_by) " +
+        "VALUES($1,$2,$3,$4,$5,$3) RETURNING id,status,amount_minor",
+        [tripId, row.intent_id, passenger.id, row.amount_minor, String(reason).slice(0, 300)],
+      );
+      return { refundRequested: true, refundId: inserted.rows[0].id, status: inserted.rows[0].status, amount: Number(inserted.rows[0].amount_minor) / 100 };
     },
     async requestRefund(owner, refundId) {
       if (owner?.role !== "owner") throw new AuthError("Owner access required", 403);
