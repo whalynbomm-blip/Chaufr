@@ -40,7 +40,7 @@ test("dispatch selects the shortest traffic-aware ETA, not the closest straight-
   };
   const result = await offerTripToNextDriver(pool, "trip-1", { latitude: -33.9, longitude: 18.4 }, routesService);
   assert.equal(result.driverUserId, "driver-fast");
-  assert.equal(result.rankingMethod, "google_routes_traffic_eta");
+  assert.equal(result.rankingMethod, "chaufr_fairmatch_v1");
   assert.equal(result.estimatedPickupMinutes, 4);
   const insert = pool.calls.find((call) => call.sql.includes("INSERT INTO trip_offers"));
   assert.equal(insert.params[1], "driver-fast");
