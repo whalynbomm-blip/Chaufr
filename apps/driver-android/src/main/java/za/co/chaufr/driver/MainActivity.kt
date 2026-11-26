@@ -350,13 +350,13 @@ private fun DriverAvailabilityCard() {
   }
 
   LaunchedEffect(apiUrl) {
-    val token = SecureTokenStore.load(context)
-    if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
-      while (true) {
+    while (true) {
+      val token = SecureTokenStore.load(context)
+      if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
         try { activationPaid = ChaufrApi.driverActivation(apiUrl, token).optBoolean("isPaid", false) }
         catch (_: Exception) { }
-        kotlinx.coroutines.delay(12000)
-      }
+      } else activationPaid = false
+      kotlinx.coroutines.delay(12000)
     }
   }
 
