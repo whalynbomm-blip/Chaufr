@@ -15,7 +15,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
   try {
     await client.query("BEGIN");
     const tripResult = await client.query(
-      "SELECT id, status, driver_user_id, fare_snapshot->>'vehicleCategory' AS vehicle_category, " +
+      "SELECT id, status, driver_user_id, pickup_label, fare_snapshot->>'vehicleCategory' AS vehicle_category, " +
       "quoted_total, driver_earnings, platform_commission, distance_km, " +
       "(SELECT fuel_price_per_litre FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS fuel_price, " +
       "(SELECT operating_cost_per_km FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS operating_cost " +
@@ -157,7 +157,12 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
         vehicleApproved: true,
         available: true,
         safetyEligible: true,
-        preferredAreaMatch: false,
+        preferredAreaMatch: (row.preferred_area_labels ?? []).some((area) => {
+          const normalize = (value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").trim();
+          const preferred = normalize(area);
+          const pickupLabel = normalize(trip.pickup_label);
+          return preferred.length >= 2 && pickupLabel.includes(preferred);
+        }),
         minimumNetPerTrip: Number(row.minimum_net_per_trip ?? 0),
         maximumPickupDistanceKm: Number(row.maximum_pickup_distance_km ?? 15),
       };
