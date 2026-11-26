@@ -17,6 +17,12 @@ object ChaufrApi {
         requestJson(baseUrl, "POST", "/v1/safety/block",
             JSONObject().put("tripId", tripId).put("blockedUserId", blockedUserId), token)
 
+    suspend fun triggerSafetySos(baseUrl: String, token: String, tripId: String, note: String = ""): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/sos", JSONObject().put("note", note), token)
+
+    suspend fun createTripShare(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/share", token = token)
+
     suspend fun currentDriverTrip(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/current", token = token)
 
