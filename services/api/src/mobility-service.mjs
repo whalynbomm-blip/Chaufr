@@ -22,6 +22,7 @@ function schedulePayload(input, routesService) {
   if (typeof input.routeQuoteToken !== "string" || !input.routeQuoteToken) throw new AuthError("Refresh the route estimate before scheduling");
   const verified = routesService.verifyRouteQuote(input.routeQuoteToken, input.origin, input.destination, input.vehicleCategory);
   const redeemReward = input.redeemReward === true;
+  if (redeemReward) throw new AuthError("Reward tickets can only be redeemed on an immediate ride request for now");
   if (redeemReward && (verified.route.durationMinutes < 5 || verified.route.durationMinutes > 20)) {
     throw new AuthError("A free ride reward can only be used on a journey lasting 5 to 20 minutes");
   }
@@ -166,11 +167,12 @@ export function createMobilityService(pool, routesService, pushService = null) {
           await client.query("UPDATE scheduled_rides SET status='dispatched',trip_id=$2,updated_at=now() WHERE id=$1",[row.id,tripId]);
           await client.query("COMMIT");
           const dispatch = await offerTripToNextDriver(pool,tripId,payload.origin,routesService);
+          if (dispatch.driverUserId) await notify(dispatch.driverUserId,"New Chaufr scheduled ride",payload.pickupLabel + " → " + payload.destinationLabel,{type:"trip_offer",tripId});
           dispatched.push({ scheduleId:row.id,tripId,dispatchStatus:dispatch.status });
           await notify(row.passenger_user_id,"Your scheduled Chaufr ride is now active","We are finding your driver for the booked pickup.",{type:"scheduled_ride_dispatched",tripId});
         } catch (error) {
           await client.query("ROLLBACK");
-          await pool.query("UPDATE scheduled_rides SET status='failed',updated_at=now() WHERE id=$1 AND status='dispatching'",[row.id]);
+          await pool.query("UPDATE scheduled_rides SET status='failed',updated_at=now() WHERE id=$1 AND status IN ('scheduled','dispatching')",[row.id]);
           dispatched.push({ scheduleId:row.id,error:error.message });
         } finally { client.release(); }
       }
