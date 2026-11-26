@@ -127,6 +127,9 @@ private fun PassengerHome() {
     var recurringLocalTime by remember { mutableStateOf("08:00") }
     var schedulingMessage by remember { mutableStateOf("") }
     var schedulingBusy by remember { mutableStateOf(false) }
+    var trustedContactName by remember { mutableStateOf("") }
+    var trustedContactPhone by remember { mutableStateOf("") }
+    var trustedContactMessage by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -509,6 +512,28 @@ private fun PassengerHome() {
                                                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                                     Text("SAFETY SHIELD", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                                     Text("Report a concern about this trip or block this driver from future matching.", color = ChaufrMuted, fontSize = 11.sp)
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Button(onClick = {
+                                                            val token = SecureTokenStore.load(context)
+                                                            if (token != null) scope.launch {
+                                                                safetyBusy = true
+                                                                try {
+                                                                    val sos = ChaufrApi.triggerSafetySos(BuildConfig.CHAUFR_API_BASE_URL, token, snapshot.optString("tripId"))
+                                                                    safetyMessage = "SOS recorded. " + sos.optString("message")
+                                                                } catch (error: Exception) { safetyMessage = error.message ?: "SOS could not be sent." }
+                                                                finally { safetyBusy = false }
+                                                            }
+                                                        }, enabled = !safetyBusy, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB42318))) { Text("SOS") }
+                                                        Button(onClick = {
+                                                            val token = SecureTokenStore.load(context)
+                                                            if (token != null) scope.launch {
+                                                                try {
+                                                                    val share = ChaufrApi.createTripShare(BuildConfig.CHAUFR_API_BASE_URL, token, snapshot.optString("tripId"))
+                                                                    safetyMessage = BuildConfig.CHAUFR_API_BASE_URL.trimEnd('/') + "/v1/shared-trips/" + share.optString("shareToken")
+                                                                } catch (error: Exception) { safetyMessage = error.message ?: "Could not create trip share." }
+                                                            }
+                                                        }, modifier = Modifier.weight(1f)) { Text("Share trip") }
+                                                    }
                                                     OutlinedTextField(value = safetyNotes, onValueChange = { safetyNotes = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("Report details (optional)") }, shape = RoundedCornerShape(12.dp), minLines = 2)
                                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                                         Button(onClick = {
@@ -731,6 +756,25 @@ private fun PassengerHome() {
                             }
                         ) { Text("Save recurring commute") }
                         if (schedulingMessage.isNotBlank()) Text(schedulingMessage, color = ChaufrGreen, fontSize = 11.sp)
+                        Divider(color = Color(0xFFE8ECF2))
+                        Text("Trusted emergency contact", color = ChaufrNavy, fontWeight = FontWeight.SemiBold)
+                        Text("Save someone Chaufr can identify if you trigger SOS. Use international format, e.g. +27821234567.", color = ChaufrMuted, fontSize = 10.sp)
+                        OutlinedTextField(value = trustedContactName, onValueChange = { trustedContactName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Contact name") }, singleLine = true)
+                        OutlinedTextField(value = trustedContactPhone, onValueChange = { trustedContactPhone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Phone number (+27...)") }, singleLine = true)
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                        ChaufrApi.addTrustedContact(BuildConfig.CHAUFR_API_BASE_URL, token, trustedContactName, trustedContactPhone, "trusted contact")
+                                        trustedContactMessage = "Trusted contact saved."
+                                        trustedContactName = ""; trustedContactPhone = ""
+                                    } catch (error: Exception) { trustedContactMessage = error.message ?: "Could not save contact." }
+                                }
+                            }
+                        ) { Text("Save trusted contact") }
+                        if (trustedContactMessage.isNotBlank()) Text(trustedContactMessage, color = ChaufrMuted, fontSize = 10.sp)
                     }
                 }
                 Spacer(Modifier.height(14.dp))
