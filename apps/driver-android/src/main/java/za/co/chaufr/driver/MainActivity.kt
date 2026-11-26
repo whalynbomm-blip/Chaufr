@@ -419,6 +419,28 @@ private fun DriverCurrentTripCard() {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
               Text("SAFETY SHIELD", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
               Text("Report a concern about this passenger or block future matching.", color = Muted, fontSize = 11.sp)
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                  val token = SecureTokenStore.load(context)
+                  if (token != null) scope.launch {
+                    safetyBusy = true
+                    try {
+                      val result = ChaufrApi.triggerSafetySos(apiUrl, token, current.optString("tripId"))
+                      safetyMessage = "SOS recorded. " + result.optString("message")
+                    } catch (error: Exception) { safetyMessage = error.message ?: "SOS could not be sent." }
+                    finally { safetyBusy = false }
+                  }
+                }, enabled = !safetyBusy, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB42318))) { Text("SOS") }
+                Button(onClick = {
+                  val token = SecureTokenStore.load(context)
+                  if (token != null) scope.launch {
+                    try {
+                      val share = ChaufrApi.createTripShare(apiUrl, token, current.optString("tripId"))
+                      safetyMessage = apiUrl.trimEnd('/') + "/v1/shared-trips/" + share.optString("shareToken")
+                    } catch (error: Exception) { safetyMessage = error.message ?: "Could not create trip share." }
+                  }
+                }, modifier = Modifier.weight(1f)) { Text("Share trip") }
+              }
               OutlinedTextField(value = safetyNotes, onValueChange = { safetyNotes = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("Report details (optional)") }, shape = RoundedCornerShape(12.dp), minLines = 2)
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
