@@ -134,7 +134,10 @@ private fun PassengerHome() {
     var passengerTripHistory by remember { mutableStateOf<List<PassengerTripHistoryEntry>>(emptyList()) }
     var tripHistoryMessage by remember { mutableStateOf("") }
     var redeemReward by remember { mutableStateOf(false) }
-    var rewardsMessage by remember { mutableStateOf("") }\n    var safetyNotes by remember { mutableStateOf("") }\n    var safetyMessage by remember { mutableStateOf("") }\n    var safetyBusy by remember { mutableStateOf(false) }
+    var rewardsMessage by remember { mutableStateOf("") }
+    var safetyNotes by remember { mutableStateOf("") }
+    var safetyMessage by remember { mutableStateOf("") }
+    var safetyBusy by remember { mutableStateOf(false) }
 
     LaunchedEffect(BuildConfig.CHAUFR_API_BASE_URL) {
         val savedToken = SecureTokenStore.load(context)
