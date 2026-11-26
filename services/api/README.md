@@ -81,7 +81,7 @@ Authenticated passengers can create a trip request with `POST /v1/trips`. The se
 
 A driver must have a successful R30 ZAR activation payment recorded for the current South African operating date before going online or accessing trip requests. The activation is unique per driver and date, and a paid activation is marked non-refundable. Driver-facing responses expose only that driver's activation status and trip earnings, not company revenue totals.
 
-`GET /v1/driver/activation` returns the driver's activation status. The internal `recordVerifiedActivationPayment` service method is designed to be called only after a payment provider verifies the transaction. There is intentionally no client-controlled payment confirmation endpoint. A real payment provider/webhook still needs to be connected before drivers can make payments in production.
+`GET /v1/driver/activation` returns the driver's activation status. The internal `POST /v1/payments/checkout` creates a hosted Paystack checkout for the daily fee. The driver is activated only after the signed Paystack webhook and server-side transaction verification succeed. No client-controlled payment confirmation endpoint exists.
 
 ## Current limitations
 
@@ -125,12 +125,14 @@ SMS/voice messages to contacts, contact ownership verification, an emergency dis
 
 ## Owner operations and reward-ride payouts
 
-The private owner console at `/owner` provides platform overview metrics, central fare controls, driver verification and vehicle approval actions. Owner-only payout endpoints list completed free-reward-ride commission requests and support the audited status sequence `requested → approved → paid` or `requested → rejected`. Mark a request as paid only after the platform has independently confirmed the real payment; this review ledger does not transfer money.
+The private owner console at `/owner` provides platform overview metrics, central fare controls, driver verification and vehicle approval actions. Reward commission requests can be approved/rejected in the existing review workflow. The new Paystack service initiates bank transfers for approved reward payouts and standard completed paid trips; only a signed `transfer.success` webhook marks the transfer as paid.
 
 - `GET /v1/owner/reward-commission-requests` — list payout requests for owner review.
-- `PATCH /v1/owner/reward-commission-requests/:requestId` with `{"status":"approved"}`, `{"status":"rejected"}`, or `{"status":"paid"}` — apply a permitted status transition. Every decision is recorded in `audit_events`.
+- `PATCH /v1/owner/reward-commission-requests/:requestId` with `{"status":"approved"}` or `{"status":"rejected"}` — review the request. Direct manual `paid` status changes are blocked.
+- `POST /v1/owner/reward-commission-requests/:requestId/pay` — initiate the approved 50% reward-ride bank transfer.
+- `POST /v1/owner/driver-earnings/:tripId/pay` — initiate payout of standard completed paid-trip earnings.
 
-The 50% reward-ride payout remains a platform liability until a real payment rail and reconciliation process are connected. This owner workflow records review and settlement status only.
+The 50% reward-ride payout remains a platform liability until Paystack confirms the transfer. Provider settlement reconciliation and transfer OTP/approval handling remain launch tasks.
 
 ## Firebase push notifications
 
@@ -154,9 +156,9 @@ Android 13 and later require notification permission. The passenger app requests
 
 Migration `0012_payment_ledger.sql` adds provider-neutral ZAR payment intents, provider-event idempotency and an append-only financial ledger. Amounts are stored in integer cents. The service supports two inbound purposes: passenger trip payments and the daily driver activation fee. A verified activation payment is linked to the owning driver and marks that day's activation as paid; a verified passenger payment marks the matching passenger trip as paid.
 
-`src/payment-service.mjs` exposes internal `createIntent` and `recordVerifiedInboundPayment` methods. The latter must only be called after a future provider-specific webhook adapter has verified the provider signature, merchant account and event authenticity. Duplicate provider event IDs are ignored, and amount/currency mismatches are rejected. No public payment-confirmation route is exposed, and no card data is stored.
+`src/payment-service.mjs` preserves the provider-neutral ledger primitives. `src/financial-identity-service.mjs` adds the Paystack adapter: server-side hosted checkout initialization, raw-body signature verification (timestamped webhook signing secret and legacy signature), transaction verification, idempotent event handling, refunds and bank transfers. No public payment-confirmation route is exposed, and no card data is stored.
 
-This is a ledger and settlement foundation, not a live checkout integration. Payment-provider selection, hosted checkout creation, signed webhook verification, failed-payment handling, refunds, payout transfers and reconciliation reports remain to be connected. Do not mark reward-ride commission requests as paid until an actual transfer is confirmed.
+The Paystack adapter is implemented but remains inactive until merchant credentials, webhook signing secret, payout capability and production hosting are configured. Do not mark reward-ride commission requests as paid until the signed transfer-success webhook is received.
 
 
 ## Safety Shield
