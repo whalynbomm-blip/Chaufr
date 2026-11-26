@@ -25,7 +25,7 @@ When a passenger cancels an unpaid/unaccepted trip, a full refund request is cre
 
 ## Driver bank payouts
 
-Drivers set a bank account with `PUT /v1/driver/payout-account` using `accountNumber`, `bankCode` and `bankName`. Paystack resolves the account before a transfer recipient is created. Chaufr encrypts the account number in PostgreSQL; only the masked account-holder name/bank metadata is returned.
+Drivers set a bank account with `PUT /v1/driver/payout-account` using `accountNumber`, `bankCode` and `bankName`. Paystack documentation for South Africa states that account resolution is not available for ZA bank accounts. Chaufr therefore creates a `basa` recipient using the driver-supplied account-holder name and bank details, then leaves the payout account pending until an owner approves an uploaded bank confirmation letter or statement. The account number is encrypted in PostgreSQL; only account-holder name and bank metadata are returned.
 
 Owners first approve reward commission requests using the existing review endpoint, then initiate the actual 50% reward-ride payout with `POST /v1/owner/reward-commission-requests/:requestId/pay`. Standard completed, paid trip earnings can be paid using `POST /v1/owner/driver-earnings/:tripId/pay`. A payout remains processing until Paystack sends a signed `transfer.success`, `transfer.failed` or `transfer.reversed` event. The API no longer allows an owner to manually mark a payout paid.
 
@@ -34,7 +34,7 @@ Owners first approve reward commission requests using the existing review endpoi
 Drivers upload one document per request using `POST /v1/driver/verification-documents`:
 `{"documentType":"south_african_id","fileName":"id-front.jpg","mimeType":"image/jpeg","base64":"..."}`
 
-Allowed types: South African ID, passport, driver's licence, proof of address, vehicle registration and roadworthy certificate. Allowed formats are JPEG, PNG and PDF; maximum 6 MB per file. Files are encrypted with AES-256-GCM before storage in PostgreSQL. Owners list the review queue at `GET /v1/owner/verification-documents`, view an individual document at `GET /v1/owner/verification-documents/:id/content`, and review it with `PATCH /v1/owner/verification-documents/:id` using `{"status":"approved"|"rejected"|"in_review","note":"..." }`.
+Allowed types: South African ID, passport, driver licence, proof of address, vehicle registration, roadworthy certificate and bank confirmation letter/statement. Allowed formats are JPEG, PNG and PDF; maximum 6 MB per file. Files are encrypted with AES-256-GCM before storage in PostgreSQL. Owners list the review queue at `GET /v1/owner/verification-documents`, view an individual document at `GET /v1/owner/verification-documents/:id/content`, and review it with `PATCH /v1/owner/verification-documents/:id` using `{"status":"approved"|"rejected"|"in_review","note":"..." }`.
 
 A driver profile is automatically marked verified only after at least one identity document (South African ID or passport) and a driver's licence document are both approved. The existing vehicle approval remains a separate requirement. This is a manual review workflow, not automated identity proofing or a guarantee against forged documents.
 
@@ -50,6 +50,6 @@ Generate each encryption key separately using `openssl rand -base64 32`. Never c
 
 ## Important launch gates
 
-The code is not live until the API is deployed, migrations 0018–0021 have run, Paystack has approved the Chaufr merchant account and transfer capability, test and live webhooks are configured, and the required secrets are installed in the host's secret manager. Paystack transfer balance/approval settings must be enabled. Some accounts may require transfer OTP/approval in the Paystack dashboard. Complete end-to-end sandbox testing before live mode.
+The code is not live until the API is deployed, migrations 0018–0021 have run, Paystack has approved Chaufr as a registered business with transfer capability, test and live webhooks are configured, and the required secrets are installed in the host secret manager. Paystack transfers require sufficient available balance and may require OTP/approval. South African account details are not provider-resolved, so bank confirmation must be manually reviewed. Complete end-to-end sandbox testing before live mode.
 
 Document uploads contain highly sensitive personal information. Restrict owner access, enable database encryption/backups, define a retention/deletion policy, secure the owner account and complete POPIA/legal review before collecting real identity documents. Do not use real identity documents in development or test environments.
