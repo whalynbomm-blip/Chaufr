@@ -20,7 +20,7 @@ test("Paystack webhook accepts an authentic event and stores it idempotently", a
   const calls = [];
   const pool = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [], rowCount: 0 }; } };
   const service = createPaystackService(pool, { secretKey: "test_secret" });
-  const raw = Buffer.from(JSON.stringify({ event: "charge.failed", data: { id: 123, reference: "chf_test" } }));
+  const raw = Buffer.from(JSON.stringify({ event: "ping", data: { id: 123, reference: "chf_test" } }));
   const signature = createHmac("sha512", "test_secret").update(raw).digest("hex");
   const result = await service.handleWebhook(raw, signature);
   assert.equal(result.received, true);
@@ -39,9 +39,9 @@ test("driver verification documents cannot be uploaded by a passenger", async ()
 });
 
 test("Paystack timestamped webhook signature uses the dedicated webhook secret", async () => {
-  const pool = { query: async () => ({ rows: [], rowCount: 1 }) };
+  const pool = { query: async () => ({ rows: [], rowCount: 0 }) };
   const service = createPaystackService(pool, { secretKey: "api_secret", webhookSecret: "whsec_test" });
-  const raw = Buffer.from(JSON.stringify({ event: "charge.failed", data: { id: 456, reference: "chf_new" } }));
+  const raw = Buffer.from(JSON.stringify({ event: "ping", data: { id: 456, reference: "chf_new" } }));
   const timestamp = String(Math.floor(Date.now() / 1000));
   const digest = createHmac("sha512", "whsec_test").update(timestamp + ".").update(raw).digest("hex");
   const result = await service.handleWebhook(raw, `t=${timestamp},v1=whk_test:${digest}`);
