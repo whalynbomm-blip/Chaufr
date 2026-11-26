@@ -21,7 +21,7 @@ Set the Paystack dashboard webhook URL to `https://<API_HOST>/v1/webhooks/paysta
 
 ## Refunds
 
-When a passenger cancels an unpaid/unaccepted trip, a full refund request is created only if a settled payment exists. Owners review `GET /v1/owner/refunds` and initiate the provider refund with `POST /v1/owner/refunds/:refundId/process`. Refund status and trip/payment status are changed only from Paystack refund webhooks. A processed refund can take several business days to reach the customer's account.
+When a passenger cancels an unpaid/unaccepted trip, a full refund request is created if a settled payment exists (including a late webhook payment that settles after cancellation). A passenger can also request a refund review for a completed paid trip. Owners review `GET /v1/owner/refunds` and initiate the provider refund with `POST /v1/owner/refunds/:refundId/process`. Refund status and trip/payment status are changed only from Paystack refund webhooks. A processed refund can take several business days to reach the customer's account.
 
 ## Driver bank payouts
 
