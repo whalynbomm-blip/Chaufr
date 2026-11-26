@@ -217,6 +217,54 @@ export function createOwnerService(pool, fareConfig) {
         client.release();
       }
     },
+    async listSafetyReports(user) {
+      requireOwner(user);
+      const result = await pool.query(
+        "SELECT r.id, r.trip_id, r.reporter_user_id, reporter.display_name AS reporter_name, " +
+        "r.reported_user_id, reported.display_name AS reported_name, r.reason_code, r.notes, r.status, r.created_at " +
+        "FROM safety_reports r " +
+        "JOIN users reporter ON reporter.id = r.reporter_user_id " +
+        "JOIN users reported ON reported.id = r.reported_user_id " +
+        "ORDER BY CASE r.status WHEN 'open' THEN 0 WHEN 'reviewing' THEN 1 ELSE 2 END, r.created_at DESC LIMIT 500"
+      );
+      return { reports: result.rows };
+    },
+    async reviewSafetyReport(user, reportId, status) {
+      requireOwner(user);
+      if (!["reviewing", "resolved", "dismissed"].includes(status)) {
+        throw new AuthError("Safety report status must be reviewing, resolved or dismissed");
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const current = await client.query(
+          "SELECT id, status FROM safety_reports WHERE id = $1 FOR UPDATE",
+          [reportId],
+        );
+        const row = current.rows[0];
+        if (!row) throw new AuthError("Safety report not found", 404);
+        const allowed = (row.status === "open" && ["reviewing", "dismissed"].includes(status)) ||
+          (row.status === "reviewing" && ["resolved", "dismissed"].includes(status));
+        if (!allowed) throw new AuthError("Invalid safety report transition: " + row.status + " to " + status, 409);
+        const updated = await client.query(
+          "UPDATE safety_reports SET status = $1 WHERE id = $2 " +
+          "RETURNING id, trip_id, reporter_user_id, reported_user_id, reason_code, notes, status, created_at",
+          [status, reportId],
+        );
+        await client.query(
+          "INSERT INTO audit_events (actor_user_id, action, resource_type, resource_id, details) " +
+          "VALUES ($1, 'safety_report.reviewed', 'safety_report', $2, $3::jsonb)",
+          [user.id, reportId, JSON.stringify({ previousStatus: row.status, status })],
+        );
+        await client.query("COMMIT");
+        return { report: updated.rows[0] };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async listFinancialLedger(user) {
       requireOwner(user);
       const result = await pool.query(
