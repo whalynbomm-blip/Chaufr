@@ -15,7 +15,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
   try {
     await client.query("BEGIN");
     const tripResult = await client.query(
-      "SELECT id, status, driver_user_id, passenger_user_id, pickup_label, fare_snapshot->>'vehicleCategory' AS vehicle_category, " +
+      "SELECT id, status, driver_user_id, passenger_user_id, pickup_label, fare_snapshot->>'vehicleCategory' AS vehicle_category, fare_snapshot->>'serviceTier' AS service_tier, " +
       "quoted_total, driver_earnings, platform_commission, distance_km, " +
       "(SELECT fuel_price_per_litre FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS fuel_price, " +
       "(SELECT operating_cost_per_km FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS operating_cost " +
@@ -176,7 +176,13 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
       row.distance_km <= row.maximumPickupDistanceKm &&
       row.estimated_net_zar >= row.minimumNetPerTrip
     );
-    const ranked = rankFairMatchCandidates(preferenceEligible);
+    const tier = trip.service_tier ?? "standard";
+    const fairMatchWeights = tier === "priority"
+      ? { passengerWaitWeight: 0.55, pickupBurdenWeight: 0.15, driverNetWeight: 0.25, preferenceWeight: 0.05 }
+      : tier === "saver"
+        ? { passengerWaitWeight: 0.25, pickupBurdenWeight: 0.25, driverNetWeight: 0.40, preferenceWeight: 0.10 }
+        : {};
+    const ranked = rankFairMatchCandidates(preferenceEligible, fairMatchWeights);
     const selectedCandidate = ranked[0]?.candidate ?? null;
     const matchDetails = ranked[0]?.match ?? null;
     const rankingMethod = "chaufr_fairmatch_v1";
@@ -195,7 +201,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
     );
     await client.query(
       "INSERT INTO trip_events (trip_id, event_type, details) VALUES ($1, 'dispatch_offered', $2::jsonb)",
-      [tripId, JSON.stringify({ driverUserId: offer.rows[0].driver_user_id, distanceKm: selectedCandidate.distance_km, etaSeconds: selectedCandidate.eta_seconds, estimatedNetZar: selectedCandidate.estimated_net_zar, fairMatchScore: matchDetails?.score, fairMatchComponents: matchDetails?.components, rankingMethod, expiresAt: offer.rows[0].expires_at })],
+      [tripId, JSON.stringify({ serviceTier: tier, driverUserId: offer.rows[0].driver_user_id, distanceKm: selectedCandidate.distance_km, etaSeconds: selectedCandidate.eta_seconds, estimatedNetZar: selectedCandidate.estimated_net_zar, fairMatchScore: matchDetails?.score, fairMatchComponents: matchDetails?.components, rankingMethod, expiresAt: offer.rows[0].expires_at })],
     );
     await client.query("COMMIT");
     return {
