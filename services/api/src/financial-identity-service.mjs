@@ -234,13 +234,17 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         [owner.id, refundId, JSON.stringify({ amountMinor: Number(refund.amount_minor), provider: "paystack" })]);
       return { refundId, status: "processing", providerReference: reference };
     },
-    async setPayoutAccount(driver, { accountNumber, bankCode, bankName } = {}) {
+    async setPayoutAccount(driver, { accountNumber, accountHolderName, bankCode, bankName } = {}) {
       if (driver?.role !== "driver") throw new AuthError("Driver account required", 403);
-      if (!/^\d{6,20}$/.test(accountNumber ?? "") || !/^\d{2,12}$/.test(bankCode ?? "") || typeof bankName !== "string" || bankName.length > 100) throw new AuthError("Valid bank details are required");
-      const resolved = await call("/bank/resolve?account_number=" + encodeURIComponent(accountNumber) + "&bank_code=" + encodeURIComponent(bankCode));
-      if (!resolved.account_name) throw new AuthError("The bank account could not be verified", 422);
+      if (!/^\d{6,20}$/.test(accountNumber ?? "") || !/^\d{2,12}$/.test(bankCode ?? "") ||
+          typeof bankName !== "string" || bankName.length > 100 ||
+          typeof accountHolderName !== "string" || accountHolderName.trim().length < 3 || accountHolderName.length > 100) {
+        throw new AuthError("Valid account holder name and South African bank details are required");
+      }
+      // Paystack's ZA docs state that bank-account resolution is unavailable for South African accounts.
+      // Create the recipient with the driver's supplied account-holder name, then require manual proof review.
       const recipient = await call("/transferrecipient", "POST", {
-        type: "basa", name: resolved.account_name, account_number: accountNumber, bank_code: bankCode, currency: "ZAR",
+        type: "basa", name: accountHolderName.trim(), account_number: accountNumber, bank_code: bankCode, currency: "ZAR",
       });
       const key = Buffer.from(process.env.PAYOUT_DATA_ENCRYPTION_KEY || "", "base64");
       if (key.length !== 32) throw new AuthError("Payout data encryption is not configured", 503);
@@ -250,10 +254,10 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       const tag = cipher.getAuthTag();
       await pool.query(
         "INSERT INTO driver_payout_accounts(driver_user_id,bank_code,bank_name,account_number_encrypted,account_name,paystack_recipient_code,status,verified_at) " +
-        "VALUES($1,$2,$3,$4,$5,$6,'verified',now()) ON CONFLICT(driver_user_id) DO UPDATE SET bank_code=EXCLUDED.bank_code,bank_name=EXCLUDED.bank_name,account_number_encrypted=EXCLUDED.account_number_encrypted,account_name=EXCLUDED.account_name,paystack_recipient_code=EXCLUDED.paystack_recipient_code,status='verified',verified_at=now(),updated_at=now()",
-        [driver.id, bankCode, bankName, Buffer.concat([iv,tag,encrypted]), resolved.account_name, recipient.recipient_code],
+        "VALUES($1,$2,$3,$4,$5,$6,'pending',NULL) ON CONFLICT(driver_user_id) DO UPDATE SET bank_code=EXCLUDED.bank_code,bank_name=EXCLUDED.bank_name,account_number_encrypted=EXCLUDED.account_number_encrypted,account_name=EXCLUDED.account_name,paystack_recipient_code=EXCLUDED.paystack_recipient_code,status='pending',verified_at=NULL,updated_at=now()",
+        [driver.id, bankCode, bankName, Buffer.concat([iv,tag,encrypted]), accountHolderName.trim(), recipient.recipient_code],
       );
-      return { status: "verified", accountName: resolved.account_name, bankName };
+      return { status: "pending", accountName: accountHolderName.trim(), bankName, message: "Upload a bank confirmation letter or statement for owner verification." };
     },
     async payDriverEarnings(owner, tripId) {
       if (owner?.role !== "owner") throw new AuthError("Owner access required", 403);
@@ -336,7 +340,7 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
     async upload(driver, input = {}) {
       if (driver?.role !== "driver") throw new AuthError("Driver account required", 403);
       configured();
-      const allowed = new Set(["south_african_id","passport","drivers_licence","proof_of_address","vehicle_registration","vehicle_roadworthy"]);
+      const allowed = new Set(["south_african_id","passport","drivers_licence","proof_of_address","vehicle_registration","vehicle_roadworthy","bank_confirmation"]);
       const types = { "image/jpeg":"jpg", "image/png":"png", "application/pdf":"pdf" };
       if (!allowed.has(input.documentType) || !types[input.mimeType] || typeof input.base64 !== "string") throw new AuthError("Unsupported document type or format");
       const bytes = Buffer.from(input.base64, "base64");
@@ -396,6 +400,12 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         const doc = await client.query("UPDATE driver_verification_documents SET status=$1,reviewer_user_id=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING driver_user_id,document_type", [status,owner.id,note,documentId]);
         if (!doc.rowCount) throw new AuthError("Document not found",404);
         const driverId = doc.rows[0].driver_user_id;
+        if (doc.rows[0].document_type === "bank_confirmation") {
+          await client.query(
+            "UPDATE driver_payout_accounts SET status=$1,verified_at=CASE WHEN $1='verified' THEN now() ELSE NULL END,updated_at=now() WHERE driver_user_id=$2",
+            [status === "approved" ? "verified" : status === "rejected" ? "rejected" : "pending", driverId],
+          );
+        }
         const required = await client.query(
           "SELECT " +
           "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type IN ('south_african_id','passport') ORDER BY created_at DESC LIMIT 1) AS identity_status, " +
