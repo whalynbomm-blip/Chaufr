@@ -1,6 +1,8 @@
 package za.co.chaufr.passenger
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -141,6 +143,8 @@ private fun PassengerHome() {
     var activePassengerTripId by remember { mutableStateOf<String?>(null) }
     var tripStatusSnapshot by remember { mutableStateOf<org.json.JSONObject?>(null) }
     var tripCancellationLoading by remember { mutableStateOf(false) }
+    var paymentLoading by remember { mutableStateOf(false) }
+    var paymentMessage by remember { mutableStateOf("") }
     var rewardsTickets by remember { mutableStateOf(0) }
     var rewardsHistory by remember { mutableStateOf<List<RewardHistoryEntry>>(emptyList()) }
     var passengerTripHistory by remember { mutableStateOf<List<PassengerTripHistoryEntry>>(emptyList()) }
@@ -470,6 +474,36 @@ private fun PassengerHome() {
                                             },
                                             color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp
                                         )
+                                        if (snapshot.optDouble("passengerPayable", 0.0) > 0.0 &&
+                                            snapshot.optString("paymentStatus") != "paid" &&
+                                            snapshot.optString("status") !in listOf("cancelled", "expired")) {
+                                            Spacer(Modifier.height(10.dp))
+                                            Button(
+                                                onClick = {
+                                                    val tripId = activePassengerTripId
+                                                    val token = SecureTokenStore.load(context)
+                                                    if (tripId != null && token != null && !paymentLoading) scope.launch {
+                                                        paymentLoading = true
+                                                        paymentMessage = ""
+                                                        try {
+                                                            val checkout = ChaufrApi.createPaymentCheckout(BuildConfig.CHAUFR_API_BASE_URL, token, tripId)
+                                                            val checkoutUrl = checkout.optString("checkoutUrl")
+                                                            if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("The secure payment link was not returned.")
+                                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                                                            paymentMessage = "Secure Paystack checkout opened. Your trip will update after payment is verified."
+                                                        } catch (error: Exception) {
+                                                            paymentMessage = error.message ?: "Unable to start payment."
+                                                        } finally { paymentLoading = false }
+                                                    }
+                                                },
+                                                enabled = !paymentLoading,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.buttonColors(containerColor = ChaufrBlue)
+                                            ) { Text(if (paymentLoading) "Opening secure checkout..." else "Pay securely by card") }
+                                            if (paymentMessage.isNotBlank()) Text(paymentMessage, color = ChaufrMuted, fontSize = 10.sp)
+                                        } else if (snapshot.optString("paymentStatus") == "paid") {
+                                            Text("Payment confirmed", color = ChaufrGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
                                         val driver = snapshot.optJSONObject("driver")
                                         if (driver != null) {
                                             Spacer(Modifier.height(6.dp))
@@ -495,7 +529,7 @@ private fun PassengerHome() {
                                                         try {
                                                             val cancelled = ChaufrApi.cancelPassengerTrip(BuildConfig.CHAUFR_API_BASE_URL, token, tripId)
                                                             tripStatusSnapshot = org.json.JSONObject(snapshot.toString()).put("status", cancelled.optString("status", "cancelled"))
-                                                            bookingMessage = if (cancelled.optInt("rewardTicketsReleased", 0) > 0) "Ride cancelled. Your 9 reward tickets have been returned." else "Ride request cancelled."
+                                                            bookingMessage = (if (cancelled.optInt("rewardTicketsReleased", 0) > 0) "Ride cancelled. Your 9 reward tickets have been returned." else "Ride request cancelled.") + if (cancelled.optBoolean("refundRequested")) " Refund request sent for processing." else ""
                                                             refreshRewards(token)
                                                             passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, token))
                                                         } catch (error: Exception) {
