@@ -130,6 +130,7 @@ private fun PassengerHome() {
     var trustedContactName by remember { mutableStateOf("") }
     var trustedContactPhone by remember { mutableStateOf("") }
     var trustedContactMessage by remember { mutableStateOf("") }
+    var scheduleSummary by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -756,6 +757,23 @@ private fun PassengerHome() {
                             }
                         ) { Text("Save recurring commute") }
                         if (schedulingMessage.isNotBlank()) Text(schedulingMessage, color = ChaufrGreen, fontSize = 11.sp)
+                        Button(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                        val result = ChaufrApi.passengerScheduledRides(BuildConfig.CHAUFR_API_BASE_URL, token)
+                                        val scheduled = result.optJSONArray("scheduled")
+                                        val recurring = result.optJSONArray("recurring")
+                                        val next = (0 until (scheduled?.length() ?: 0)).mapNotNull { scheduled?.optJSONObject(it)?.let { row -> "Pickup " + row.optString("scheduled_for") + " · " + row.optString("status") } }
+                                        val repeats = (0 until (recurring?.length() ?: 0)).mapNotNull { recurring?.optJSONObject(it)?.let { row -> "Repeat " + row.optString("weekdays") + " at " + row.optString("local_time") + " · " + row.optString("status") } }
+                                        scheduleSummary = (next + repeats).take(8).joinToString("\\n").ifBlank { "No future bookings or recurring commutes yet." }
+                                    } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to load bookings." }
+                                }
+                            }
+                        ) { Text("View my scheduled rides") }
+                        if (scheduleSummary.isNotBlank()) Text(scheduleSummary, color = ChaufrMuted, fontSize = 10.sp, lineHeight = 15.sp)
                         Divider(color = Color(0xFFE8ECF2))
                         Text("Trusted emergency contact", color = ChaufrNavy, fontWeight = FontWeight.SemiBold)
                         Text("Save someone Chaufr can identify if you trigger SOS. Use international format, e.g. +27821234567.", color = ChaufrMuted, fontSize = 10.sp)
