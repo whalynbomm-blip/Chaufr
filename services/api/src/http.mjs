@@ -147,7 +147,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
-            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/financial-ledger",
+            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -178,6 +178,14 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "owner") return json(response, 403, { error: "Owner access required", requestId });
+        if (request.method === "GET" && url.pathname === "/v1/owner/safety-reports") {
+          return json(response, 200, await ownerService.listSafetyReports(user));
+        }
+        const safetyReportReviewMatch = /^\\/v1\\/owner\\/safety-reports\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && safetyReportReviewMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await ownerService.reviewSafetyReport(user, safetyReportReviewMatch[1], body.status));
+        }
         if (request.method === "GET" && url.pathname === "/v1/owner/financial-ledger") {
           return json(response, 200, await ownerService.listFinancialLedger(user));
         }
