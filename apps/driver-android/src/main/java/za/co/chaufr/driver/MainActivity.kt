@@ -45,6 +45,7 @@ import java.util.Locale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,7 +76,7 @@ private fun DriverHome() {
   Surface(modifier = Modifier.fillMaxSize(), color = Page) {
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
       Column(
-        modifier = Modifier.fillMaxWidth().background(Navy).padding(horizontal = 22.dp, vertical = 24.dp)
+        modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 27.dp)
       ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Column {
@@ -86,8 +87,8 @@ private fun DriverHome() {
           Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(24.dp))
-        Text("Good day, Driver", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-        Text("Your driving day starts here.", color = Color(0xFFB8C7DA), fontSize = 13.sp)
+        Text("Ready to roll?", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Your next great trip starts here.", color = Color(0xFFB8C7DA), fontSize = 13.sp)
       }
 
       Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -105,7 +106,7 @@ private fun DriverHome() {
 
         Card(
           modifier = Modifier.fillMaxWidth(),
-          shape = RoundedCornerShape(18.dp),
+          shape = RoundedCornerShape(26.dp),
           colors = CardDefaults.cardColors(containerColor = Color.White)
         ) {
           Column(modifier = Modifier.padding(17.dp)) {
@@ -314,7 +315,7 @@ private fun DriverAvailabilityCard() {
     modifier = Modifier.fillMaxWidth(),
     shape = RoundedCornerShape(18.dp),
     colors = CardDefaults.cardColors(containerColor = Color.White),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
   ) {
     Column(modifier = Modifier.padding(17.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
@@ -331,7 +332,7 @@ private fun DriverAvailabilityCard() {
         onClick = { requestPresence(!available) },
         enabled = !busy,
         modifier = Modifier.fillMaxWidth().height(48.dp),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (available) Navy else Blue)
       ) {
         Text(if (busy) "Updating..." else if (available) "Go offline" else "Go online", fontWeight = FontWeight.Bold)
@@ -531,7 +532,7 @@ private fun AvailableTripsCard() {
                   finally { acceptingId = null }
                 }
               }, enabled = acceptingId == null, modifier = Modifier.weight(1f)) {
-                Text(if (acceptingId == id) "Accepting…" else "Accept")
+                Text(if (acceptingId == id) "ACCEPTING…" else "✓  ACCEPT RIDE")
               }
               OutlinedButton(onClick = {
                 scope.launch {
@@ -547,7 +548,7 @@ private fun AvailableTripsCard() {
                   finally { acceptingId = null }
                 }
               }, enabled = acceptingId == null, modifier = Modifier.weight(1f)) {
-                Text("Decline")
+                Text("PASS")
               }
             }
           }
