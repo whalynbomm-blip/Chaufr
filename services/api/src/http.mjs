@@ -11,6 +11,7 @@ import { createPushService } from "./push-service.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
 import { createMobilityService } from "./mobility-service.mjs";
+import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -21,7 +22,7 @@ const json = (response, status, body) => {
   response.end(JSON.stringify(body));
 };
 
-const readJson = async (request, maxBytes = 32_768) => {
+const readRaw = async (request, maxBytes = 10 * 1024 * 1024) => {\n  const chunks = []; let size = 0;\n  for await (const chunk of request) { size += chunk.length; if (size > maxBytes) { const error = new Error("Request body too large"); error.status = 413; throw error; } chunks.push(chunk); }\n  return Buffer.concat(chunks);\n};\n\nconst readJson = async (request, maxBytes = 32_768) => {
   let raw = "";
   for await (const chunk of request) {
     raw += chunk;
@@ -86,7 +87,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const pushService = database ? createPushService(database, fcmSender) : null;
   const safetyService = database ? createSafetyService(database) : null;
   const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
-  const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
+  const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;\n  const paystackService = database ? createPaystackService(database) : null;\n  const verificationService = database ? createDriverVerificationService(database) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
@@ -149,11 +150,27 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
             "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
-            "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
+            "POST /v1/payments/checkout", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
         });
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/webhooks/paystack") {
+        if (!paystackService) return json(response, 503, { error: "Payment services unavailable", requestId });
+        const raw = await readRaw(request, 1_000_000);
+        const result = await paystackService.handleWebhook(raw, request.headers["x-paystack-signature"] || request.headers["paystack-signature"]);
+        return json(response, 200, result);
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/payments/checkout") {
+        if (!authService || !paystackService) return json(response, 503, { error: "Payment services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        return json(response, 201, await paystackService.createCheckout(user, await readJson(request)));
       }
 
       if (url.pathname.startsWith("/v1/safety/")) {
@@ -183,6 +200,30 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "owner") return json(response, 403, { error: "Owner access required", requestId });
+        if (request.method === "GET" && url.pathname === "/v1/owner/verification-documents") {
+          return json(response, 200, await verificationService.listForOwner(user));
+        }
+        const docContentMatch = /^\/v1\/owner\/verification-documents\/([0-9a-f-]{36})\/content$/i.exec(url.pathname);
+        if (request.method === "GET" && docContentMatch) {
+          return json(response, 200, await verificationService.readForOwner(user, docContentMatch[1]));
+        }
+        const docReviewMatch = /^\/v1\/owner\/verification-documents\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && docReviewMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await verificationService.review(user, docReviewMatch[1], body.status, body.note));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/refunds") {
+          const rows = await database.query("SELECT r.id,r.trip_id,r.passenger_user_id,u.display_name AS passenger_name,r.amount_minor,r.currency,r.reason,r.status,r.created_at,r.updated_at FROM payment_refunds r JOIN users u ON u.id=r.passenger_user_id ORDER BY r.created_at DESC LIMIT 300");
+          return json(response, 200, { refunds: rows.rows.map(row => ({...row, amount: Number(row.amount_minor)/100})) });
+        }
+        const refundProcessMatch = /^\/v1\/owner\/refunds\/([0-9a-f-]{36})\/process$/i.exec(url.pathname);
+        if (request.method === "POST" && refundProcessMatch) {
+          return json(response, 200, await paystackService.requestRefund(user, refundProcessMatch[1]));
+        }
+        const rewardPayoutMatch = /^\/v1\/owner\/reward-commission-requests\/([0-9a-f-]{36})\/pay$/i.exec(url.pathname);
+        if (request.method === "POST" && rewardPayoutMatch) {
+          return json(response, 200, await paystackService.payRewardCommission(user, rewardPayoutMatch[1]));
+        }
         if (request.method === "GET" && url.pathname === "/v1/owner/safety-reports") {
           return json(response, 200, await ownerService.listSafetyReports(user));
         }
@@ -301,6 +342,15 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         }
         const driverContactMatch = /^\/v1\/driver\/trusted-contacts\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (mobilityService && request.method === "DELETE" && driverContactMatch) return json(response, 200, await mobilityService.deleteTrustedContact(user, driverContactMatch[1]));
+        if (verificationService && request.method === "POST" && url.pathname === "/v1/driver/verification-documents") {
+          return json(response, 201, await verificationService.upload(user, await readJson(request, 9 * 1024 * 1024)));
+        }
+        if (verificationService && request.method === "GET" && url.pathname === "/v1/driver/verification-documents") {
+          return json(response, 200, await verificationService.listForDriver(user));
+        }
+        if (paystackService && request.method === "PUT" && url.pathname === "/v1/driver/payout-account") {
+          return json(response, 200, await paystackService.setPayoutAccount(user, await readJson(request)));
+        }
         if (request.method === "GET" && url.pathname === "/v1/driver/profile") {
           return json(response, 200, await driverService.getProfile(user));
         }
@@ -384,7 +434,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
-        return json(response, 200, await tripService.cancelPassengerTrip(user, passengerTripCancelMatch[1]));
+        const cancelled = await tripService.cancelPassengerTrip(user, passengerTripCancelMatch[1]);
+        const refund = paystackService ? await paystackService.createRefundRequest(user, passengerTripCancelMatch[1]) : { refundRequested: false };
+        return json(response, 200, { ...cancelled, ...refund });
       }
 
       if (request.method === "GET" && url.pathname === "/v1/passenger/trips/history") {
