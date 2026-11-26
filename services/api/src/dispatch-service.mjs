@@ -15,7 +15,10 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
   try {
     await client.query("BEGIN");
     const tripResult = await client.query(
-      "SELECT id, status, driver_user_id, fare_snapshot->>'vehicleCategory' AS vehicle_category " +
+      "SELECT id, status, driver_user_id, fare_snapshot->>'vehicleCategory' AS vehicle_category, " +
+      "quoted_total, driver_earnings, platform_commission, distance_km, " +
+      "(SELECT fuel_price_per_litre FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS fuel_price, " +
+      "(SELECT operating_cost_per_km FROM fare_rules WHERE fare_rules.id = trips.fare_rule_id) AS operating_cost " +
       "FROM trips WHERE id = $1 FOR UPDATE",
       [tripId],
     );
@@ -137,8 +140,8 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
         tripDistanceKm: tripKm,
         pickupDistanceKm: row.distance_km,
         fuelConsumptionLPer100Km: Number(row.fuel_consumption_l_per_100km ?? 8),
-        fuelPricePerLitreZar: 0,
-        operatingCostPerKmZar: 0,
+        fuelPricePerLitreZar: Number(trip.fuel_price ?? 0),
+        operatingCostPerKmZar: Number(trip.operating_cost ?? 0),
       });
       return {
         ...row,
