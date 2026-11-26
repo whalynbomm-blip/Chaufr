@@ -17,7 +17,7 @@ Authenticated users call `POST /v1/payments/checkout`:
 
 The API derives the amount from the stored trip fare or the R30 daily activation record. It never trusts a client-supplied amount. It creates a Paystack hosted checkout and returns `checkoutUrl`; the Android client must open this URL in a Custom Tab/browser. Payment is only fulfilled after Paystack's signed webhook is received and the transaction is verified server-to-server.
 
-Set the Paystack dashboard webhook URL to `https://<API_HOST>/v1/webhooks/paystack`. The webhook validates the HMAC-SHA512 signature over the exact raw request body, verifies the transaction reference, amount and ZAR currency, and processes duplicate events idempotently.
+Set the Paystack dashboard webhook URL to `https://<API_HOST>/v1/webhooks/paystack`. The webhook validates the HMAC-SHA512 signature over the exact raw request body (using the API secret for the South African `x-paystack-signature` flow, or the dedicated secret for timestamped signatures), verifies the transaction reference, amount and ZAR currency, and processes duplicate events idempotently.
 
 ## Refunds
 
@@ -41,7 +41,7 @@ A driver profile is automatically marked verified only after at least one identi
 ## Required production secrets
 
 - `PAYSTACK_SECRET_KEY`: Paystack secret API key (use test key in staging, live key only after merchant approval).
-- `PAYSTACK_WEBHOOK_SECRET`: Paystack webhook signing secret (`whsec_...`) for timestamped `Paystack-Signature` headers. Legacy `x-paystack-signature` remains supported while Paystack rotates webhook signing modes.
+- `PAYSTACK_WEBHOOK_SECRET`: optional dedicated signing secret if the Paystack account is configured to send timestamped `Paystack-Signature` headers. The South Africa webhook flow also supports the documented `x-paystack-signature` HMAC using `PAYSTACK_SECRET_KEY`.
 - `PAYOUT_DATA_ENCRYPTION_KEY`: base64-encoded 32-byte key for stored driver bank account numbers.
 - `DOCUMENT_ENCRYPTION_KEY`: base64-encoded 32-byte key for identity/vehicle document contents.
 - `PAYSTACK_CALLBACK_URL`: optional HTTPS return URL after hosted checkout.
