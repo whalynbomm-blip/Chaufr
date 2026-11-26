@@ -178,7 +178,8 @@ private fun PassengerHome() {
                 val snapshot = ChaufrApi.passengerTripStatus(apiBase, token, tripId)
                 tripStatusSnapshot = snapshot
                 val status = snapshot.optString("status")
-                if (status in listOf("completed", "cancelled", "expired") &&\n                    (status != "completed" || snapshot.optString("paymentStatus") == "paid" || snapshot.optDouble("passengerPayable", 0.0) <= 0.0)) {
+                if (status in listOf("completed", "cancelled", "expired") &&
+                    (status != "completed" || snapshot.optString("paymentStatus") == "paid" || snapshot.optDouble("passengerPayable", 0.0) <= 0.0)) {
                     try {
                         val rewards = ChaufrApi.passengerRewards(apiBase, token)
                         rewardsTickets = rewards.optInt("tickets", rewardsTickets)
@@ -802,7 +803,8 @@ private fun PassengerHome() {
                                         val recurring = result.optJSONArray("recurring")
                                         val next = (0 until (scheduled?.length() ?: 0)).mapNotNull { scheduled?.optJSONObject(it)?.let { row -> "Pickup " + row.optString("scheduled_for") + " · " + row.optString("status") } }
                                         val repeats = (0 until (recurring?.length() ?: 0)).mapNotNull { recurring?.optJSONObject(it)?.let { row -> "Repeat " + row.optString("weekdays") + " at " + row.optString("local_time") + " · " + row.optString("status") } }
-                                        scheduleSummary = (next + repeats).take(8).joinToString("\n").ifBlank { "No future bookings or recurring commutes yet." }
+                                        scheduleSummary = (next + repeats).take(8).joinToString("
+").ifBlank { "No future bookings or recurring commutes yet." }
                                     } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to load bookings." }
                                 }
                             }
