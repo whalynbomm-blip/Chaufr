@@ -144,7 +144,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
-            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId",
+            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -159,7 +159,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "owner") return json(response, 403, { error: "Owner access required", requestId });
-        if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
+        if (request.method === "GET" && url.pathname === "/v1/owner/financial-ledger") {\n          return json(response, 200, await ownerService.listFinancialLedger(user));\n        }\n        if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
           return json(response, 200, await ownerService.getOverview(user));
         }
         if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {
