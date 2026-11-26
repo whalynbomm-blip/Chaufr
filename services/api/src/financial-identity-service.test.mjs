@@ -18,7 +18,7 @@ test("Paystack webhook rejects an invalid signature before touching the database
 
 test("Paystack webhook accepts an authentic event and stores it idempotently", async () => {
   const calls = [];
-  const pool = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [], rowCount: 1 }; } };
+  const pool = { query: async (sql, params) => { calls.push({ sql, params }); return { rows: [], rowCount: 0 }; } };
   const service = createPaystackService(pool, { secretKey: "test_secret" });
   const raw = Buffer.from(JSON.stringify({ event: "charge.failed", data: { id: 123, reference: "chf_test" } }));
   const signature = createHmac("sha512", "test_secret").update(raw).digest("hex");
