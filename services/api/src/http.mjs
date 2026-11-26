@@ -158,7 +158,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
             "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
-            "POST /v1/payments/checkout", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
+            "POST /v1/payments/checkout", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
@@ -227,6 +227,10 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const refundProcessMatch = /^\/v1\/owner\/refunds\/([0-9a-f-]{36})\/process$/i.exec(url.pathname);
         if (request.method === "POST" && refundProcessMatch) {
           return json(response, 200, await paystackService.requestRefund(user, refundProcessMatch[1]));
+        }
+        const driverEarningsPayoutMatch = /^\/v1\/owner\/driver-earnings\/([0-9a-f-]{36})\/pay$/i.exec(url.pathname);
+        if (request.method === "POST" && driverEarningsPayoutMatch) {
+          return json(response, 200, await paystackService.payDriverEarnings(user, driverEarningsPayoutMatch[1]));
         }
         const rewardPayoutMatch = /^\/v1\/owner\/reward-commission-requests\/([0-9a-f-]{36})\/pay$/i.exec(url.pathname);
         if (request.method === "POST" && rewardPayoutMatch) {
