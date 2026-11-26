@@ -150,6 +150,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
       return {
         ...row,
         eta_minutes: etaMinutes,
+        pickupEtaMinutes: etaMinutes,
         estimated_net_zar: Number((driverGross - profit.estimatedCostZar).toFixed(2)),
         verified: true,
         activationPaid: true,
