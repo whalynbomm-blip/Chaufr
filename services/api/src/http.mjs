@@ -156,18 +156,20 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       }
 
       if (url.pathname.startsWith("/v1/safety/")) {
-        if (!authService || !safetyService) return json(response, 503, { error: "Safety Shield requires a configured database", requestId });
-        if (request.method !== "POST" || !["/v1/safety/block", "/v1/safety/report"].includes(url.pathname)) {
-          return json(response, 404, { error: "Safety endpoint not found", requestId });
-        }
+        if (!authService || !safetyService || !mobilityService) return json(response, 503, { error: "Safety Shield requires a configured database", requestId });
         const token = getBearerToken(request);
         if (!token) return json(response, 401, { error: "Authentication required", requestId });
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
-        const body = await readJson(request);
-        if (url.pathname === "/v1/safety/block") {
-          return json(response, 201, await safetyService.blockParticipant(user, body));
+        const sosMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/sos$/i.exec(url.pathname);
+        if (request.method === "POST" && sosMatch) return json(response, 201, await mobilityService.triggerSos(user, sosMatch[1], await readJson(request)));
+        const shareMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/share$/i.exec(url.pathname);
+        if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
+        if (request.method !== "POST" || !["/v1/safety/block", "/v1/safety/report"].includes(url.pathname)) {
+          return json(response, 404, { error: "Safety endpoint not found", requestId });
         }
+        const body = await readJson(request);
+        if (url.pathname === "/v1/safety/block") return json(response, 201, await safetyService.blockParticipant(user, body));
         return json(response, 201, await safetyService.reportParticipant(user, body));
       }
 
