@@ -158,7 +158,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
             "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
-            "POST /v1/payments/checkout", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "GET /v1/owner/driver-earnings/eligible", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
+            "POST /v1/payments/checkout", "POST /v1/passenger/trips/:tripId/refund-request", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "GET /v1/owner/driver-earnings/eligible", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
@@ -446,6 +446,17 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           await authService.logout(token);
           return json(response, 200, { ok: true });
         }
+      }
+      const passengerRefundRequestMatch = /^\/v1\/passenger\/trips\/([0-9a-f-]{36})\/refund-request$/i.exec(url.pathname);
+      if (request.method === "POST" && passengerRefundRequestMatch) {
+        if (!authService || !paystackService) return json(response, 503, { error: "Refund services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
+        const body = await readJson(request);
+        return json(response, 201, await paystackService.createRefundRequest(user, passengerRefundRequestMatch[1], body.reason || "Passenger refund request"));
       }
       const passengerTripCancelMatch = /^\/v1\/passenger\/trips\/([0-9a-f-]{36})\/cancel$/i.exec(url.pathname);
       if (request.method === "POST" && passengerTripCancelMatch) {
