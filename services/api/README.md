@@ -63,13 +63,13 @@ When PostgreSQL is configured, the API exposes:
 
 Passwords must be 12–128 characters. Registration requires a display name and either an email address or international-format phone number. Public registration is restricted to passenger and driver roles; owner and operations accounts cannot be self-created. Driver accounts receive a pending driver profile. Access tokens are random opaque values; only their SHA-256 hashes are stored. Sessions expire after 30 days and can be revoked. Registration and login have a basic per-process IP rate limit.
 
-These endpoints are an initial account foundation, not a complete production identity system. Email/phone ownership verification, password reset, stronger distributed rate limiting, admin account provisioning and app-side account screens are still outstanding. Do not treat the Android demo screens as connected to live accounts yet.
+These endpoints provide the account foundation used by the passenger and driver Android account cards. Production identity hardening still requires email/phone ownership verification, password reset/recovery, stronger distributed rate limiting and secure owner account provisioning. The mobile apps require the production API URL before account and trip features can operate.
 
 ## Driver onboarding and availability
 
 Authenticated driver accounts can submit a vehicle and licence number through `POST /v1/driver/vehicles`. Vehicle registration and licence identifiers are encrypted with AES-256-GCM before they are stored. This endpoint requires `VEHICLE_DATA_ENCRYPTION_KEY`, a private base64-encoded 32-byte key; generate one with `openssl rand -base64 32` and provide it through the deployment secret manager. Never commit the production key.
 
-Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner review/approval tools and document uploads are not yet implemented. The driver Android app now includes the vehicle and licence submission form and connects its online/offline control to the API when a server URL is configured.
+Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner-only driver verification and vehicle approval are available in the private owner console. Document image uploads and automated licence/vehicle verification remain outstanding. The driver Android app includes the vehicle and licence submission form and connects its online/offline control to the API when a server URL is configured.
 
 ## Fare schedule and trip acceptance
 
@@ -90,7 +90,7 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 - Driver dispatch offers eligible drivers sequentially with an offer timeout and redispatch after decline/expiry. Driver location is updated by an Android foreground location service; passenger trip status polls for fresh driver coordinates. Real-device testing is still required.
 - FCM device registration and notification delivery are implemented, but require matching Firebase Android configuration values in CI and `FIREBASE_SERVICE_ACCOUNT_JSON` on the API host.
 - Daily R30 activation is enforced server-side, but payment-provider checkout/webhooks are not connected; do not treat the internal verified-payment method as a public payment route.
-- Owner driver verification/document review, payment reconciliation, refunds, passenger support workflows and ratings remain outstanding.
+- Safety Shield trip-linked reporting and blocking are available in both Android apps; owner moderation is available in the private dashboard. SOS escalation, trusted-contact management, live trip sharing and route-deviation alerts still need to be completed and field-tested.\n- Document image uploads, automated identity/vehicle verification, passenger/driver ratings, customer support workflows, refunds and financial reconciliation remain outstanding.\n- Scheduled/recurring rides and Saver/Standard/Priority booking choices are not yet wired into the live booking flow.
 - Android debug builds need the deployed `chaufrApiBaseUrl`; passenger map selection also needs an Android-restricted `chaufrGoogleMapsApiKey`.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
@@ -131,3 +131,15 @@ Migration `0012_payment_ledger.sql` adds provider-neutral ZAR payment intents, p
 `src/payment-service.mjs` exposes internal `createIntent` and `recordVerifiedInboundPayment` methods. The latter must only be called after a future provider-specific webhook adapter has verified the provider signature, merchant account and event authenticity. Duplicate provider event IDs are ignored, and amount/currency mismatches are rejected. No public payment-confirmation route is exposed, and no card data is stored.
 
 This is a ledger and settlement foundation, not a live checkout integration. Payment-provider selection, hosted checkout creation, signed webhook verification, failed-payment handling, refunds, payout transfers and reconciliation reports remain to be connected. Do not mark reward-ride commission requests as paid until an actual transfer is confirmed.
+
+
+## Safety Shield
+
+Authenticated passengers and drivers can report or block the other participant on a trip through the Android trip screen. Reports are linked to the trip and include a controlled reason code plus optional notes (maximum 500 characters). Blocks are stored as directional user pairs and dispatch excludes blocked pairs in either direction. The private owner console exposes the moderation queue and an audited workflow: `open → reviewing → resolved` or `dismissed`.
+
+- `POST /v1/safety/report` — report the other participant on one of the caller's trips.
+- `POST /v1/safety/block` — block the other participant on one of the caller's trips.
+- `GET /v1/owner/safety-reports` — owner-only moderation queue.
+- `PATCH /v1/owner/safety-reports/:reportId` — owner-only status transition.
+
+The current report/block controls are not an emergency response service. SOS calling, trusted contacts, live trip sharing and route-deviation alerts are not yet complete; do not market these as available.
