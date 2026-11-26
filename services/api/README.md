@@ -69,7 +69,7 @@ These endpoints provide the account foundation used by the passenger and driver 
 
 Authenticated driver accounts can submit a vehicle and licence number through `POST /v1/driver/vehicles`. Vehicle registration and licence identifiers are encrypted with AES-256-GCM before they are stored. This endpoint requires `VEHICLE_DATA_ENCRYPTION_KEY`, a private base64-encoded 32-byte key; generate one with `openssl rand -base64 32` and provide it through the deployment secret manager. Never commit the production key.
 
-Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner-only driver verification and vehicle approval are available in the private owner console. Document image uploads and automated licence/vehicle verification remain outstanding. The driver Android app includes the vehicle and licence submission form and connects its online/offline control to the API when a server URL is configured.
+Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner-only driver verification and vehicle approval are available in the private owner console. Encrypted identity, driver-licence, vehicle and bank-confirmation document uploads are implemented with manual owner review. This is not automated Home Affairs or licence-authority verification; document authenticity checks and external verification integrations remain outstanding. The driver Android app includes vehicle/licence submission, document upload and payout-bank onboarding screens.
 
 ## Fare schedule and trip acceptance
 
@@ -121,7 +121,7 @@ Saver, Standard and Priority are matching preferences, not different fare produc
 - `POST /v1/safety/trips/:tripId/share` — creates a random, hashed, 12-hour sharing token. The public `GET /v1/shared-trips/:token` endpoint returns a limited trip status and recent driver location.
 - Driver GPS updates during an active trip are checked against the saved route. More than 800 metres from the route can trigger a route-deviation alert. Three or more recent samples showing less than 40 metres of movement across at least three minutes can trigger an unusual-stop alert, with a ten-minute alert cooldown.
 
-SMS/voice messages to contacts, contact ownership verification, an emergency dispatch centre, and real-world accuracy/safety validation are not connected. Users in immediate danger must contact local emergency services. Location alerts are heuristic and may produce false positives or miss events; they must not be relied on as the sole safety measure.
+SMS/voice messages to contacts, contact ownership verification, an emergency dispatch centre, and real-world accuracy/safety validation are not connected. Trusted contacts without Chaufr accounts do not receive FCM notifications. Users in immediate danger must contact local emergency services. Location alerts are heuristic and may produce false positives or miss events; they must not be relied on as the sole safety measure.
 
 ## Owner operations and reward-ride payouts
 
@@ -170,4 +170,4 @@ Authenticated passengers and drivers can report or block the other participant o
 - `GET /v1/owner/safety-reports` — owner-only moderation queue.
 - `PATCH /v1/owner/safety-reports/:reportId` — owner-only status transition.
 
-The current report/block controls are not an emergency response service. SOS calling, trusted contacts, live trip sharing and route-deviation alerts are not yet complete; do not market these as available.
+Report/block controls and SOS event recording are available in the app. SOS sends FCM alerts to the other trip participant and trusted contacts who have Chaufr accounts; it does not call emergency services. Trusted-contact management, expiring live-trip sharing and GPS-based route-deviation/unusual-stop alerts are implemented, but need production FCM configuration and real-world field validation. Do not market Chaufr SOS as an emergency response service.
