@@ -161,9 +161,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!token) return json(response, 401, { error: "Authentication required", requestId });
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
-        const sosMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/sos$/i.exec(url.pathname);
+        const sosMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/sos$/i.exec(url.pathname);
         if (request.method === "POST" && sosMatch) return json(response, 201, await mobilityService.triggerSos(user, sosMatch[1], await readJson(request)));
-        const shareMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/share$/i.exec(url.pathname);
+        const shareMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/share$/i.exec(url.pathname);
         if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
         if (request.method !== "POST" || !["/v1/safety/block", "/v1/safety/report"].includes(url.pathname)) {
           return json(response, 404, { error: "Safety endpoint not found", requestId });
@@ -231,9 +231,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!token) return json(response, 401, { error: "Authentication required", requestId });
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
-        const sosMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/sos$/i.exec(url.pathname);
+        const sosMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/sos$/i.exec(url.pathname);
         if (request.method === "POST" && sosMatch) return json(response, 201, await mobilityService.triggerSos(user, sosMatch[1], await readJson(request)));
-        const shareMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/share$/i.exec(url.pathname);
+        const shareMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/share$/i.exec(url.pathname);
         if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
       }
 
@@ -251,15 +251,15 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           if (request.method === "GET") return json(response, 200, await mobilityService.listTrustedContacts(user));
           if (request.method === "POST") return json(response, 201, await mobilityService.addTrustedContact(user, await readJson(request)));
         }
-        const contactMatch = /^\\/v1\\/passenger\\/trusted-contacts\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const contactMatch = /^\/v1\/passenger\/trusted-contacts\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (request.method === "DELETE" && contactMatch) return json(response, 200, await mobilityService.deleteTrustedContact(user, contactMatch[1]));
-        const scheduleMatch = /^\\/v1\\/passenger\\/scheduled-rides\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const scheduleMatch = /^\/v1\/passenger\/scheduled-rides\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (request.method === "DELETE" && scheduleMatch) return json(response, 200, await mobilityService.cancelSchedule(user, scheduleMatch[1], false));
-        const recurringMatch = /^\\/v1\\/passenger\\/recurring-rides\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const recurringMatch = /^\/v1\/passenger\/recurring-rides\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (request.method === "DELETE" && recurringMatch) return json(response, 200, await mobilityService.cancelSchedule(user, recurringMatch[1], true));
       }
 
-      const sharedTripMatch = /^\\/v1\\/shared-trips\\/([A-Za-z0-9_-]{32,100})$/i.exec(url.pathname);
+      const sharedTripMatch = /^\/v1\/shared-trips\/([A-Za-z0-9_-]{32,100})$/i.exec(url.pathname);
       if (request.method === "GET" && sharedTripMatch) {
         if (!mobilityService) return json(response, 503, { error: "Trip sharing requires a configured database", requestId });
         return json(response, 200, await mobilityService.getSharedTrip(sharedTripMatch[1]));
@@ -298,7 +298,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           if (request.method === "GET") return json(response, 200, await mobilityService.listTrustedContacts(user));
           if (request.method === "POST") return json(response, 201, await mobilityService.addTrustedContact(user, await readJson(request)));
         }
-        const driverContactMatch = /^\\/v1\\/driver\\/trusted-contacts\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const driverContactMatch = /^\/v1\/driver\/trusted-contacts\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (mobilityService && request.method === "DELETE" && driverContactMatch) return json(response, 200, await mobilityService.deleteTrustedContact(user, driverContactMatch[1]));
         if (request.method === "GET" && url.pathname === "/v1/driver/profile") {
           return json(response, 200, await driverService.getProfile(user));
