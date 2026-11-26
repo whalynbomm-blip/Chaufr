@@ -120,6 +120,13 @@ private fun PassengerHome() {
     var encodedRoute by remember { mutableStateOf<String?>(null) }
     var vehicle by remember { mutableStateOf("Standard") }
     var serviceTier by remember { mutableStateOf("standard") }
+    var scheduledLocalDateTime by remember { mutableStateOf("") }
+    var recurringWeekdays by remember { mutableStateOf("1,2,3,4,5") }
+    var recurringStartDate by remember { mutableStateOf("") }
+    var recurringEndDate by remember { mutableStateOf("") }
+    var recurringLocalTime by remember { mutableStateOf("08:00") }
+    var schedulingMessage by remember { mutableStateOf("") }
+    var schedulingBusy by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -643,6 +650,90 @@ private fun PassengerHome() {
                     }
                 }
                 Spacer(Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        Text("Plan ahead", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text("Use the selected route above to book a future pickup or repeat commute. Choose a route and calculate its fare first.", color = ChaufrMuted, fontSize = 11.sp)
+                        OutlinedTextField(
+                            value = scheduledLocalDateTime,
+                            onValueChange = { scheduledLocalDateTime = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("One-off pickup date and time") },
+                            placeholder = { Text("2026-12-01T07:30") },
+                            singleLine = true
+                        )
+                        Button(
+                            enabled = !schedulingBusy,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                scope.launch {
+                                    schedulingBusy = true
+                                    schedulingMessage = ""
+                                    try {
+                                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                        val routeToken = routeQuoteToken ?: throw IllegalStateException("Choose a route and calculate its fare first.")
+                                        val pickupPointValue = pickupPoint ?: throw IllegalStateException("Choose a pickup point.")
+                                        val destinationPointValue = destinationPoint ?: throw IllegalStateException("Choose a destination.")
+                                        val local = scheduledLocalDateTime.trim()
+                                        if (!Regex("^\\d{4}-\\d{2}-\\d{2}T([01]\\d|2[0-3]):[0-5]\\d$").matches(local)) throw IllegalStateException("Use YYYY-MM-DDTHH:MM, South African local time.")
+                                        val payload = org.json.JSONObject()
+                                            .put("pickupLabel", pickup).put("destinationLabel", destination)
+                                            .put("origin", org.json.JSONObject().put("latitude", pickupPointValue.latitude).put("longitude", pickupPointValue.longitude))
+                                            .put("destination", org.json.JSONObject().put("latitude", destinationPointValue.latitude).put("longitude", destinationPointValue.longitude))
+                                            .put("vehicleCategory", vehicle.lowercase()).put("routeQuoteToken", routeToken)
+                                            .put("serviceTier", serviceTier).put("redeemReward", redeemReward)
+                                            .put("scheduledFor", local + ":00+02:00")
+                                        val result = ChaufrApi.createScheduledRide(BuildConfig.CHAUFR_API_BASE_URL, token, payload)
+                                        schedulingMessage = "Ride scheduled for " + result.optString("scheduledFor")
+                                    } catch (error: Exception) { schedulingMessage = error.message ?: "Could not schedule ride." }
+                                    finally { schedulingBusy = false }
+                                }
+                            }
+                        ) { Text("Schedule this ride") }
+                        Divider(color = Color(0xFFE8ECF2))
+                        Text("Recurring commute", color = ChaufrNavy, fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(value = recurringWeekdays, onValueChange = { recurringWeekdays = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Weekdays (1=Mon … 7=Sun)") }, singleLine = true)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(value = recurringStartDate, onValueChange = { recurringStartDate = it }, modifier = Modifier.weight(1f), label = { Text("Starts YYYY-MM-DD") }, singleLine = true)
+                            OutlinedTextField(value = recurringEndDate, onValueChange = { recurringEndDate = it }, modifier = Modifier.weight(1f), label = { Text("Ends YYYY-MM-DD") }, singleLine = true)
+                        }
+                        OutlinedTextField(value = recurringLocalTime, onValueChange = { recurringLocalTime = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Pickup time (HH:MM)") }, singleLine = true)
+                        Button(
+                            enabled = !schedulingBusy,
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                scope.launch {
+                                    schedulingBusy = true
+                                    schedulingMessage = ""
+                                    try {
+                                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                        val routeToken = routeQuoteToken ?: throw IllegalStateException("Choose a route and calculate its fare first.")
+                                        val pickupPointValue = pickupPoint ?: throw IllegalStateException("Choose a pickup point.")
+                                        val destinationPointValue = destinationPoint ?: throw IllegalStateException("Choose a destination.")
+                                        val days = recurringWeekdays.split(",").map { it.trim().toInt() }
+                                        val payload = org.json.JSONObject()
+                                            .put("pickupLabel", pickup).put("destinationLabel", destination)
+                                            .put("origin", org.json.JSONObject().put("latitude", pickupPointValue.latitude).put("longitude", pickupPointValue.longitude))
+                                            .put("destination", org.json.JSONObject().put("latitude", destinationPointValue.latitude).put("longitude", destinationPointValue.longitude))
+                                            .put("vehicleCategory", vehicle.lowercase()).put("routeQuoteToken", routeToken)
+                                            .put("serviceTier", serviceTier).put("redeemReward", false)
+                                            .put("weekdays", org.json.JSONArray(days)).put("startsOn", recurringStartDate)
+                                            .put("endsOn", recurringEndDate).put("localTime", recurringLocalTime)
+                                        val result = ChaufrApi.createRecurringRide(BuildConfig.CHAUFR_API_BASE_URL, token, payload)
+                                        schedulingMessage = "Recurring commute saved. Chaufr will create the ride requests on your selected days."
+                                    } catch (error: Exception) { schedulingMessage = error.message ?: "Could not save recurring commute." }
+                                    finally { schedulingBusy = false }
+                                }
+                            }
+                        ) { Text("Save recurring commute") }
+                        if (schedulingMessage.isNotBlank()) Text(schedulingMessage, color = ChaufrGreen, fontSize = 11.sp)
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
                 PassengerAccountCard(onSignedIn = { refreshRewards(it); scope.launch {
                     try { passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, it)) } catch (_: Exception) { }
                 } })
