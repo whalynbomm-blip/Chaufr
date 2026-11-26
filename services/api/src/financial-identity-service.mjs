@@ -212,6 +212,12 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         await pool.query("UPDATE payment_refunds SET status=$1,provider_refund_id=$2,updated_at=now() WHERE provider_reference=$3",
           [status, String(data.id ?? ""), data.reference]);
         if (status === "processed") {
+          await pool.query(
+            "INSERT INTO financial_ledger(trip_id,account_type,direction,amount_minor,source_reference) " +
+            "SELECT trip_id,'refund','debit',amount_minor,'paystack-refund:' || provider_reference FROM payment_refunds WHERE provider_reference=$1 " +
+            "ON CONFLICT(account_type,source_reference) DO NOTHING",
+            [data.reference],
+          );
           await pool.query("UPDATE payment_intents SET status='refunded',updated_at=now() WHERE id=(SELECT payment_intent_id FROM payment_refunds WHERE provider_reference=$1)", [data.reference]);
           await pool.query("UPDATE trips SET payment_status='refunded' WHERE id=(SELECT trip_id FROM payment_refunds WHERE provider_reference=$1)", [data.reference]);
         }
