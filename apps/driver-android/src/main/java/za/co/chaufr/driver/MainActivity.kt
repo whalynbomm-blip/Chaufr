@@ -378,6 +378,8 @@ private fun DriverCurrentTripCard() {
   var safetyNotes by remember { mutableStateOf("") }
   var safetyMessage by remember { mutableStateOf("") }
   var safetyBusy by remember { mutableStateOf(false) }
+  var trustedName by remember { mutableStateOf("") }
+  var trustedPhone by remember { mutableStateOf("") }
 
   suspend fun refreshCurrent() {
     if (apiUrl.isBlank()) return
@@ -419,6 +421,18 @@ private fun DriverCurrentTripCard() {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
               Text("SAFETY SHIELD", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
               Text("Report a concern about this passenger or block future matching.", color = Muted, fontSize = 11.sp)
+              OutlinedTextField(value = trustedName, onValueChange = { trustedName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Trusted contact name") }, singleLine = true)
+              OutlinedTextField(value = trustedPhone, onValueChange = { trustedPhone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Contact phone (+27...)") }, singleLine = true)
+              Button(onClick = {
+                val token = SecureTokenStore.load(context)
+                if (token != null) scope.launch {
+                  try {
+                    ChaufrApi.addTrustedContact(apiUrl, token, trustedName, trustedPhone, "trusted contact")
+                    safetyMessage = "Trusted contact saved."
+                    trustedName = ""; trustedPhone = ""
+                  } catch (error: Exception) { safetyMessage = error.message ?: "Could not save trusted contact." }
+                }
+              }, modifier = Modifier.fillMaxWidth()) { Text("Save trusted contact") }
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                   val token = SecureTokenStore.load(context)
