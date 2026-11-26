@@ -245,7 +245,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const result = await pool.query(
         "SELECT t.id, t.status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
         "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, " +
-        "u.display_name AS driver_name, dp.rating AS driver_rating, v.make AS vehicle_make, v.model AS vehicle_model, " +
+        "u.id AS driver_user_id, u.display_name AS driver_name, dp.rating AS driver_rating, v.make AS vehicle_make, v.model AS vehicle_model, " +
         "v.category AS vehicle_category, p.latitude AS driver_latitude, p.longitude AS driver_longitude, " +
         "p.location_accuracy_m, p.last_seen_at " +
         "FROM trips t LEFT JOIN users u ON u.id = t.driver_user_id " +
@@ -412,7 +412,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const activation = await hasPaidActivation(pool, driver.id);
       if (!activation) throw activationRequired();
       const result = await pool.query(
-        "SELECT id, status, pickup_label, destination_label, distance_km, duration_minutes, " +
+        "SELECT id, passenger_user_id, status, pickup_label, destination_label, distance_km, duration_minutes, " +
         "quoted_total, driver_earnings, accepted_at, started_at, fare_snapshot->>'rewardRedemption' AS reward_redemption " +
         "FROM trips WHERE driver_user_id = $1 AND status IN ('accepted', 'in_progress') " +
         "ORDER BY accepted_at DESC LIMIT 1",
