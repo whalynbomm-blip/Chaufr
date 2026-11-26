@@ -476,7 +476,7 @@ private fun PassengerHome() {
                                             color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 14.sp
                                         )
                                         if (snapshot.optDouble("passengerPayable", 0.0) > 0.0 &&
-                                            snapshot.optString("paymentStatus") != "paid" &&
+                                            snapshot.optString("paymentStatus") !in listOf("paid", "refunded") &&
                                             snapshot.optString("status") !in listOf("cancelled", "expired")) {
                                             Spacer(Modifier.height(10.dp))
                                             Button(
@@ -504,6 +504,8 @@ private fun PassengerHome() {
                                             if (paymentMessage.isNotBlank()) Text(paymentMessage, color = ChaufrMuted, fontSize = 10.sp)
                                         } else if (snapshot.optString("paymentStatus") == "paid") {
                                             Text("Payment confirmed", color = ChaufrGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        } else if (snapshot.optString("paymentStatus") == "refunded") {
+                                            Text("Payment refunded", color = ChaufrGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                         }
                                         val driver = snapshot.optJSONObject("driver")
                                         if (driver != null) {
