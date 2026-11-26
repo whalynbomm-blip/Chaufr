@@ -115,6 +115,15 @@ object ChaufrApi {
         token = token
     )
 
+    suspend fun reportSafetyParticipant(baseUrl: String, token: String, tripId: String, reportedUserId: String, reasonCode: String, notes: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/report",
+            JSONObject().put("tripId", tripId).put("reportedUserId", reportedUserId)
+                .put("reasonCode", reasonCode).put("notes", notes), token)
+
+    suspend fun blockSafetyParticipant(baseUrl: String, token: String, tripId: String, blockedUserId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/block",
+            JSONObject().put("tripId", tripId).put("blockedUserId", blockedUserId), token)
+
     suspend fun passengerRewards(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/passenger/rewards", token = token)
 
