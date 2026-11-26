@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -224,6 +226,9 @@ private fun DriverAvailabilityCard() {
   var available by remember { mutableStateOf(false) }
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
+  var activationPaid by remember { mutableStateOf(false) }
+  var activationBusy by remember { mutableStateOf(false) }
+  var activationMessage by remember { mutableStateOf("") }
 
   LaunchedEffect(apiUrl) {
     val token = SecureTokenStore.load(context)
@@ -231,8 +236,20 @@ private fun DriverAvailabilityCard() {
       try {
         val profile = ChaufrApi.driverProfile(apiUrl, token)
         available = profile.optBoolean("isOnline", false)
+        activationPaid = ChaufrApi.driverActivation(apiUrl, token).optBoolean("isPaid", false)
       } catch (_: Exception) {
         available = false
+      }
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    val token = SecureTokenStore.load(context)
+    if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
+      while (true) {
+        try { activationPaid = ChaufrApi.driverActivation(apiUrl, token).optBoolean("isPaid", false) }
+        catch (_: Exception) { }
+        kotlinx.coroutines.delay(12000)
       }
     }
   }
@@ -325,12 +342,45 @@ private fun DriverAvailabilityCard() {
           Text(if (available) "You're online" else "You're offline", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Bold)
           Text("Availability is controlled by your verified driver account.", color = Muted, fontSize = 11.sp)
         }
-        Switch(checked = available, onCheckedChange = { requestPresence(it) }, enabled = !busy)
+        Switch(checked = available, onCheckedChange = { requestPresence(it) }, enabled = !busy && activationPaid)
+      }
+      if (!activationPaid) {
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF1FC))) {
+          Column(modifier = Modifier.padding(13.dp)) {
+            Text("DAILY ACTIVATION · R30", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text("Pay today's non-refundable activation fee before going online or viewing trip requests.", color = Navy, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            Button(
+              onClick = {
+                val token = SecureTokenStore.load(context)
+                if (token != null && !activationBusy) scope.launch {
+                  activationBusy = true
+                  activationMessage = ""
+                  try {
+                    val checkout = ChaufrApi.createActivationCheckout(apiUrl, token)
+                    val checkoutUrl = checkout.optString("checkoutUrl")
+                    if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("Secure payment link unavailable.")
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                    activationMessage = "Secure Paystack checkout opened. Activation updates after payment verification."
+                  } catch (error: Exception) {
+                    activationMessage = error.message ?: "Unable to start activation payment."
+                  } finally { activationBusy = false }
+                }
+              },
+              enabled = !activationBusy && apiUrl.isNotBlank(),
+              modifier = Modifier.fillMaxWidth(),
+              colors = ButtonDefaults.buttonColors(containerColor = Blue)
+            ) { Text(if (activationBusy) "Opening checkout..." else "Pay R30 securely") }
+            if (activationMessage.isNotBlank()) Text(activationMessage, color = Muted, fontSize = 10.sp)
+          }
+        }
+      } else {
+        Text("Today's R30 activation is paid.", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
       }
       Spacer(Modifier.height(12.dp))
       Button(
         onClick = { requestPresence(!available) },
-        enabled = !busy,
+        enabled = !busy && activationPaid,
         modifier = Modifier.fillMaxWidth().height(48.dp),
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (available) Navy else Blue)
