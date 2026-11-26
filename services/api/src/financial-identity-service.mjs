@@ -30,12 +30,12 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       if (purpose === "passenger_trip") {
         if (user.role !== "passenger" || !uuid.test(tripId ?? "")) throw new AuthError("A valid passenger trip is required");
         const trip = await pool.query(
-          "SELECT id, quoted_total, status, payment_status FROM trips WHERE id=$1 AND passenger_user_id=$2",
+          "SELECT id, quoted_total, passenger_payable, status, payment_status FROM trips WHERE id=$1 AND passenger_user_id=$2",
           [tripId, user.id],
         );
         if (!trip.rowCount || ["cancelled","expired"].includes(trip.rows[0].status)) throw new AuthError("Trip cannot be paid", 409);
         if (trip.rows[0].payment_status === "paid") throw new AuthError("Trip is already paid", 409);
-        amount = Number(trip.rows[0].quoted_total);
+        amount = Number(trip.rows[0].passenger_payable ?? trip.rows[0].quoted_total);\n        if (!Number.isFinite(amount) || amount <= 0) throw new AuthError("This reward ride does not require a passenger payment", 409);
       } else if (purpose === "driver_activation") {
         if (user.role !== "driver") throw new AuthError("Driver account required", 403);
         const result = await pool.query(
@@ -51,7 +51,7 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       } else throw new AuthError("Unsupported payment purpose");
       const userRow = await pool.query("SELECT email FROM users WHERE id=$1", [user.id]);
       email = userRow.rows[0]?.email;
-      if (!email) throw new AuthError("Add and verify an email address before paying by card", 409);
+      if (!email) throw new AuthError("Add an email address to your account before paying by card", 409);
       const amountMinor = minor(amount);
       if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) throw new AuthError("Invalid payment amount");
       const existing = await pool.query(
