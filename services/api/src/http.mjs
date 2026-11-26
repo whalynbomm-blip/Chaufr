@@ -117,7 +117,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
     return match?.[1] ?? null;
   };
 
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     const requestId = randomUUID();
     try {
       const url = new URL(request.url ?? "/", "http://localhost");
@@ -460,4 +460,6 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       });
     }
   });
+  server.mobilityService = mobilityService;
+  return server;
 }
