@@ -91,6 +91,20 @@ object ChaufrApi {
     }
 
 
+    suspend fun submitTripRating(baseUrl: String, token: String, tripId: String, score: Int, comment: String = ""): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/trips/$tripId/rating",
+            JSONObject().put("score", score).put("comment", comment), token)
+
+    suspend fun myRatings(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/me/ratings", token = token)
+
+    suspend fun createSupportTicket(baseUrl: String, token: String, subject: String, message: String, category: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/support/tickets",
+            JSONObject().put("subject", subject).put("message", message).put("category", category), token)
+
+    suspend fun mySupportTickets(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/support/tickets", token = token)
+
     suspend fun registerPushDevice(baseUrl: String, token: String, fcmToken: String, deviceLabel: String): JSONObject =
         requestJson(
             baseUrl, "POST", "/v1/push-devices",
