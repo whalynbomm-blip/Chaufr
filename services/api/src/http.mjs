@@ -168,7 +168,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
       if (request.method === "POST" && url.pathname === "/v1/webhooks/paystack") {
         if (!paystackService) return json(response, 503, { error: "Payment services unavailable", requestId });
         const raw = await readRaw(request, 1_000_000);
-        const result = await paystackService.handleWebhook(raw, request.headers["x-paystack-signature"] || request.headers["paystack-signature"]);
+        const result = await paystackService.handleWebhook(raw, request.headers["paystack-signature"] || request.headers["x-paystack-signature"]);
         return json(response, 200, result);
       }
 
