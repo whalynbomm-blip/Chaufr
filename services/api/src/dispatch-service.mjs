@@ -103,7 +103,6 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
       distance_km: Number(row.distance_km),
       eta_seconds: null,
     }));
-    let rankingMethod = "straight_line_distance";
     if (routesService?.computeRouteMatrix) {
       try {
         const matrix = await routesService.computeRouteMatrix(
@@ -121,7 +120,6 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
             }
           }
           if (rankedCandidates.some((row) => Number.isFinite(row.eta_seconds))) {
-            rankingMethod = "google_routes_traffic_eta";
           }
         }
       } catch {
