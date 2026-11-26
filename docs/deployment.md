@@ -36,7 +36,8 @@ Set secrets and fare configuration only in the hosting provider's private enviro
 | `FARE_QUOTE_SIGNING_SECRET` | Private random signing key for server-issued route quotes |
 | `GOOGLE_MAPS_SERVER_API_KEY` | Server-restricted key with Google Routes API enabled |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Full Firebase service-account JSON used by the API to send FCM notifications |
-| `PAYSTACK_SECRET_KEY` | Paystack South Africa secret API key; use test credentials until launch approval |\n| `PAYSTACK_WEBHOOK_SECRET` | Paystack webhook signing secret (`whsec_...`) |
+| `PAYSTACK_SECRET_KEY` | Paystack South Africa secret API key; use test credentials until launch approval |
+| `PAYSTACK_WEBHOOK_SECRET` | Paystack webhook signing secret (`whsec_...`) |
 | `PAYSTACK_CALLBACK_URL` | Optional HTTPS checkout return URL |
 | `PAYOUT_DATA_ENCRYPTION_KEY` | Separate base64 32-byte key for encrypted driver bank account numbers |
 | `DOCUMENT_ENCRYPTION_KEY` | Separate base64 32-byte key for encrypted identity and vehicle documents |
@@ -59,7 +60,8 @@ Do not use sample values as live commercial pricing without approval and validat
 1. Select and authorize the hosting provider and deployment project.
 2. Configure production fare rules and verify the health endpoint.
 3. Connect PostgreSQL and apply versioned migrations.
-4. Provision the owner account securely through a trusted database operator; public registration must never grant owner privileges.\n5. Review the owner pricing console at `/owner`, approve all fare bands and verify audit events before allowing public trip requests.
+4. Provision the owner account securely through a trusted database operator; public registration must never grant owner privileges.
+5. Review the owner pricing console at `/owner`, approve all fare bands and verify audit events before allowing public trip requests.
 5. Connect a routing provider and calculate routes on trusted server-side infrastructure.
 6. Configure monitoring, backups, privacy controls and incident response.
 7. Complete security and South African legal/compliance review.
