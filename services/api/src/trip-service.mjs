@@ -226,6 +226,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       return result.rows.map((trip) => ({
         tripId: trip.id,
         status: trip.status,
+        paymentStatus: trip.payment_status,
         pickupLabel: trip.pickup_label,
         destinationLabel: trip.destination_label,
         quotedFare: Number(trip.quoted_total),
@@ -243,7 +244,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       requireRole(passenger, "passenger");
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
       const result = await pool.query(
-        "SELECT t.id, t.status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
+        "SELECT t.id, t.status, t.payment_status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
         "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, " +
         "u.id AS driver_user_id, u.display_name AS driver_name, dp.rating AS driver_rating, v.make AS vehicle_make, v.model AS vehicle_model, " +
         "v.category AS vehicle_category, p.latitude AS driver_latitude, p.longitude AS driver_longitude, " +
