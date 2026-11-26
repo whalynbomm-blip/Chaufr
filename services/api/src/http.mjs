@@ -11,7 +11,7 @@ import { createPushService } from "./push-service.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
 import { createMobilityService } from "./mobility-service.mjs";
-import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";
+import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";\nimport { createRatingService } from "./rating-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -95,7 +95,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
   const paystackService = database ? createPaystackService(database) : null;
-  const verificationService = database ? createDriverVerificationService(database) : null;
+  const verificationService = database ? createDriverVerificationService(database) : null;\n  const ratingService = database ? createRatingService(database) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
@@ -159,7 +159,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
             "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
             "POST /v1/payments/checkout", "POST /v1/passenger/trips/:tripId/refund-request", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "GET /v1/owner/driver-earnings/eligible", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
-            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
+            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger", "POST /v1/trips/:tripId/rating", "GET /v1/me/ratings",
           ],
           database: database ? "connected" : "not_configured",
         });
@@ -518,6 +518,24 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
         return json(response, 200, await tripService.getPassengerRewards(user));
+      }
+
+      const ratingMatch = /^\\/v1\\/trips\\/([0-9a-f-]{36})\\/rating$/i.exec(url.pathname);
+      if (request.method === "POST" && ratingMatch) {
+        if (!authService || !ratingService) return json(response, 503, { error: "Rating services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        return json(response, 201, await ratingService.submitRating(user, ratingMatch[1], await readJson(request)));
+      }
+      if (request.method === "GET" && url.pathname === "/v1/me/ratings") {
+        if (!authService || !ratingService) return json(response, 503, { error: "Rating services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        return json(response, 200, await ratingService.getRatingsForUser(user));
       }
 
       if (request.method === "POST" && url.pathname === "/v1/trips") {
