@@ -127,6 +127,13 @@ object ChaufrApi {
         requestJson(baseUrl, "POST", "/v1/auth/logout", token = token)
     }
 
+    suspend fun driverActivation(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/activation", token = token)
+
+    suspend fun createActivationCheckout(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/payments/checkout",
+            JSONObject().put("purpose", "driver_activation"), token)
+
     private suspend fun requestJson(
         baseUrl: String, method: String, path: String,
         payload: JSONObject? = null, token: String? = null
