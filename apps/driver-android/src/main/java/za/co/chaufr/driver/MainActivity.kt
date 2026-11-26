@@ -374,7 +374,7 @@ private fun DriverCurrentTripCard() {
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
   var completedRewardTripId by remember { mutableStateOf<String?>(null) }
-  var commissionRequested by remember { mutableStateOf(false) }
+  var commissionRequested by remember { mutableStateOf(false) }\n  var safetyNotes by remember { mutableStateOf("") }\n  var safetyMessage by remember { mutableStateOf("") }\n  var safetyBusy by remember { mutableStateOf(false) }
 
   suspend fun refreshCurrent() {
     if (apiUrl.isBlank()) return
@@ -411,6 +411,43 @@ private fun DriverCurrentTripCard() {
           current.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
         Text("Expected earnings: R " + String.format(Locale.US, "%.2f",
           current.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        current.optString("passengerUserId").takeIf { it.isNotBlank() }?.let { passengerUserId ->
+          Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED))) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              Text("SAFETY SHIELD", color = Navy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+              Text("Report a concern about this passenger or block future matching.", color = Muted, fontSize = 11.sp)
+              OutlinedTextField(value = safetyNotes, onValueChange = { safetyNotes = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("Report details (optional)") }, shape = RoundedCornerShape(12.dp), minLines = 2)
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                  val token = SecureTokenStore.load(context)
+                  if (token == null) safetyMessage = "Sign in to submit a safety report."
+                  else scope.launch {
+                    safetyBusy = true
+                    try {
+                      ChaufrApi.reportSafetyParticipant(apiUrl, token, current.optString("tripId"), passengerUserId, "other", safetyNotes)
+                      safetyMessage = "Safety report submitted securely."
+                      safetyNotes = ""
+                    } catch (error: Exception) { safetyMessage = error.message ?: "Unable to submit report." }
+                    finally { safetyBusy = false }
+                  }
+                }, enabled = !safetyBusy, modifier = Modifier.weight(1f)) { Text("Report passenger") }
+                Button(onClick = {
+                  val token = SecureTokenStore.load(context)
+                  if (token == null) safetyMessage = "Sign in to block a passenger."
+                  else scope.launch {
+                    safetyBusy = true
+                    try {
+                      ChaufrApi.blockSafetyParticipant(apiUrl, token, current.optString("tripId"), passengerUserId)
+                      safetyMessage = "Passenger blocked from future matching."
+                    } catch (error: Exception) { safetyMessage = error.message ?: "Unable to block passenger." }
+                    finally { safetyBusy = false }
+                  }
+                }, enabled = !safetyBusy, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9F2D20))) { Text("Block passenger") }
+              }
+              if (safetyMessage.isNotBlank()) Text(safetyMessage, color = Navy, fontSize = 11.sp)
+            }
+          }
+        }
         Button(onClick = {
           scope.launch {
             busy = true
