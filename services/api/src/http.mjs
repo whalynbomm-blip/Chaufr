@@ -22,7 +22,11 @@ const json = (response, status, body) => {
   response.end(JSON.stringify(body));
 };
 
-const readRaw = async (request, maxBytes = 10 * 1024 * 1024) => {\n  const chunks = []; let size = 0;\n  for await (const chunk of request) { size += chunk.length; if (size > maxBytes) { const error = new Error("Request body too large"); error.status = 413; throw error; } chunks.push(chunk); }\n  return Buffer.concat(chunks);\n};
+const readRaw = async (request, maxBytes = 10 * 1024 * 1024) => {
+  const chunks = []; let size = 0;
+  for await (const chunk of request) { size += chunk.length; if (size > maxBytes) { const error = new Error("Request body too large"); error.status = 413; throw error; } chunks.push(chunk); }
+  return Buffer.concat(chunks);
+};
 
 const readJson = async (request, maxBytes = 32_768) => {
   let raw = "";
@@ -89,7 +93,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const pushService = database ? createPushService(database, fcmSender) : null;
   const safetyService = database ? createSafetyService(database) : null;
   const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
-  const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;\n  const paystackService = database ? createPaystackService(database) : null;\n  const verificationService = database ? createDriverVerificationService(database) : null;
+  const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
+  const paystackService = database ? createPaystackService(database) : null;
+  const verificationService = database ? createDriverVerificationService(database) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
   const checkAuthRateLimit = (request, route) => {
