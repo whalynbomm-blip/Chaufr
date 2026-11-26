@@ -538,7 +538,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         return json(response, 404, { error: "Support endpoint not found", requestId });
       }
 
-      const ratingMatch = /^\\/v1\\/trips\\/([0-9a-f-]{36})\\/rating$/i.exec(url.pathname);
+      const ratingMatch = /^\/v1\/trips\/([0-9a-f-]{36})\/rating$/i.exec(url.pathname);
       if (request.method === "POST" && ratingMatch) {
         if (!authService || !ratingService) return json(response, 503, { error: "Rating services unavailable", requestId });
         const token = getBearerToken(request);
