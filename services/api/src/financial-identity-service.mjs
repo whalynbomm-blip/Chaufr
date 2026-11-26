@@ -34,7 +34,7 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
           [tripId, user.id],
         );
         if (!trip.rowCount || ["cancelled","expired"].includes(trip.rows[0].status)) throw new AuthError("Trip cannot be paid", 409);
-        if (trip.rows[0].payment_status === "paid") throw new AuthError("Trip is already paid", 409);
+        if (["paid","refunded"].includes(trip.rows[0].payment_status)) throw new AuthError("Trip payment is already settled", 409);
         amount = Number(trip.rows[0].passenger_payable ?? trip.rows[0].quoted_total);
         if (!Number.isFinite(amount) || amount <= 0) throw new AuthError("This reward ride does not require a passenger payment", 409);
       } else if (purpose === "driver_activation") {
