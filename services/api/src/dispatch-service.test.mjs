@@ -58,5 +58,5 @@ test("dispatch falls back to nearest eligible driver when Google Routes fails", 
     { async computeRouteMatrix() { throw new Error("provider unavailable"); } },
   );
   assert.equal(result.driverUserId, "driver-near");
-  assert.equal(result.rankingMethod, "straight_line_distance");
+  assert.equal(result.rankingMethod, "chaufr_fairmatch_v1");
 });
