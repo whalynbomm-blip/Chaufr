@@ -181,7 +181,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "GET" && url.pathname === "/v1/owner/safety-reports") {
           return json(response, 200, await ownerService.listSafetyReports(user));
         }
-        const safetyReportReviewMatch = /^\\/v1\\/owner\\/safety-reports\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const safetyReportReviewMatch = /^\/v1\/owner\/safety-reports\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (request.method === "PATCH" && safetyReportReviewMatch) {
           const body = await readJson(request);
           return json(response, 200, await ownerService.reviewSafetyReport(user, safetyReportReviewMatch[1], body.status));
