@@ -326,3 +326,41 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     await admin.end();
   }
 });
+
+test("driver Advantage preferences validate and persist driver profit controls", async () => {
+  let savedParams;
+  const pool = {
+    async query(sql, params) {
+      if (String(sql).includes("INSERT INTO driver_advantage_settings")) {
+        savedParams = params;
+        return { rows: [{
+          preferred_area_labels: params[1],
+          minimum_net_per_trip: params[2],
+          maximum_pickup_distance_km: params[3],
+          fuel_price_per_litre: params[4],
+          operating_cost_per_km: params[5],
+          updated_at: "2026-11-26T10:00:00Z",
+        }] };
+      }
+      return { rows: [] };
+    },
+    async connect() { throw new Error("connect should not be used for settings test"); },
+  };
+  const service = createDriverService(pool, testKey);
+  const driver = { id: "driver-settings-id", role: "driver" };
+  const saved = await service.updateAdvantageSettings(driver, {
+    preferredAreaLabels: ["Pinelands", "CBD"],
+    minimumNetPerTrip: 70,
+    maximumPickupDistanceKm: 8,
+    fuelPricePerLitre: 25,
+    operatingCostPerKm: 1.5,
+  });
+  assert.deepEqual(saved.preferredAreaLabels, ["Pinelands", "CBD"]);
+  assert.equal(saved.minimumNetPerTrip, 70);
+  assert.equal(saved.maximumPickupDistanceKm, 8);
+  assert.equal(saved.fuelPricePerLitre, 25);
+  assert.equal(saved.operatingCostPerKm, 1.5);
+  assert.equal(savedParams[0], driver.id);
+  await assert.rejects(() => service.updateAdvantageSettings(driver, { minimumNetPerTrip: -5 }), /minimumNetPerTrip/);
+  await assert.rejects(() => service.updateAdvantageSettings({ id: "p", role: "passenger" }, {}), /Driver account required/);
+});
