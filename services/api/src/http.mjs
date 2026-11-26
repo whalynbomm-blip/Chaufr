@@ -139,7 +139,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /health", "GET /v1", "POST /v1/fare-quotes", "POST /v1/routes/preview",
             "POST /v1/auth/register", "POST /v1/auth/login",
             "GET /v1/auth/me", "POST /v1/auth/logout", "POST/DELETE /v1/push-devices",
-            "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence",
+            "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence", "GET/PUT /v1/driver/advantage-settings",
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
@@ -217,6 +217,12 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "driver") return json(response, 403, { error: "Driver account required", requestId });
 
+        if (request.method === "GET" && url.pathname === "/v1/driver/advantage-settings") {
+          return json(response, 200, await driverService.getAdvantageSettings(user));
+        }
+        if (request.method === "PUT" && url.pathname === "/v1/driver/advantage-settings") {
+          return json(response, 200, await driverService.updateAdvantageSettings(user, await readJson(request)));
+        }
         if (request.method === "GET" && url.pathname === "/v1/driver/profile") {
           return json(response, 200, await driverService.getProfile(user));
         }
