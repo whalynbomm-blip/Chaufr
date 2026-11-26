@@ -294,6 +294,12 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "PUT" && url.pathname === "/v1/driver/advantage-settings") {
           return json(response, 200, await driverService.updateAdvantageSettings(user, await readJson(request)));
         }
+        if (mobilityService && url.pathname === "/v1/driver/trusted-contacts") {
+          if (request.method === "GET") return json(response, 200, await mobilityService.listTrustedContacts(user));
+          if (request.method === "POST") return json(response, 201, await mobilityService.addTrustedContact(user, await readJson(request)));
+        }
+        const driverContactMatch = /^\\/v1\\/driver\\/trusted-contacts\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (mobilityService && request.method === "DELETE" && driverContactMatch) return json(response, 200, await mobilityService.deleteTrustedContact(user, driverContactMatch[1]));
         if (request.method === "GET" && url.pathname === "/v1/driver/profile") {
           return json(response, 200, await driverService.getProfile(user));
         }
