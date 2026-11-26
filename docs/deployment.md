@@ -36,7 +36,7 @@ Set secrets and fare configuration only in the hosting provider's private enviro
 | `FARE_QUOTE_SIGNING_SECRET` | Private random signing key for server-issued route quotes |
 | `GOOGLE_MAPS_SERVER_API_KEY` | Server-restricted key with Google Routes API enabled |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Full Firebase service-account JSON used by the API to send FCM notifications |
-| `PAYSTACK_SECRET_KEY` | Paystack South Africa secret API key; use test credentials until launch approval |
+| `PAYSTACK_SECRET_KEY` | Paystack South Africa secret API key; use test credentials until launch approval |\n| `PAYSTACK_WEBHOOK_SECRET` | Paystack webhook signing secret (`whsec_...`) |
 | `PAYSTACK_CALLBACK_URL` | Optional HTTPS checkout return URL |
 | `PAYOUT_DATA_ENCRYPTION_KEY` | Separate base64 32-byte key for encrypted driver bank account numbers |
 | `DOCUMENT_ENCRYPTION_KEY` | Separate base64 32-byte key for encrypted identity and vehicle documents |
