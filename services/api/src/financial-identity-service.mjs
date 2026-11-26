@@ -241,13 +241,13 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
           typeof accountHolderName !== "string" || accountHolderName.trim().length < 3 || accountHolderName.length > 100) {
         throw new AuthError("Valid account holder name and South African bank details are required");
       }
+      const key = Buffer.from(process.env.PAYOUT_DATA_ENCRYPTION_KEY || "", "base64");
+      if (key.length !== 32) throw new AuthError("Payout data encryption is not configured", 503);
       // Paystack's ZA docs state that bank-account resolution is unavailable for South African accounts.
       // Create the recipient with the driver's supplied account-holder name, then require manual proof review.
       const recipient = await call("/transferrecipient", "POST", {
         type: "basa", name: accountHolderName.trim(), account_number: accountNumber, bank_code: bankCode, currency: "ZAR",
       });
-      const key = Buffer.from(process.env.PAYOUT_DATA_ENCRYPTION_KEY || "", "base64");
-      if (key.length !== 32) throw new AuthError("Payout data encryption is not configured", 503);
       const iv = randomBytes(12);
       const cipher = createCipheriv("aes-256-gcm", key, iv);
       const encrypted = Buffer.concat([cipher.update(accountNumber, "utf8"), cipher.final()]);
