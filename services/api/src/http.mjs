@@ -235,6 +235,18 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           const rows = await database.query("SELECT r.id,r.trip_id,r.passenger_user_id,u.display_name AS passenger_name,r.amount_minor,r.currency,r.reason,r.status,r.created_at,r.updated_at FROM payment_refunds r JOIN users u ON u.id=r.passenger_user_id ORDER BY r.created_at DESC LIMIT 300");
           return json(response, 200, { refunds: rows.rows.map(row => ({...row, amount: Number(row.amount_minor)/100})) });
         }
+        const refundReviewMatch = /^\/v1\/owner\/refunds\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && refundReviewMatch) {
+          const body = await readJson(request);
+          if (body.status !== "rejected") return json(response, 400, { error: "Only rejection is available here; initiate approved refunds through the process endpoint", requestId });
+          const updated = await database.query(
+            "UPDATE payment_refunds SET status='rejected',reviewed_by=$2,updated_at=now() WHERE id=$1 AND status='requested' RETURNING id,status",
+            [refundReviewMatch[1], user.id],
+          );
+          if (!updated.rowCount) return json(response, 404, { error: "Refund request not found or already reviewed", requestId });
+          await database.query("INSERT INTO audit_events(actor_user_id,action,resource_type,resource_id,details) VALUES($1,'refund.rejected','payment_refund',$2,'{}'::jsonb)", [user.id, refundReviewMatch[1]]);
+          return json(response, 200, { refund: updated.rows[0] });
+        }
         const refundProcessMatch = /^\/v1\/owner\/refunds\/([0-9a-f-]{36})\/process$/i.exec(url.pathname);
         if (request.method === "POST" && refundProcessMatch) {
           return json(response, 200, await paystackService.requestRefund(user, refundProcessMatch[1]));
