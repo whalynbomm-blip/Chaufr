@@ -44,6 +44,12 @@ object ChaufrApi {
         requestJson(baseUrl, "POST", "/v1/auth/logout", token = token)
     }
 
+    suspend fun createPaymentCheckout(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(
+            baseUrl, "POST", "/v1/payments/checkout",
+            JSONObject().put("purpose", "passenger_trip").put("tripId", tripId), token
+        )
+
     private suspend fun requestJson(
         baseUrl: String, method: String, path: String,
         payload: JSONObject? = null, token: String? = null
