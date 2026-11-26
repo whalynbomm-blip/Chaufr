@@ -1,4 +1,5 @@
 import { AuthError } from "./auth-service.mjs";
+import { estimateDriverTripProfit, rankFairMatchCandidates } from "./chaufr-advantage.mjs";
 
 const OFFER_SECONDS = 25;
 
@@ -41,7 +42,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
     }
 
     const candidate = await client.query(
-      `SELECT p.driver_user_id, p.latitude, p.longitude,
+      `SELECT p.driver_user_id, p.latitude, p.longitude, v.fuel_consumption_l_per_100km,
               (6371 * acos(LEAST(1, GREATEST(-1,
                 cos(radians($1)) * cos(radians(p.latitude)) *
                 cos(radians(p.longitude) - radians($2)) +
@@ -118,15 +119,43 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
         // Dispatch must continue if Google Routes is temporarily unavailable.
       }
     }
-    rankedCandidates.sort((a, b) => {
-      if (rankingMethod === "google_routes_traffic_eta") {
-        const aEta = Number.isFinite(a.eta_seconds) ? a.eta_seconds : Number.POSITIVE_INFINITY;
-        const bEta = Number.isFinite(b.eta_seconds) ? b.eta_seconds : Number.POSITIVE_INFINITY;
-        if (aEta !== bEta) return aEta - bEta;
-      }
-      return a.distance_km - b.distance_km;
+    // FairMatch replaces ETA/distance-only ranking. SQL already enforces
+    // verified, paid, approved vehicle, online, and no active trip/offer.
+    const fare = Number(trip.quoted_total ?? 0);
+    const driverGross = Number(trip.driver_earnings ?? fare);
+    const commissionRate = fare > 0
+      ? Math.max(0, Math.min(0.99, Number(trip.platform_commission ?? 0) / fare))
+      : 0.12;
+    const tripKm = Number(trip.distance_km ?? 0);
+    const fairMatchRows = rankedCandidates.map((row) => {
+      const etaMinutes = Number.isFinite(row.eta_seconds)
+        ? row.eta_seconds / 60
+        : Math.max(1, row.distance_km * 3);
+      const profit = estimateDriverTripProfit({
+        passengerFareZar: fare,
+        commissionRate,
+        tripDistanceKm: tripKm,
+        pickupDistanceKm: row.distance_km,
+        fuelConsumptionLPer100Km: Number(row.fuel_consumption_l_per_100km ?? 8),
+        fuelPricePerLitreZar: 0,
+        operatingCostPerKmZar: 0,
+      });
+      return {
+        ...row,
+        eta_minutes: etaMinutes,
+        estimated_net_zar: Number((driverGross - profit.estimatedCostZar).toFixed(2)),
+        verified: true,
+        activationPaid: true,
+        vehicleApproved: true,
+        available: true,
+        safetyEligible: true,
+        preferredAreaMatch: false,
+      };
     });
-    const selectedCandidate = rankedCandidates[0];
+    const ranked = rankFairMatchCandidates(fairMatchRows);
+    const selectedCandidate = ranked[0]?.candidate ?? rankedCandidates[0];
+    const matchDetails = ranked[0]?.match ?? null;
+    const rankingMethod = "chaufr_fairmatch_v1";
 
     const offer = await client.query(
       "INSERT INTO trip_offers (trip_id, driver_user_id, status, expires_at) " +
@@ -136,7 +165,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
     );
     await client.query(
       "INSERT INTO trip_events (trip_id, event_type, details) VALUES ($1, 'dispatch_offered', $2::jsonb)",
-      [tripId, JSON.stringify({ driverUserId: offer.rows[0].driver_user_id, distanceKm: selectedCandidate.distance_km, etaSeconds: selectedCandidate.eta_seconds, rankingMethod, expiresAt: offer.rows[0].expires_at })],
+      [tripId, JSON.stringify({ driverUserId: offer.rows[0].driver_user_id, distanceKm: selectedCandidate.distance_km, etaSeconds: selectedCandidate.eta_seconds, estimatedNetZar: selectedCandidate.estimated_net_zar, fairMatchScore: matchDetails?.score, fairMatchComponents: matchDetails?.components, rankingMethod, expiresAt: offer.rows[0].expires_at })],
     );
     await client.query("COMMIT");
     return {
@@ -146,6 +175,8 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
       distanceKm: selectedCandidate.distance_km,
       estimatedPickupMinutes: Number.isFinite(selectedCandidate.eta_seconds) ? Math.ceil(selectedCandidate.eta_seconds / 60) : null,
       rankingMethod,
+      fairMatchScore: matchDetails?.score,
+      estimatedNetZar: selectedCandidate.estimated_net_zar,
     };
   } catch (error) {
     await client.query("ROLLBACK");
