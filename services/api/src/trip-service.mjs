@@ -713,6 +713,13 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'completed')",
           [tripId, driver.id],
         );
+        await client.query(
+          "INSERT INTO financial_ledger(trip_id,account_type,direction,amount_minor,source_reference) " +
+          "SELECT id,'driver_earnings','credit',round(driver_earnings * 100)::bigint,'trip-earnings:' || id::text " +
+          "FROM trips WHERE id=$1 AND payment_status='paid' AND COALESCE(fare_snapshot->>'rewardRedemption','false') <> 'true' " +
+          "ON CONFLICT(account_type,source_reference) DO NOTHING",
+          [tripId],
+        );
         const passenger = await client.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
         const passengerId = passenger.rows[0].passenger_user_id;
         await client.query(
