@@ -119,6 +119,7 @@ private fun PassengerHome() {
     var routeQuoteToken by remember { mutableStateOf<String?>(null) }
     var encodedRoute by remember { mutableStateOf<String?>(null) }
     var vehicle by remember { mutableStateOf("Standard") }
+    var serviceTier by remember { mutableStateOf("standard") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -371,6 +372,26 @@ private fun PassengerHome() {
                                                         Spacer(Modifier.height(11.dp))
                             Divider(color = Color(0xFFE8ECF2))
                             Spacer(Modifier.height(10.dp))
+                            Text("Choose your ride experience", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                listOf("saver" to "Saver", "standard" to "Standard", "priority" to "Priority").forEach { (tier, label) ->
+                                    FilterChip(
+                                        selected = serviceTier == tier,
+                                        onClick = { serviceTier = tier },
+                                        label = { Text(label, fontSize = 11.sp) }
+                                    )
+                                }
+                            }
+                            Text(
+                                when (serviceTier) {
+                                    "saver" -> "Flexible pickup matching. Same approved fare; no hidden discount or surcharge."
+                                    "priority" -> "Prioritises quicker eligible driver matching. Same approved fare."
+                                    else -> "Normal Chaufr matching and pickup experience."
+                                },
+                                color = ChaufrMuted, fontSize = 10.sp
+                            )
+                            Spacer(Modifier.height(10.dp))
                             Row {
                                 Text("Passenger total", fontWeight = FontWeight.Bold, color = ChaufrNavy)
                                 Spacer(Modifier.weight(1f))
@@ -395,7 +416,8 @@ private fun PassengerHome() {
                                                 destinationPoint ?: throw IllegalStateException("Choose a destination point on the map."),
                                                 vehicle.lowercase(),
                                                 routeQuoteToken ?: throw IllegalStateException("Calculate the fare again before requesting this ride."),
-                                                redeemReward
+                                                redeemReward,
+                                                serviceTier
                                             )
                                             activePassengerTripId = result.optString("tripId").takeIf { it.isNotBlank() }
                                             tripStatusSnapshot = null
