@@ -126,6 +126,37 @@ object ChaufrApi {
         requestJson(baseUrl, "POST", "/v1/safety/block",
             JSONObject().put("tripId", tripId).put("blockedUserId", blockedUserId), token)
 
+    suspend fun createScheduledRide(baseUrl: String, token: String, booking: JSONObject): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/passenger/scheduled-rides", booking, token)
+
+    suspend fun createRecurringRide(baseUrl: String, token: String, rule: JSONObject): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/passenger/recurring-rides", rule, token)
+
+    suspend fun passengerScheduledRides(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/passenger/scheduled-rides", token = token)
+
+    suspend fun cancelScheduledRide(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "DELETE", "/v1/passenger/scheduled-rides/$id", token = token)
+
+    suspend fun cancelRecurringRide(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "DELETE", "/v1/passenger/recurring-rides/$id", token = token)
+
+    suspend fun trustedContacts(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/passenger/trusted-contacts", token = token)
+
+    suspend fun addTrustedContact(baseUrl: String, token: String, name: String, phone: String, relationship: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/passenger/trusted-contacts",
+            JSONObject().put("contactName", name).put("phoneE164", phone).put("relationship", relationship), token)
+
+    suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "DELETE", "/v1/passenger/trusted-contacts/$id", token = token)
+
+    suspend fun triggerSafetySos(baseUrl: String, token: String, tripId: String, note: String = ""): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/sos", JSONObject().put("note", note), token)
+
+    suspend fun createTripShare(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/share", token = token)
+
     suspend fun passengerRewards(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/passenger/rewards", token = token)
 
