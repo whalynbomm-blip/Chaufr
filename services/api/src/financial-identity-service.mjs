@@ -147,7 +147,18 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
           if (locked.rows[0].status === "pending") {
             await client.query("UPDATE payment_intents SET status='paid',provider='paystack',provider_reference=$2,paid_at=now(),updated_at=now() WHERE id=$1", [intentId, verified.reference]);
             if (locked.rows[0].purpose === "passenger_trip") {
-              await client.query("UPDATE trips SET payment_status='paid' WHERE id=$1 AND passenger_user_id=$2 AND status<>'cancelled'", [locked.rows[0].trip_id, locked.rows[0].user_id]);
+              const paidTrip = await client.query(
+                "UPDATE trips SET payment_status='paid' WHERE id=$1 AND passenger_user_id=$2 RETURNING status",
+                [locked.rows[0].trip_id, locked.rows[0].user_id],
+              );
+              if (paidTrip.rows[0]?.status === "cancelled") {
+                await client.query(
+                  "INSERT INTO payment_refunds(trip_id,payment_intent_id,passenger_user_id,amount_minor,reason,requested_by) " +
+                  "VALUES($1,$2,$3,$4,'Late card payment received after passenger cancellation',$3) " +
+                  "ON CONFLICT DO NOTHING",
+                  [locked.rows[0].trip_id, intentId, locked.rows[0].user_id, locked.rows[0].amount_minor],
+                );
+              }
               await client.query(
                 "INSERT INTO financial_ledger(trip_id,account_type,direction,amount_minor,source_reference) " +
                 "SELECT id,'driver_earnings','credit',round(driver_earnings * 100)::bigint,'trip-earnings:' || id::text " +
