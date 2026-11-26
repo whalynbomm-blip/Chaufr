@@ -154,6 +154,7 @@ private fun DriverComplianceCard() {
   val scope = rememberCoroutineScope()
   val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
   var accountNumber by remember { mutableStateOf("") }
+  var accountHolderName by remember { mutableStateOf("") }
   var bankCode by remember { mutableStateOf("") }
   var bankName by remember { mutableStateOf("") }
   var accountMessage by remember { mutableStateOf("Add a bank account to receive completed-trip and reward-ride payouts.") }
@@ -211,12 +212,17 @@ private fun DriverComplianceCard() {
   val licencePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
     uploadDocument(uri, "drivers_licence")
   }
+  val bankProofPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    uploadDocument(uri, "bank_confirmation")
+  }
 
   Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
     colors = CardDefaults.cardColors(containerColor = Color.White)) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
       Text("PAYOUTS & VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
       Text("Bank account for payouts", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+      OutlinedTextField(value = accountHolderName, onValueChange = { accountHolderName = it.take(100) },
+        modifier = Modifier.fillMaxWidth(), label = { Text("Account holder full name") }, singleLine = true)
       OutlinedTextField(value = accountNumber, onValueChange = { accountNumber = it.filter(Char::isDigit).take(20) },
         modifier = Modifier.fillMaxWidth(), label = { Text("Bank account number") }, singleLine = true)
       OutlinedTextField(value = bankCode, onValueChange = { bankCode = it.filter(Char::isDigit).take(12) },
@@ -229,13 +235,13 @@ private fun DriverComplianceCard() {
         else scope.launch {
           busy = true
           try {
-            val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, bankCode, bankName)
+            val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, accountHolderName, bankCode, bankName)
             accountMessage = "Bank account verified for ${result.optString("accountName")}."
             accountNumber = ""
           } catch (error: Exception) { accountMessage = error.message ?: "Could not verify bank account." }
           finally { busy = false }
         }
-      }, enabled = !busy && accountNumber.length >= 6 && bankCode.isNotBlank() && bankName.isNotBlank(),
+      }, enabled = !busy && accountNumber.length >= 6 && accountHolderName.trim().length >= 3 && bankCode.isNotBlank() && bankName.isNotBlank(),
         modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Verify and save bank account") }
       Text(accountMessage, color = Muted, fontSize = 10.sp)
       Spacer(Modifier.height(4.dp))
