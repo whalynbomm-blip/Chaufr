@@ -40,7 +40,8 @@ A driver profile is automatically marked verified only after at least one identi
 
 ## Required production secrets
 
-- `PAYSTACK_SECRET_KEY`: Paystack secret API key (use test key in staging, live key only after merchant approval).\n- `PAYSTACK_WEBHOOK_SECRET`: Paystack webhook signing secret (`whsec_...`) for timestamped `Paystack-Signature` headers. Legacy `x-paystack-signature` remains supported while Paystack rotates webhook signing modes.
+- `PAYSTACK_SECRET_KEY`: Paystack secret API key (use test key in staging, live key only after merchant approval).
+- `PAYSTACK_WEBHOOK_SECRET`: Paystack webhook signing secret (`whsec_...`) for timestamped `Paystack-Signature` headers. Legacy `x-paystack-signature` remains supported while Paystack rotates webhook signing modes.
 - `PAYOUT_DATA_ENCRYPTION_KEY`: base64-encoded 32-byte key for stored driver bank account numbers.
 - `DOCUMENT_ENCRYPTION_KEY`: base64-encoded 32-byte key for identity/vehicle document contents.
 - `PAYSTACK_CALLBACK_URL`: optional HTTPS return URL after hosted checkout.
