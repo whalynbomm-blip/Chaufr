@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
@@ -190,11 +191,11 @@ private fun PassengerHome() {
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().background(ChaufrNavy).padding(horizontal = 22.dp, vertical = 25.dp)
+                modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 27.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        modifier = Modifier.size(42.dp).background(ChaufrBlue, RoundedCornerShape(13.dp)),
+                        modifier = Modifier.size(42.dp).background(ChaufrBlue, RoundedCornerShape(20.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text("C", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Black)
@@ -207,16 +208,16 @@ private fun PassengerHome() {
                     Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(24.dp))
-                Text("Start your journey", color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Text("Start your journey", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Set your route and preview a clear fixed fare.", color = Color(0xFFB8C7DA), fontSize = 13.sp)
             }
 
             Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 18.dp)) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(26.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    elevation = CardDefaults.cardElevation(defaultElevation = 5.dp)
                 ) {
                     Column(modifier = Modifier.padding(17.dp)) {
                         Text("YOUR JOURNEY", color = ChaufrMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
@@ -239,7 +240,7 @@ private fun PassengerHome() {
                             label = { Text("Pickup location") },
                             placeholder = { Text("Enter pickup address") },
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = RoundedCornerShape(18.dp)
                         )
                         Spacer(Modifier.height(10.dp))
                         OutlinedTextField(
@@ -321,7 +322,7 @@ private fun PassengerHome() {
                             shape = RoundedCornerShape(13.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ChaufrBlue)
                         ) {
-                            Text(if (loading) "Getting fare..." else "Preview fixed fare", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            Text(if (loading) "Finding your fare..." else "✨  Preview my fare", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                         if (message.isNotEmpty()) {
                             Spacer(Modifier.height(9.dp))
