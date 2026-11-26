@@ -768,7 +768,7 @@ private fun PassengerHome() {
                                         val recurring = result.optJSONArray("recurring")
                                         val next = (0 until (scheduled?.length() ?: 0)).mapNotNull { scheduled?.optJSONObject(it)?.let { row -> "Pickup " + row.optString("scheduled_for") + " · " + row.optString("status") } }
                                         val repeats = (0 until (recurring?.length() ?: 0)).mapNotNull { recurring?.optJSONObject(it)?.let { row -> "Repeat " + row.optString("weekdays") + " at " + row.optString("local_time") + " · " + row.optString("status") } }
-                                        scheduleSummary = (next + repeats).take(8).joinToString("\\n").ifBlank { "No future bookings or recurring commutes yet." }
+                                        scheduleSummary = (next + repeats).take(8).joinToString("\n").ifBlank { "No future bookings or recurring commutes yet." }
                                     } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to load bookings." }
                                 }
                             }
