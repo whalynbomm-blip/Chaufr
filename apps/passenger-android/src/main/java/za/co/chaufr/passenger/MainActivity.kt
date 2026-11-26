@@ -182,7 +182,7 @@ private fun PassengerHome() {
                 tripStatusSnapshot = snapshot
                 val status = snapshot.optString("status")
                 if (status in listOf("completed", "cancelled", "expired") &&
-                    (status != "completed" || snapshot.optString("paymentStatus") == "paid" || snapshot.optDouble("passengerPayable", 0.0) <= 0.0)) {
+                    (status != "completed" || snapshot.optString("paymentStatus") in listOf("paid", "refunded") || snapshot.optDouble("passengerPayable", 0.0) <= 0.0)) {
                     try {
                         val rewards = ChaufrApi.passengerRewards(apiBase, token)
                         rewardsTickets = rewards.optInt("tickets", rewardsTickets)
