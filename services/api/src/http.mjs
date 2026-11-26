@@ -9,6 +9,7 @@ import { createOwnerService } from "./owner-service.mjs";
 import { createGoogleRoutesService } from "./google-routes.mjs";
 import { createPushService } from "./push-service.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
+import { createSafetyService } from "./safety-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -82,6 +83,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const fcmSender = createFcmSender();
   const pushService = database ? createPushService(database, fcmSender) : null;
+  const safetyService = database ? createSafetyService(database) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
@@ -143,11 +145,28 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
+            "POST /v1/safety/block", "POST /v1/safety/report",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/financial-ledger",
           ],
           database: database ? "connected" : "not_configured",
         });
+      }
+
+      if (url.pathname.startsWith("/v1/safety/")) {
+        if (!authService || !safetyService) return json(response, 503, { error: "Safety Shield requires a configured database", requestId });
+        if (request.method !== "POST" || !["/v1/safety/block", "/v1/safety/report"].includes(url.pathname)) {
+          return json(response, 404, { error: "Safety endpoint not found", requestId });
+        }
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        const body = await readJson(request);
+        if (url.pathname === "/v1/safety/block") {
+          return json(response, 201, await safetyService.blockParticipant(user, body));
+        }
+        return json(response, 201, await safetyService.reportParticipant(user, body));
       }
 
       if (url.pathname.startsWith("/v1/owner/")) {
