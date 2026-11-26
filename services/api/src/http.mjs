@@ -237,7 +237,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
       }
 
-      if (url.pathname.startsWith("/v1/passenger/") && (url.pathname === "/v1/passenger/scheduled-rides" || url.pathname === "/v1/passenger/recurring-rides" || url.pathname.startsWith("/v1/passenger/trusted-contacts"))) {
+      if (url.pathname.startsWith("/v1/passenger/") && (url.pathname === "/v1/passenger/scheduled-rides" || url.pathname.startsWith("/v1/passenger/recurring-rides") || url.pathname.startsWith("/v1/passenger/scheduled-rides/") || url.pathname.startsWith("/v1/passenger/trusted-contacts"))) {
         if (!authService || !mobilityService) return json(response, 503, { error: "Passenger mobility services require a configured database", requestId });
         const token = getBearerToken(request);
         if (!token) return json(response, 401, { error: "Authentication required", requestId });
