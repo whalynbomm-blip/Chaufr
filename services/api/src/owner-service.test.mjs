@@ -75,9 +75,11 @@ test("owner reward payout review only allows requested-to-approved/rejected and 
     () => service.reviewRewardCommissionRequest(owner, "00000000-0000-4000-8000-000000000001", "rejected"),
     (error) => error.status === 409,
   );
-  const paid = await service.reviewRewardCommissionRequest(owner, "00000000-0000-4000-8000-000000000001", "paid");
-  assert.equal(paid.request.status, "paid");
-  assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 2);
+  await assert.rejects(
+    () => service.reviewRewardCommissionRequest(owner, "00000000-0000-4000-8000-000000000001", "paid"),
+    (error) => error.status === 400,
+  );
+  assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 1);
 });
 
 
