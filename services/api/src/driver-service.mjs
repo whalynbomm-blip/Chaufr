@@ -116,6 +116,68 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
       }
     },
 
+    async getAdvantageSettings(user) {
+      if (user?.role !== "driver") throw new AuthError("Driver account required", 403);
+      const result = await pool.query(
+        "SELECT preferred_area_labels, minimum_net_per_trip, maximum_pickup_distance_km, " +
+        "fuel_price_per_litre, operating_cost_per_km, updated_at " +
+        "FROM driver_advantage_settings WHERE driver_user_id = $1",
+        [user.id],
+      );
+      const row = result.rows[0] ?? {};
+      return {
+        preferredAreaLabels: row.preferred_area_labels ?? [],
+        minimumNetPerTrip: Number(row.minimum_net_per_trip ?? 0),
+        maximumPickupDistanceKm: Number(row.maximum_pickup_distance_km ?? 15),
+        fuelPricePerLitre: Number(row.fuel_price_per_litre ?? 0),
+        operatingCostPerKm: Number(row.operating_cost_per_km ?? 0),
+        updatedAt: row.updated_at ?? null,
+      };
+    },
+
+    async updateAdvantageSettings(user, input = {}) {
+      if (user?.role !== "driver") throw new AuthError("Driver account required", 403);
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new AuthError("Settings must be an object");
+      const areas = input.preferredAreaLabels ?? [];
+      if (!Array.isArray(areas) || areas.length > 20 ||
+          areas.some((area) => typeof area !== "string" || area.trim().length < 1 || area.trim().length > 80)) {
+        throw new AuthError("preferredAreaLabels must contain up to 20 area names (1–80 characters each)");
+      }
+      const minimumNet = Number(input.minimumNetPerTrip ?? 0);
+      const maxPickup = Number(input.maximumPickupDistanceKm ?? 15);
+      const fuelPrice = Number(input.fuelPricePerLitre ?? 0);
+      const operatingCost = Number(input.operatingCostPerKm ?? 0);
+      if (!Number.isFinite(minimumNet) || minimumNet < 0 || minimumNet > 10000) throw new AuthError("minimumNetPerTrip must be between 0 and R10000");
+      if (!Number.isFinite(maxPickup) || maxPickup < 0 || maxPickup > 100) throw new AuthError("maximumPickupDistanceKm must be between 0 and 100");
+      if (!Number.isFinite(fuelPrice) || fuelPrice < 0 || fuelPrice > 1000) throw new AuthError("fuelPricePerLitre must be between 0 and R1000");
+      if (!Number.isFinite(operatingCost) || operatingCost < 0 || operatingCost > 1000) throw new AuthError("operatingCostPerKm must be between 0 and R1000");
+      const result = await pool.query(
+        `INSERT INTO driver_advantage_settings
+          (driver_user_id, preferred_area_labels, minimum_net_per_trip,
+           maximum_pickup_distance_km, fuel_price_per_litre, operating_cost_per_km, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, now())
+         ON CONFLICT (driver_user_id) DO UPDATE SET
+          preferred_area_labels = EXCLUDED.preferred_area_labels,
+          minimum_net_per_trip = EXCLUDED.minimum_net_per_trip,
+          maximum_pickup_distance_km = EXCLUDED.maximum_pickup_distance_km,
+          fuel_price_per_litre = EXCLUDED.fuel_price_per_litre,
+          operating_cost_per_km = EXCLUDED.operating_cost_per_km,
+          updated_at = now()
+         RETURNING preferred_area_labels, minimum_net_per_trip, maximum_pickup_distance_km,
+                   fuel_price_per_litre, operating_cost_per_km, updated_at`,
+        [user.id, areas.map((area) => area.trim()), minimumNet, maxPickup, fuelPrice, operatingCost],
+      );
+      const row = result.rows[0];
+      return {
+        preferredAreaLabels: row.preferred_area_labels,
+        minimumNetPerTrip: Number(row.minimum_net_per_trip),
+        maximumPickupDistanceKm: Number(row.maximum_pickup_distance_km),
+        fuelPricePerLitre: Number(row.fuel_price_per_litre),
+        operatingCostPerKm: Number(row.operating_cost_per_km),
+        updatedAt: row.updated_at,
+      };
+    },
+
     async setPresence(user, input = {}) {
       if (user?.role !== "driver") throw new AuthError("Driver account required", 403);
       if (!input || typeof input !== "object" || Array.isArray(input) || typeof input.isOnline !== "boolean") {
