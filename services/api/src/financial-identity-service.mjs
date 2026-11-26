@@ -9,7 +9,7 @@ const safeEqual = (a, b) => {
   return left.length === right.length && timingSafeEqual(left, right);
 };
 
-export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_SECRET_KEY, fetchImpl = fetch } = {}) {
+export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_SECRET_KEY, webhookSecret = process.env.PAYSTACK_WEBHOOK_SECRET, fetchImpl = fetch } = {}) {
   const configured = () => {
     if (!secretKey) throw new AuthError("Paystack is not configured. Contact Chaufr support.", 503);
   };
@@ -84,8 +84,33 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
     async handleWebhook(rawBody, signature) {
       configured();
       if (!Buffer.isBuffer(rawBody) || !signature) throw new AuthError("Invalid payment webhook", 401);
-      const expected = createHmac("sha512", secretKey).update(rawBody).digest("hex");
-      if (!safeEqual(expected, signature)) throw new AuthError("Invalid payment webhook signature", 401);
+      let signatureValid = false;
+      if (signature.includes("t=") && signature.includes("v1=")) {
+        if (!webhookSecret) throw new AuthError("Paystack webhook signing secret is not configured", 503);
+        let timestamp = null;
+        const signatures = [];
+        for (const part of signature.split(",")) {
+          const splitAt = part.indexOf("=");
+          if (splitAt < 0) continue;
+          const name = part.slice(0, splitAt).trim();
+          const value = part.slice(splitAt + 1).trim();
+          if (name === "t") timestamp = value;
+          if (name === "v1") {
+            const colon = value.indexOf(":");
+            if (colon > 0) signatures.push(value.slice(colon + 1));
+          }
+        }
+        const seconds = Number(timestamp);
+        if (!Number.isSafeInteger(seconds) || Math.abs(Math.floor(Date.now() / 1000) - seconds) > 300) {
+          throw new AuthError("Payment webhook timestamp is outside the allowed window", 401);
+        }
+        const expected = createHmac("sha512", webhookSecret).update(timestamp + ".").update(rawBody).digest("hex");
+        signatureValid = signatures.some((candidate) => /^[0-9a-f]{128}$/.test(candidate) && safeEqual(expected, candidate));
+      } else {
+        const expected = createHmac("sha512", secretKey).update(rawBody).digest("hex");
+        signatureValid = /^[0-9a-f]{128}$/.test(signature) && safeEqual(expected, signature);
+      }
+      if (!signatureValid) throw new AuthError("Invalid payment webhook signature", 401);
       let event;
       try { event = JSON.parse(rawBody.toString("utf8")); } catch { throw new AuthError("Invalid webhook payload", 400); }
       const data = event.data || {};
