@@ -374,7 +374,10 @@ private fun DriverCurrentTripCard() {
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
   var completedRewardTripId by remember { mutableStateOf<String?>(null) }
-  var commissionRequested by remember { mutableStateOf(false) }\n  var safetyNotes by remember { mutableStateOf("") }\n  var safetyMessage by remember { mutableStateOf("") }\n  var safetyBusy by remember { mutableStateOf(false) }
+  var commissionRequested by remember { mutableStateOf(false) }
+  var safetyNotes by remember { mutableStateOf("") }
+  var safetyMessage by remember { mutableStateOf("") }
+  var safetyBusy by remember { mutableStateOf(false) }
 
   suspend fun refreshCurrent() {
     if (apiUrl.isBlank()) return
