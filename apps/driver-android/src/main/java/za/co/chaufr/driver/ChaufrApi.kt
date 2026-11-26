@@ -134,6 +134,17 @@ object ChaufrApi {
         requestJson(baseUrl, "POST", "/v1/payments/checkout",
             JSONObject().put("purpose", "driver_activation"), token)
 
+    suspend fun setPayoutAccount(baseUrl: String, token: String, accountNumber: String, bankCode: String, bankName: String): JSONObject =
+        requestJson(baseUrl, "PUT", "/v1/driver/payout-account",
+            JSONObject().put("accountNumber", accountNumber).put("bankCode", bankCode).put("bankName", bankName), token)
+
+    suspend fun uploadVerificationDocument(baseUrl: String, token: String, documentType: String, fileName: String, mimeType: String, base64: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/verification-documents",
+            JSONObject().put("documentType", documentType).put("fileName", fileName).put("mimeType", mimeType).put("base64", base64), token)
+
+    suspend fun verificationDocuments(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/verification-documents", token = token)
+
     private suspend fun requestJson(
         baseUrl: String, method: String, path: String,
         payload: JSONObject? = null, token: String? = null
