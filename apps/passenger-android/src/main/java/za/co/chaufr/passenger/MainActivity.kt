@@ -134,7 +134,7 @@ private fun PassengerHome() {
     var passengerTripHistory by remember { mutableStateOf<List<PassengerTripHistoryEntry>>(emptyList()) }
     var tripHistoryMessage by remember { mutableStateOf("") }
     var redeemReward by remember { mutableStateOf(false) }
-    var rewardsMessage by remember { mutableStateOf("") }
+    var rewardsMessage by remember { mutableStateOf("") }\n    var safetyNotes by remember { mutableStateOf("") }\n    var safetyMessage by remember { mutableStateOf("") }\n    var safetyBusy by remember { mutableStateOf(false) }
 
     LaunchedEffect(BuildConfig.CHAUFR_API_BASE_URL) {
         val savedToken = SecureTokenStore.load(context)
@@ -470,6 +470,44 @@ private fun PassengerHome() {
                                                 enabled = !tripCancellationLoading,
                                                 modifier = Modifier.fillMaxWidth()
                                             ) { Text(if (tripCancellationLoading) "Cancelling..." else "Cancel request") }
+                                        }
+                                        snapshot.optJSONObject("driver")?.optString("userId")?.takeIf { it.isNotBlank() }?.let { driverUserId ->
+                                            Spacer(Modifier.height(10.dp))
+                                            Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED))) {
+                                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Text("SAFETY SHIELD", color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    Text("Report a concern about this trip or block this driver from future matching.", color = ChaufrMuted, fontSize = 11.sp)
+                                                    OutlinedTextField(value = safetyNotes, onValueChange = { safetyNotes = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("Report details (optional)") }, shape = RoundedCornerShape(12.dp), minLines = 2)
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                        Button(onClick = {
+                                                            val token = SecureTokenStore.load(context)
+                                                            if (token == null) safetyMessage = "Sign in to submit a safety report."
+                                                            else scope.launch {
+                                                                safetyBusy = true
+                                                                try {
+                                                                    ChaufrApi.reportSafetyParticipant(BuildConfig.CHAUFR_API_BASE_URL, token, snapshot.optString("tripId"), driverUserId, "other", safetyNotes)
+                                                                    safetyMessage = "Safety report submitted securely."
+                                                                    safetyNotes = ""
+                                                                } catch (error: Exception) { safetyMessage = error.message ?: "Unable to submit report." }
+                                                                finally { safetyBusy = false }
+                                                            }
+                                                        }, enabled = !safetyBusy, modifier = Modifier.weight(1f)) { Text("Report driver") }
+                                                        Button(onClick = {
+                                                            val token = SecureTokenStore.load(context)
+                                                            if (token == null) safetyMessage = "Sign in to block a driver."
+                                                            else scope.launch {
+                                                                safetyBusy = true
+                                                                try {
+                                                                    ChaufrApi.blockSafetyParticipant(BuildConfig.CHAUFR_API_BASE_URL, token, snapshot.optString("tripId"), driverUserId)
+                                                                    safetyMessage = "Driver blocked from future matching."
+                                                                } catch (error: Exception) { safetyMessage = error.message ?: "Unable to block driver." }
+                                                                finally { safetyBusy = false }
+                                                            }
+                                                        }, enabled = !safetyBusy, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF9F2D20))) { Text("Block driver") }
+                                                    }
+                                                    if (safetyMessage.isNotBlank()) Text(safetyMessage, color = ChaufrNavy, fontSize = 11.sp)
+                                                }
+                                            }
                                         }
                                         if (snapshot.optString("status") in listOf("completed", "cancelled", "expired")) {
                                             Button(onClick = { activePassengerTripId = null; tripStatusSnapshot = null }, modifier = Modifier.fillMaxWidth()) { Text("Dismiss trip status") }
