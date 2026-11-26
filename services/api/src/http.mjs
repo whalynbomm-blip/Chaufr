@@ -159,7 +159,10 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "owner") return json(response, 403, { error: "Owner access required", requestId });
-        if (request.method === "GET" && url.pathname === "/v1/owner/financial-ledger") {\n          return json(response, 200, await ownerService.listFinancialLedger(user));\n        }\n        if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
+        if (request.method === "GET" && url.pathname === "/v1/owner/financial-ledger") {
+          return json(response, 200, await ownerService.listFinancialLedger(user));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/overview") {
           return json(response, 200, await ownerService.getOverview(user));
         }
         if (request.method === "GET" && url.pathname === "/v1/owner/drivers") {
