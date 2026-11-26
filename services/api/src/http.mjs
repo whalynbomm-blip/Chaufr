@@ -533,7 +533,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "POST" && url.pathname === "/v1/support/tickets") return json(response, 201, await supportService.createTicket(user, await readJson(request)));
         if (request.method === "GET" && url.pathname === "/v1/support/tickets") return json(response, 200, await supportService.listMyTickets(user));
         if (request.method === "GET" && url.pathname === "/v1/support/owner/tickets") return json(response, 200, await supportService.listOwnerTickets(user, url.searchParams.get("status")));
-        const ticketMatch = /^\\/v1\\/support\\/owner\\/tickets\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const ticketMatch = /^\/v1\/support\/owner\/tickets\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (request.method === "PATCH" && ticketMatch) return json(response, 200, await supportService.respondToTicket(user, ticketMatch[1], await readJson(request)));
         return json(response, 404, { error: "Support endpoint not found", requestId });
       }
