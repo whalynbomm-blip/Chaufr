@@ -102,3 +102,44 @@ test("owner financial ledger converts integer cents to ZAR amounts", async () =>
   const result = await service.listFinancialLedger({ id: "owner-1", role: "owner" });
   assert.equal(result.entries[0].amount, 125.5);
 });
+
+
+test("owner safety report queue is restricted to owner accounts", async () => {
+  const pool = {
+    query: async () => { throw new Error("Database must not be queried for a rejected role"); },
+    connect: async () => { throw new Error("Database must not be connected for a rejected role"); },
+  };
+  const service = createOwnerService(pool, developmentFareConfig());
+  await assert.rejects(() => service.listSafetyReports({ id: "driver-1", role: "driver" }), (error) => error.status === 403);
+  await assert.rejects(() => service.reviewSafetyReport({ id: "passenger-1", role: "passenger" }, "00000000-0000-4000-8000-000000000001", "resolved"), (error) => error.status === 403);
+});
+
+test("owner safety report review enforces workflow and audits each transition", async () => {
+  const calls = [];
+  let currentStatus = "open";
+  const client = {
+    query: async (sql, params = []) => {
+      calls.push({ sql, params });
+      if (sql.includes("SELECT id, status FROM safety_reports")) {
+        return { rows: [{ id: "00000000-0000-4000-8000-000000000001", status: currentStatus }] };
+      }
+      if (sql.includes("UPDATE safety_reports")) {
+        currentStatus = params[0];
+        return { rows: [{ id: params[1], status: currentStatus, reason_code: "unsafe_driving" }] };
+      }
+      return { rows: [] };
+    },
+    release() {},
+  };
+  const service = createOwnerService({ query: async () => ({ rows: [] }), connect: async () => client }, developmentFareConfig());
+  const owner = { id: "owner-1", role: "owner" };
+  const reviewing = await service.reviewSafetyReport(owner, "00000000-0000-4000-8000-000000000001", "reviewing");
+  assert.equal(reviewing.report.status, "reviewing");
+  await assert.rejects(
+    () => service.reviewSafetyReport(owner, "00000000-0000-4000-8000-000000000001", "reviewing"),
+    (error) => error.status === 409,
+  );
+  const resolved = await service.reviewSafetyReport(owner, "00000000-0000-4000-8000-000000000001", "resolved");
+  assert.equal(resolved.report.status, "resolved");
+  assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 2);
+});
