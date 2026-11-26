@@ -46,6 +46,11 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
 
     const candidate = await client.query(
       `SELECT p.driver_user_id, p.latitude, p.longitude, v.fuel_consumption_l_per_100km,
+              COALESCE(ds.minimum_net_per_trip, 0) AS minimum_net_per_trip,
+              COALESCE(ds.maximum_pickup_distance_km, 15) AS maximum_pickup_distance_km,
+              COALESCE(ds.fuel_price_per_litre, (SELECT fuel_price_per_litre FROM fare_rules WHERE id = (SELECT fare_rule_id FROM trips WHERE id = $4)), 0) AS driver_fuel_price,
+              COALESCE(ds.operating_cost_per_km, (SELECT operating_cost_per_km FROM fare_rules WHERE id = (SELECT fare_rule_id FROM trips WHERE id = $4)), 0) AS driver_operating_cost,
+              ds.preferred_area_labels,
               (6371 * acos(LEAST(1, GREATEST(-1,
                 cos(radians($1)) * cos(radians(p.latitude)) *
                 cos(radians(p.longitude) - radians($2)) +
@@ -58,6 +63,7 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
          AND a.status = 'paid'
        JOIN vehicles v ON v.driver_user_id = p.driver_user_id
          AND v.status = 'approved' AND v.category = $3
+       LEFT JOIN driver_advantage_settings ds ON ds.driver_user_id = p.driver_user_id
        WHERE p.is_online = true
          AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
          AND p.last_seen_at >= now() - interval '90 seconds'
@@ -140,8 +146,8 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
         tripDistanceKm: tripKm,
         pickupDistanceKm: row.distance_km,
         fuelConsumptionLPer100Km: Number(row.fuel_consumption_l_per_100km ?? 8),
-        fuelPricePerLitreZar: Number(trip.fuel_price ?? 0),
-        operatingCostPerKmZar: Number(trip.operating_cost ?? 0),
+        fuelPricePerLitreZar: Number(row.driver_fuel_price ?? trip.fuel_price ?? 0),
+        operatingCostPerKmZar: Number(row.driver_operating_cost ?? trip.operating_cost ?? 0),
       });
       return {
         ...row,
@@ -153,12 +159,24 @@ export async function offerTripToNextDriver(pool, tripId, pickup, routesService 
         available: true,
         safetyEligible: true,
         preferredAreaMatch: false,
+        minimumNetPerTrip: Number(row.minimum_net_per_trip ?? 0),
+        maximumPickupDistanceKm: Number(row.maximum_pickup_distance_km ?? 15),
       };
     });
-    const ranked = rankFairMatchCandidates(fairMatchRows);
-    const selectedCandidate = ranked[0]?.candidate ?? rankedCandidates[0];
+    const preferenceEligible = fairMatchRows.filter((row) =>
+      row.distance_km <= row.maximumPickupDistanceKm &&
+      row.estimated_net_zar >= row.minimumNetPerTrip
+    );
+    const ranked = rankFairMatchCandidates(preferenceEligible);
+    const selectedCandidate = ranked[0]?.candidate ?? null;
     const matchDetails = ranked[0]?.match ?? null;
     const rankingMethod = "chaufr_fairmatch_v1";
+
+    if (!selectedCandidate) {
+      await client.query("UPDATE trips SET status = 'requested' WHERE id = $1 AND status = 'offered'", [tripId]);
+      await client.query("COMMIT");
+      return { status: "waiting_for_driver", reason: "driver_preferences_no_match" };
+    }
 
     const offer = await client.query(
       "INSERT INTO trip_offers (trip_id, driver_user_id, status, expires_at) " +
