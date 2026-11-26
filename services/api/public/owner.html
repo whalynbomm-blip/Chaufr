@@ -71,6 +71,11 @@
   <div class="tablewrap"><table><thead><tr><th>Driver</th><th>Trip</th><th>Amount</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead><tbody id="payoutsBody"></tbody></table></div>
   <div id="payoutStatus" class="status" role="status"></div>
 </div>
+<div class="panel">
+  <div class="row"><div><h2>Financial ledger</h2><p class="muted">Read-only payment records. Not a bank balance and does not initiate transfers.</p></div><button id="refreshLedger" class="btn secondary">Refresh ledger</button></div>
+  <div class="tablewrap"><table><thead><tr><th>Date</th><th>Account</th><th>Entry</th><th>Trip / Intent</th><th>Amount</th><th>Reference</th><th>Payment status</th></tr></thead><tbody id="ledgerBody"></tbody></table></div>
+  <div id="ledgerStatus" class="status" role="status"></div>
+</div>
 </section>
 </main>
 <script>
