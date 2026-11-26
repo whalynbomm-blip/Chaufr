@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS driver_payouts_driver_idx ON driver_payouts(driver_us
 CREATE TABLE IF NOT EXISTS driver_verification_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   driver_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  document_type TEXT NOT NULL CHECK (document_type IN ('south_african_id','passport','drivers_licence','proof_of_address','vehicle_registration','vehicle_roadworthy')),
+  document_type TEXT NOT NULL CHECK (document_type IN ('south_african_id','passport','drivers_licence','proof_of_address','vehicle_registration','vehicle_roadworthy','bank_confirmation')),
   file_name TEXT NOT NULL,
   mime_type TEXT NOT NULL CHECK (mime_type IN ('image/jpeg','image/png','application/pdf')),
   file_size INTEGER NOT NULL CHECK (file_size > 0 AND file_size <= 6291456),
