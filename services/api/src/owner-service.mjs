@@ -183,8 +183,8 @@ export function createOwnerService(pool, fareConfig) {
     },
     async reviewRewardCommissionRequest(user, requestId, status) {
       requireOwner(user);
-      if (!["approved", "rejected", "paid"].includes(status)) {
-        throw new AuthError("Payout status must be approved, rejected or paid");
+      if (!["approved", "rejected"].includes(status)) {
+        throw new AuthError("Payout status must be approved or rejected; only a verified bank-transfer webhook can mark it paid");
       }
       const client = await pool.connect();
       try {
@@ -195,8 +195,7 @@ export function createOwnerService(pool, fareConfig) {
         );
         const row = current.rows[0];
         if (!row) throw new AuthError("Reward commission request not found", 404);
-        const allowed = (row.status === "requested" && ["approved", "rejected"].includes(status)) ||
-          (row.status === "approved" && status === "paid");
+        const allowed = row.status === "requested" && ["approved", "rejected"].includes(status);
         if (!allowed) throw new AuthError("Invalid payout transition: " + row.status + " to " + status, 409);
         const updated = await client.query(
           "UPDATE reward_driver_commission_requests SET status = $1, updated_at = now() WHERE id = $2 " +
