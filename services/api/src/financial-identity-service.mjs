@@ -257,6 +257,11 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         "VALUES($1,$2,$3,$4,$5,$6,'pending',NULL) ON CONFLICT(driver_user_id) DO UPDATE SET bank_code=EXCLUDED.bank_code,bank_name=EXCLUDED.bank_name,account_number_encrypted=EXCLUDED.account_number_encrypted,account_name=EXCLUDED.account_name,paystack_recipient_code=EXCLUDED.paystack_recipient_code,status='pending',verified_at=NULL,updated_at=now()",
         [driver.id, bankCode, bankName, Buffer.concat([iv,tag,encrypted]), accountHolderName.trim(), recipient.recipient_code],
       );
+      await pool.query(
+        "UPDATE driver_verification_documents SET status='rejected',review_note='Payout bank details changed. Upload new bank confirmation.',reviewer_user_id=NULL,reviewed_at=NULL " +
+        "WHERE driver_user_id=$1 AND document_type='bank_confirmation' AND status='approved'",
+        [driver.id],
+      );
       return { status: "pending", accountName: accountHolderName.trim(), bankName, message: "Upload a bank confirmation letter or statement for owner verification." };
     },
     async payDriverEarnings(owner, tripId) {
