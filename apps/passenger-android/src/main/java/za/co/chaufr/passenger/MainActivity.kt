@@ -868,6 +868,8 @@ private fun PassengerHome() {
                     }
                 }
                 Spacer(Modifier.height(14.dp))
+                PassengerFeedbackSupportPanel()
+                Spacer(Modifier.height(14.dp))
                 PassengerAccountCard(onSignedIn = { refreshRewards(it); scope.launch {
                     try { passengerTripHistory = parsePassengerTripHistory(ChaufrApi.passengerTripHistory(BuildConfig.CHAUFR_API_BASE_URL, it)) } catch (_: Exception) { }
                 } })
