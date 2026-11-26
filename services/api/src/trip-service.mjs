@@ -1,5 +1,6 @@
 import { AuthError } from "./auth-service.mjs";
 import { offerTripToNextDriver, declineTripOffer } from "./dispatch-service.mjs";
+import { estimateDriverTripProfit } from "./chaufr-advantage.mjs";
 
 const SA_DATE_SQL = "(now() AT TIME ZONE 'Africa/Johannesburg')::date";
 const activationRequired = () => new AuthError(
@@ -465,20 +466,54 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         "AND t.quote_expires_at > now() ORDER BY o.offered_at ASC LIMIT 50",
         [driver.id],
       );
+      const advantageSettings = await pool.query(
+        "SELECT minimum_net_per_trip, maximum_pickup_distance_km, fuel_price_per_litre, operating_cost_per_km " +
+        "FROM driver_advantage_settings WHERE driver_user_id = $1",
+        [driver.id],
+      );
+      const settings = advantageSettings.rows[0] ?? {};
+      const vehicle = await pool.query(
+        "SELECT fuel_consumption_l_per_100km FROM vehicles WHERE driver_user_id = $1 AND status = 'approved' ORDER BY created_at DESC LIMIT 1",
+        [driver.id],
+      );
+      const consumption = Number(vehicle.rows[0]?.fuel_consumption_l_per_100km ?? 8);
+      const fallbackFareRule = await pool.query(
+        "SELECT fuel_price_per_litre, operating_cost_per_km FROM fare_rules WHERE is_active = true LIMIT 1",
+      );
+      const fuelPrice = Number(settings.fuel_price_per_litre ?? fallbackFareRule.rows[0]?.fuel_price_per_litre ?? 0);
+      const operatingCost = Number(settings.operating_cost_per_km ?? fallbackFareRule.rows[0]?.operating_cost_per_km ?? 0);
       return {
         activation: { isPaid: true, operatingDate: activation.operating_date },
-        trips: result.rows.map((row) => ({
-          tripId: row.id,
-          pickupLabel: row.pickup_label,
-          destinationLabel: row.destination_label,
-          distanceKm: Number(row.distance_km),
-          durationMinutes: Number(row.duration_minutes),
-          passengerFare: Number(row.quoted_total),
-          expectedDriverEarnings: Number(row.driver_earnings),
-          vehicleCategory: row.vehicle_category,
-          expiresAt: row.quote_expires_at,
-          requestedAt: row.requested_at,
-        })),
+        trips: result.rows.map((row) => {
+          const commissionRate = Number(row.quoted_total) > 0
+            ? Math.max(0, Math.min(0.99, (Number(row.quoted_total) - Number(row.driver_earnings)) / Number(row.quoted_total)))
+            : 0.12;
+          const profit = estimateDriverTripProfit({
+            passengerFareZar: Number(row.quoted_total),
+            commissionRate,
+            tripDistanceKm: Number(row.distance_km),
+            pickupDistanceKm: 0,
+            fuelConsumptionLPer100Km: consumption,
+            fuelPricePerLitreZar: fuelPrice,
+            operatingCostPerKmZar: operatingCost,
+          });
+          const estimatedNet = Number((Number(row.driver_earnings) - profit.estimatedCostZar).toFixed(2));
+          return {
+            tripId: row.id,
+            pickupLabel: row.pickup_label,
+            destinationLabel: row.destination_label,
+            distanceKm: Number(row.distance_km),
+            durationMinutes: Number(row.duration_minutes),
+            passengerFare: Number(row.quoted_total),
+            expectedDriverEarnings: Number(row.driver_earnings),
+            estimatedOperatingCost: profit.estimatedCostZar,
+            estimatedNetEarnings: estimatedNet,
+            minimumNetPerTrip: Number(settings.minimum_net_per_trip ?? 0),
+            vehicleCategory: row.vehicle_category,
+            expiresAt: row.quote_expires_at,
+            requestedAt: row.requested_at,
+          };
+        }).filter((offer) => offer.estimatedNetEarnings >= offer.minimumNetPerTrip),
       };
     },
 
