@@ -190,6 +190,18 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
             [payout.rows[0].amount_minor, "paystack-transfer:" + data.reference],
           );
         }
+        if (payout.rowCount && status === "reversed") {
+          const priorDebit = await pool.query(
+            "SELECT id FROM financial_ledger WHERE account_type='driver_earnings' AND direction='debit' AND source_reference=$1 LIMIT 1",
+            ["paystack-transfer:" + data.reference],
+          );
+          if (priorDebit.rowCount) {
+            await pool.query(
+              "INSERT INTO financial_ledger(account_type,direction,amount_minor,source_reference) VALUES('driver_earnings','credit',$1,$2) ON CONFLICT(account_type,source_reference) DO NOTHING",
+              [payout.rows[0].amount_minor, "paystack-transfer-reversal:" + data.reference],
+            );
+          }
+        }
         if (payout.rowCount && payout.rows[0].source_type === "reward_commission") {
           if (status === "paid") await pool.query("UPDATE reward_driver_commission_requests SET status='paid',updated_at=now() WHERE id=$1 AND status='processing'", [payout.rows[0].source_id]);
           if (status === "failed" || status === "reversed") await pool.query("UPDATE reward_driver_commission_requests SET status='approved',updated_at=now() WHERE id=$1 AND status='processing'", [payout.rows[0].source_id]);
