@@ -136,6 +136,8 @@ private fun DriverHome() {
           }
         }
 
+        DriverFeedbackSupportPanel()
+        Spacer(Modifier.height(14.dp))
         Text(
           "Chaufr Driver · Development preview. Earnings and availability shown here are not live account data.",
           modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
