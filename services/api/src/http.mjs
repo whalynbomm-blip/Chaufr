@@ -10,6 +10,7 @@ import { createGoogleRoutesService } from "./google-routes.mjs";
 import { createPushService } from "./push-service.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
+import { createMobilityService } from "./mobility-service.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -84,6 +85,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const fcmSender = createFcmSender();
   const pushService = database ? createPushService(database, fcmSender) : null;
   const safetyService = database ? createSafetyService(database) : null;
+  const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
   const authAttempts = new Map();
   const routeAttempts = new Map();
@@ -145,7 +147,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
-            "POST /v1/safety/block", "POST /v1/safety/report",
+            "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",\n            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
             "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
           ],
@@ -221,6 +223,46 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         }
       }
 
+      if (url.pathname.startsWith("/v1/safety/trips/")) {
+        if (!authService || !mobilityService) return json(response, 503, { error: "Safety services require a configured database", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        const sosMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/sos$/i.exec(url.pathname);
+        if (request.method === "POST" && sosMatch) return json(response, 201, await mobilityService.triggerSos(user, sosMatch[1], await readJson(request)));
+        const shareMatch = /^\\/v1\\/safety\\/trips\\/([0-9a-f-]{36})\\/share$/i.exec(url.pathname);
+        if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
+      }
+
+      if (url.pathname.startsWith("/v1/passenger/") && (url.pathname === "/v1/passenger/scheduled-rides" || url.pathname === "/v1/passenger/recurring-rides" || url.pathname.startsWith("/v1/passenger/trusted-contacts"))) {
+        if (!authService || !mobilityService) return json(response, 503, { error: "Passenger mobility services require a configured database", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
+        if (request.method === "GET" && url.pathname === "/v1/passenger/scheduled-rides") return json(response, 200, await mobilityService.listScheduledRides(user));
+        if (request.method === "POST" && url.pathname === "/v1/passenger/scheduled-rides") return json(response, 201, await mobilityService.createScheduledRide(user, await readJson(request)));
+        if (request.method === "POST" && url.pathname === "/v1/passenger/recurring-rides") return json(response, 201, await mobilityService.createRecurringRide(user, await readJson(request)));
+        if (url.pathname === "/v1/passenger/trusted-contacts") {
+          if (request.method === "GET") return json(response, 200, await mobilityService.listTrustedContacts(user));
+          if (request.method === "POST") return json(response, 201, await mobilityService.addTrustedContact(user, await readJson(request)));
+        }
+        const contactMatch = /^\\/v1\\/passenger\\/trusted-contacts\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "DELETE" && contactMatch) return json(response, 200, await mobilityService.deleteTrustedContact(user, contactMatch[1]));
+        const scheduleMatch = /^\\/v1\\/passenger\\/scheduled-rides\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "DELETE" && scheduleMatch) return json(response, 200, await mobilityService.cancelSchedule(user, scheduleMatch[1], false));
+        const recurringMatch = /^\\/v1\\/passenger\\/recurring-rides\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "DELETE" && recurringMatch) return json(response, 200, await mobilityService.cancelSchedule(user, recurringMatch[1], true));
+      }
+
+      const sharedTripMatch = /^\\/v1\\/shared-trips\\/([A-Za-z0-9_-]{32,100})$/i.exec(url.pathname);
+      if (request.method === "GET" && sharedTripMatch) {
+        if (!mobilityService) return json(response, 503, { error: "Trip sharing requires a configured database", requestId });
+        return json(response, 200, await mobilityService.getSharedTrip(sharedTripMatch[1]));
+      }
+
       if (url.pathname === "/v1/push-devices") {
         if (!authService || !pushService) {
           return json(response, 503, { error: "Push-device services are unavailable until the database is configured", requestId });
@@ -257,7 +299,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           return json(response, 201, await driverService.submitVehicle(user, await readJson(request)));
         }
         if (request.method === "PUT" && url.pathname === "/v1/driver/presence") {
-          return json(response, 200, await driverService.setPresence(user, await readJson(request)));
+          const presenceBody = await readJson(request);\n          const presenceResult = await driverService.setPresence(user, presenceBody);\n          if (mobilityService && Number.isFinite(Number(presenceBody.latitude)) && Number.isFinite(Number(presenceBody.longitude))) {\n            await mobilityService.evaluateDriverLocation(user, Number(presenceBody.latitude), Number(presenceBody.longitude));\n          }\n          return json(response, 200, presenceResult);
         }
         if (request.method === "GET" && url.pathname === "/v1/driver/activation") {
           return json(response, 200, await tripService.getActivationStatus(user));
