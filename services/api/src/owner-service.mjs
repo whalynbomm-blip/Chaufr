@@ -217,6 +217,20 @@ export function createOwnerService(pool, fareConfig) {
         client.release();
       }
     },
+    async listFinancialLedger(user) {
+      requireOwner(user);
+      const result = await pool.query(
+        "SELECT l.id, l.payment_intent_id, l.trip_id, l.account_type, l.direction, " +
+        "l.amount_minor, l.currency, l.source_reference, l.created_at, " +
+        "p.purpose AS payment_purpose, p.status AS payment_status, p.provider, " +
+        "u.display_name AS account_name, u.role AS account_role " +
+        "FROM financial_ledger l " +
+        "LEFT JOIN payment_intents p ON p.id = l.payment_intent_id " +
+        "LEFT JOIN users u ON u.id = p.user_id " +
+        "ORDER BY l.created_at DESC, l.id DESC LIMIT 250"
+      );
+      return { entries: result.rows.map((row) => ({ ...row, amount: Number(row.amount_minor) / 100 })) };
+    },
     async getOverview(user) {
       requireOwner(user);
       const result = await pool.query(
