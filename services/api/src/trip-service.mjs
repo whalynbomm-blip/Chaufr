@@ -270,8 +270,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         acceptedAt: trip.accepted_at,
         startedAt: trip.started_at,
         completedAt: trip.completed_at,
-        driver: trip.driver_name ? {
-          name: trip.driver_name,
+        driver: trip.driver_name ? {\n          userId: trip.driver_user_id,\n          name: trip.driver_name,
           rating: trip.driver_rating == null ? null : Number(trip.driver_rating),
           vehicle: trip.vehicle_make ? {
             make: trip.vehicle_make,
@@ -419,9 +418,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         [driver.id],
       );
       const trip = result.rows[0];
-      return { trip: trip ? {
-        tripId: trip.id,
-        status: trip.status,
+      return { trip: trip ? {\n        tripId: trip.id,\n        passengerUserId: trip.passenger_user_id,\n        status: trip.status,
         pickupLabel: trip.pickup_label,
         destinationLabel: trip.destination_label,
         distanceKm: Number(trip.distance_km),
