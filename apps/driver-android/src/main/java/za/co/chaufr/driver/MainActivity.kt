@@ -236,7 +236,7 @@ private fun DriverComplianceCard() {
           busy = true
           try {
             val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, accountHolderName, bankCode, bankName)
-            accountMessage = "Bank account verified for ${result.optString("accountName")}."
+            accountMessage = "Payout recipient created for ${result.optString("accountName")}. Upload bank confirmation for owner approval."
             accountNumber = ""
           } catch (error: Exception) { accountMessage = error.message ?: "Could not verify bank account." }
           finally { busy = false }
@@ -246,11 +246,12 @@ private fun DriverComplianceCard() {
       Text(accountMessage, color = Muted, fontSize = 10.sp)
       Spacer(Modifier.height(4.dp))
       Text("Driver identity documents", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-      Text("Upload a clear photo or PDF of your South African ID and driver's licence. Files are encrypted before storage.", color = Muted, fontSize = 11.sp)
+      Text("Upload a clear photo or PDF of your South African ID, driver licence and bank confirmation letter or statement. Files are encrypted before storage.", color = Muted, fontSize = 11.sp)
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { idPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload ID") }
         OutlinedButton(onClick = { licencePicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload licence") }
       }
+      OutlinedButton(onClick = { bankProofPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload bank confirmation") }
       Text(documentSummary, color = Muted, fontSize = 10.sp)
       if (documentMessage.isNotBlank()) Text(documentMessage, color = if (documentMessage.startsWith("Document uploaded")) Green else Color(0xFFB42318), fontSize = 10.sp)
     }
