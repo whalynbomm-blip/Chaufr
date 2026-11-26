@@ -355,7 +355,10 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         "VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,document_type,file_name,mime_type,file_size,status,created_at",
         [driver.id,input.documentType,fileName,input.mimeType,bytes.length,encrypted,iv,tag],
       );
-      await pool.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'verified'", [driver.id]);
+      if (["south_african_id","passport","drivers_licence"].includes(input.documentType)) {
+        await pool.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'suspended'", [driver.id]);
+        await pool.query("UPDATE driver_presence SET is_online=false,updated_at=now() WHERE driver_user_id=$1", [driver.id]);
+      }
       return { document: result.rows[0] };
     },
     async listForDriver(driver) {
