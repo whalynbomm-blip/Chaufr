@@ -97,6 +97,28 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 See `../../docs/deployment.md` before deploying.
 
 
+## Scheduled rides and recurring commutes
+
+Authenticated passengers can use:
+
+- `POST /v1/passenger/scheduled-rides` — book a pickup at least 30 minutes and up to 90 days ahead. The route quote is verified at booking and the fare snapshot is retained.
+- `POST /v1/passenger/recurring-rides` — create a weekday rule (Monday=1 through Sunday=7), local pickup time and date range up to 180 days.
+- `GET /v1/passenger/scheduled-rides` — list one-off bookings and recurring rules.
+- `DELETE /v1/passenger/scheduled-rides/:id` and `DELETE /v1/passenger/recurring-rides/:id` — cancel future bookings/rules.
+
+The API host materializes recurring occurrences over a rolling 30-day horizon and checks due bookings every minute. At pickup time it creates a normal trip and invokes the existing FairMatch dispatch flow. A scheduled trip still depends on an eligible, online, activated driver being available. Recurring fares use the verified route/fare snapshot captured when the rule is created. Reward-ticket redemption is not enabled for scheduled or recurring rides until reservation, cancellation and refund semantics are implemented.
+
+Saver, Standard and Priority are matching preferences, not different fare products: Saver gives more weight to driver net and pickup burden, Standard uses normal FairMatch weights, and Priority gives more weight to passenger wait time. All three preserve the current fare schedule and commission rules.
+
+## Safety Shield additions
+
+- `POST /v1/passenger/trusted-contacts` and `POST /v1/driver/trusted-contacts` — save a trusted contact using an E.164 phone number. Matching GET/DELETE endpoints list and remove contacts.
+- `POST /v1/safety/trips/:tripId/sos` — records an SOS event, alerts the other trip participant through FCM where available, and sends an FCM alert to trusted contacts who have a Chaufr account.
+- `POST /v1/safety/trips/:tripId/share` — creates a random, hashed, 12-hour sharing token. The public `GET /v1/shared-trips/:token` endpoint returns a limited trip status and recent driver location.
+- Driver GPS updates during an active trip are checked against the saved route. More than 800 metres from the route can trigger a route-deviation alert. Three or more recent samples showing less than 40 metres of movement across at least three minutes can trigger an unusual-stop alert, with a ten-minute alert cooldown.
+
+SMS/voice messages to contacts, contact ownership verification, an emergency dispatch centre, and real-world accuracy/safety validation are not connected. Users in immediate danger must contact local emergency services. Location alerts are heuristic and may produce false positives or miss events; they must not be relied on as the sole safety measure.
+
 ## Owner operations and reward-ride payouts
 
 The private owner console at `/owner` provides platform overview metrics, central fare controls, driver verification and vehicle approval actions. Owner-only payout endpoints list completed free-reward-ride commission requests and support the audited status sequence `requested → approved → paid` or `requested → rejected`. Mark a request as paid only after the platform has independently confirmed the real payment; this review ledger does not transfer money.
