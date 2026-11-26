@@ -212,7 +212,7 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       if (!uuid.test(tripId ?? "")) throw new AuthError("Invalid trip ID");
       const result = await pool.query(
         "SELECT p.id AS intent_id,p.amount_minor FROM payment_intents p JOIN trips t ON t.id=p.trip_id " +
-        "WHERE t.id=$1 AND t.passenger_user_id=$2 AND p.status='paid' LIMIT 1",
+        "WHERE t.id=$1 AND t.passenger_user_id=$2 AND t.status IN ('cancelled','completed') AND p.status='paid' LIMIT 1",
         [tripId, passenger.id],
       );
       if (!result.rowCount) return { refundRequested: false, reason: "No settled payment exists for this trip" };
