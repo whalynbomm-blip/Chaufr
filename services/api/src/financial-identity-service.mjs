@@ -394,13 +394,11 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         if (!doc.rowCount) throw new AuthError("Document not found",404);
         const driverId = doc.rows[0].driver_user_id;
         const required = await client.query(
-          "SELECT count(*) FILTER (WHERE document_type IN ('south_african_id','passport')) AS identity_count, " +
-          "count(*) FILTER (WHERE document_type='drivers_licence') AS licence_count, " +
-          "bool_and(status='approved') FILTER (WHERE document_type IN ('south_african_id','passport')) AS identity_ok, " +
-          "bool_and(status='approved') FILTER (WHERE document_type='drivers_licence') AS licence_ok " +
-          "FROM driver_verification_documents WHERE driver_user_id=$1", [driverId]);
-        if (Number(required.rows[0].identity_count)>0 && Number(required.rows[0].licence_count)>0 &&
-            required.rows[0].identity_ok === true && required.rows[0].licence_ok === true) {
+          "SELECT " +
+          "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type IN ('south_african_id','passport') ORDER BY created_at DESC LIMIT 1) AS identity_status, " +
+          "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status",
+          [driverId]);
+        if (required.rows[0].identity_status === "approved" && required.rows[0].licence_status === "approved") {
           await client.query("UPDATE driver_profiles SET verification_status='verified' WHERE user_id=$1", [driverId]);
         } else {
           await client.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'suspended'", [driverId]);
