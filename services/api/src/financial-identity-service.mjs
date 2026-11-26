@@ -57,8 +57,9 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
       const existing = await pool.query(
         "SELECT id,provider_reference,checkout_url,checkout_access_code FROM payment_intents " +
         "WHERE user_id=$1 AND purpose=$2 AND COALESCE(trip_id,'00000000-0000-0000-0000-000000000000'::uuid)=COALESCE($3,'00000000-0000-0000-0000-000000000000'::uuid) " +
+        "AND COALESCE(activation_id,'00000000-0000-0000-0000-000000000000'::uuid)=COALESCE($4,'00000000-0000-0000-0000-000000000000'::uuid) " +
         "AND status='pending' AND expires_at>now() ORDER BY created_at DESC LIMIT 1",
-        [user.id,purpose,purpose === "passenger_trip" ? tripId : null],
+        [user.id,purpose,purpose === "passenger_trip" ? tripId : null,activationId],
       );
       if (existing.rowCount && existing.rows[0].checkout_url) {
         return { intentId:existing.rows[0].id,reference:existing.rows[0].provider_reference,checkoutUrl:existing.rows[0].checkout_url,accessCode:existing.rows[0].checkout_access_code,amount,currency:"ZAR" };
