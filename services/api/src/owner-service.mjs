@@ -114,12 +114,12 @@ export function createOwnerService(pool, fareConfig) {
         await client.query("BEGIN");
         if (status === "verified") {
           const evidence = await client.query(
-            "SELECT count(*) FILTER (WHERE document_type IN ('south_african_id','passport') AND status='approved') AS identity_count, " +
-            "count(*) FILTER (WHERE document_type='drivers_licence' AND status='approved') AS licence_count " +
-            "FROM driver_verification_documents WHERE driver_user_id=$1",
+            "SELECT " +
+            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type IN ('south_african_id','passport') ORDER BY created_at DESC LIMIT 1) AS identity_status, " +
+            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status",
             [driverId],
           );
-          if (Number(evidence.rows[0]?.identity_count ?? 0) < 1 || Number(evidence.rows[0]?.licence_count ?? 0) < 1) {
+          if (evidence.rows[0]?.identity_status !== "approved" || evidence.rows[0]?.licence_status !== "approved") {
             throw new AuthError("Approve an identity document and a driver's licence before verifying this driver", 409);
           }
         }
