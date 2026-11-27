@@ -1,5 +1,6 @@
 package za.co.chaufr.passenger
 
+import android.location.Location
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,8 +49,14 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
     val duration = snapshot.optDouble("durationMinutes", 0.0)
     val started = snapshot.optString("startedAt")
     val elapsed = if (started.isBlank()) 0.0 else try { Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0 } catch (_: Exception) { 0.0 }
-    val progress = if (status == "completed") 1f else if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f, 0.95f) else 0f
+    val progress = if (status == "completed") 1f else gpsProgress ?: if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f, 0.95f) else 0f
     val remaining = (duration - elapsed).coerceAtLeast(0.0)
+    val gpsRouteProgress = if (status == "in_progress" && driverPoint != null) calculateRouteProgress(points, driverPoint) else null
+    val gpsRemainingKm = gpsRouteProgress?.second
+    val gpsProgress = gpsRouteProgress?.first
+    val gpsEtaMinutes = if (gpsRemainingKm != null && snapshot.optDouble("distanceKm", 0.0) > 0 && duration > 0) {
+        (gpsRemainingKm / (snapshot.optDouble("distanceKm") / duration)).toInt().coerceAtLeast(0)
+    } else remaining.toInt()
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("LIVE TRIP MAP", color = Color(0xFF14243A), fontWeight = FontWeight.Bold)
@@ -68,7 +75,13 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
                 Text(if (status == "in_progress") "In progress" else status.replace("_", " ").replaceFirstChar { it.uppercase() }, color = Color(0xFF14243A), fontWeight = FontWeight.Bold)
             }
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
-            Text(if (status == "in_progress") "Route estimate: ~${remaining.toInt()} min remaining" else "Route estimate: ${duration.toInt()} min", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
+            Text(
+                if (status == "in_progress") {
+                    if (gpsRemainingKm != null) "GPS route remaining: ${String.format("%.1f", gpsRemainingKm)} km · ETA ~${gpsEtaMinutes} min"
+                    else "Route estimate: ~${remaining.toInt()} min remaining"
+                } else "Route estimate: ${duration.toInt()} min",
+                color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold
+            )
             val lastSeen = location?.optString("lastSeenAt").orEmpty()
             val ageSeconds = if (lastSeen.isBlank()) null else try {
                 Duration.between(Instant.parse(lastSeen), Instant.now()).seconds.coerceAtLeast(0)
@@ -104,4 +117,21 @@ private fun decodeTripPolyline(encoded: String): List<LatLng> {
         points.add(LatLng(lat / 1e5, lng / 1e5))
     }
     return points
+}
+
+
+private fun calculateRouteProgress(points: List<LatLng>, current: LatLng): Pair<Float, Double>? {
+    if (points.size < 2) return null
+    fun metres(a: LatLng, b: LatLng): Double {
+        val result = FloatArray(1)
+        Location.distanceBetween(a.latitude, a.longitude, b.latitude, b.longitude, result)
+        return result[0].toDouble()
+    }
+    val segmentLengths = points.zipWithNext { a, b -> metres(a, b) }
+    val total = segmentLengths.sum()
+    if (total <= 0.0) return null
+    val nearestIndex = points.indices.minByOrNull { index -> metres(points[index], current) } ?: return null
+    val travelled = segmentLengths.take(nearestIndex).sum()
+    val remaining = (total - travelled).coerceAtLeast(0.0)
+    return ((travelled / total).toFloat().coerceIn(0f, 0.99f)) to (remaining / 1000.0)
 }
