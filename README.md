@@ -45,7 +45,7 @@ The code is not yet a live ride-hailing service. Render staging infrastructure i
 6. Confirm Paystack has approved Chaufr's registered business and live transfer capability.
 7. Create signed release builds only after production API configuration, signing-key setup and final acceptance testing.
 
-See `docs/deployment.md`, `docs/owner-deployment-and-acceptance.md`, `docs/POPIA-and-e-hailing-readiness.md`, `docs/payments-identity.md`, `docs/staging-acceptance-scenarios.md` and `services/api/README.md` for the operational setup. Core launch tracking is in `docs/core-completion-checklist.md`. Never commit API keys, signing keys, bank details or real identity documents.
+See `docs/deployment.md`, `docs/owner-deployment-and-acceptance.md`, `docs/POPIA-and-e-hailing-readiness.md`, `docs/payments-identity.md`, `docs/staging-acceptance-scenarios.md`, `docs/incident-response-runbook.md`, `docs/privacy-retention-checklist.md` and `services/api/README.md` for operational setup. Core launch tracking is in `docs/core-completion-checklist.md`. Never commit API keys, signing keys, bank details or real identity documents.
 
 ## Optional emergency SMS configuration
 
