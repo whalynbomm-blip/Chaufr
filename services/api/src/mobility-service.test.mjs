@@ -95,7 +95,7 @@ test("trusted contact phone verification sends a one-time code and confirms owne
   const contactId="123e4567-e89b-12d3-a456-426614174004";
   try {
     assert.deepEqual(await service.requestTrustedContactVerification({id:passengerId,role:"passenger"},contactId),{sent:true,expiresInSeconds:600});
-    const code=smsBody.match(/code is (\\d{6})/)[1];
+    const code=smsBody.split("code is ")[1].slice(0,6);
     assert.ok(storedHash);
     const verified=await service.confirmTrustedContactVerification({id:passengerId,role:"passenger"},contactId,{code});
     assert.equal(verified.verified,true);
