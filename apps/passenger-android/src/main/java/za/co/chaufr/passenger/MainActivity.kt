@@ -995,15 +995,34 @@ private fun PassengerHome() {
                             }
                             "Safety" -> {
                                 Text("Your safety tools and trusted contacts", color = ChaufrMuted, fontSize = 12.sp)
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("ACTIVE TRIP SAFETY", color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        val hasActiveSafetyTrip = activePassengerTripId != null &&
+                                            (tripStatusSnapshot?.optString("status") ?: "") in listOf("accepted", "driver_arriving", "in_progress")
+                                        Text(
+                                            if (hasActiveSafetyTrip) "Your active trip has SOS, trip sharing, reporting and driver-blocking controls."
+                                            else "SOS and live trip-sharing controls become available from an active trip.",
+                                            color = ChaufrMuted, fontSize = 11.sp
+                                        )
+                                        Button(onClick = { selectedSection = "My Trips" }, modifier = Modifier.fillMaxWidth()) {
+                                            Text(if (hasActiveSafetyTrip) "Open active trip safety controls" else "Open My Trips")
+                                        }
+                                    }
+                                }
                                 PassengerTrustedContactsPanel()
                                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text("EMERGENCY NUMBERS", color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                         listOf("112" to "Mobile emergency", "10111" to "Police", "10177" to "Ambulance").forEach { item ->
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(item.first, color = ChaufrNavy, fontWeight = FontWeight.Bold)
-                                                Spacer(Modifier.weight(1f))
-                                                Text(item.second, color = ChaufrMuted, fontSize = 11.sp)
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Column(Modifier.weight(1f)) {
+                                                    Text(item.first, color = ChaufrNavy, fontWeight = FontWeight.Bold)
+                                                    Text(item.second, color = ChaufrMuted, fontSize = 11.sp)
+                                                }
+                                                OutlinedButton(onClick = {
+                                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + item.first)))
+                                                }) { Text("Call") }
                                             }
                                         }
                                         Text("Chaufr does not dispatch emergency services. Contact emergency services directly using your phone.", color = ChaufrMuted, fontSize = 10.sp)
