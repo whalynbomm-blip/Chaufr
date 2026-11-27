@@ -207,7 +207,7 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
         }
         const expiredDocuments = await pool.query(
           "SELECT 1 FROM driver_verification_documents WHERE driver_user_id=$1 " +
-          "AND document_type IN ('prdp','vehicle_roadworthy','vehicle_operating_licence') " +
+          "AND document_type IN ('vehicle_roadworthy','vehicle_operating_licence') " +
           "AND status='approved' AND (expiry_date IS NULL OR expiry_date <= CURRENT_DATE) LIMIT 1",
           [user.id],
         );
