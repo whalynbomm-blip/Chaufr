@@ -47,7 +47,7 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
     val status = snapshot.optString("status")
     val duration = snapshot.optDouble("durationMinutes", 0.0)
     val started = snapshot.optString("startedAt")
-    val elapsed = remember(started, status) {
+    val elapsed = 
         if (started.isBlank()) 0.0 else try {
             Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0
         } catch (_: Exception) { 0.0 }
@@ -68,7 +68,7 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Trip progress", color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
+                Text("Estimated trip progress", color = Color(0xFF64748B), fontWeight = FontWeight.Medium)
                 Text(if (status == "in_progress") "In progress" else status.replace("_", " ").replaceFirstChar { it.uppercase() }, color = Color(0xFF14243A), fontWeight = FontWeight.Bold)
             }
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
@@ -76,7 +76,7 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
                 Text(if (status == "in_progress") "Route estimate: ~${remaining.toInt()} min remaining" else "Route estimate: ${duration.toInt()} min", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
                 Text(location?.optString("lastSeenAt")?.take(16)?.replace("T", " ")?.let { "GPS $it" } ?: "Waiting for driver GPS", color = Color(0xFF64748B))
             }
-            Text("ETA is an estimate based on the original Google route duration and elapsed trip time; it is not a live traffic prediction.", color = Color(0xFF64748B))
+            Text("ETA and progress are estimates from the original Google route duration and elapsed time, not live traffic or GPS-distance calculations.", color = Color(0xFF64748B))
         }
     }
 }
