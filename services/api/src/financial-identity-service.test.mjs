@@ -93,3 +93,34 @@ test("Paystack timestamped webhook signature uses the dedicated webhook secret",
   const result = await service.handleWebhook(raw, `t=${timestamp},v1=whk_test:${digest}`);
   assert.equal(result.received, true);
 });
+
+test("ambiguous Paystack transfer errors keep driver payout processing to prevent duplicate retries", async () => {
+  const calls = [];
+  const pool = {
+    async query(sql, params = []) {
+      const query = String(sql);
+      calls.push({ query, params });
+      if (query.includes("FROM trips t JOIN driver_payout_accounts")) {
+        return { rowCount: 1, rows: [{
+          id: "44444444-4444-4444-8444-444444444444",
+          driver_user_id: "55555555-5555-4555-8555-555555555555",
+          driver_earnings: "88.00", reward_redemption: "false",
+          paystack_recipient_code: "RCP_test",
+        }] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+  };
+  const service = createPaystackService(pool, {
+    secretKey: "test_secret",
+    fetchImpl: async () => { throw new Error("network timeout after request"); },
+  });
+  await assert.rejects(
+    service.payDriverEarnings({ id: "66666666-6666-4666-8666-666666666666", role: "owner" },
+      "44444444-4444-4444-8444-444444444444"),
+    /network timeout/,
+  );
+  const payoutUpdate = calls.find((call) => call.query.includes("UPDATE driver_payouts SET status='processing'"));
+  assert.ok(payoutUpdate, "ambiguous transfer must remain processing");
+  assert.equal(calls.some((call) => call.query.includes("SET status=$2") && call.params[1] === "failed"), false);
+});
