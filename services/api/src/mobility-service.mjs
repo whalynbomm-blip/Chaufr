@@ -145,6 +145,14 @@ export function createMobilityService(pool, routesService, pushService = null, s
     },
 
     async processDueScheduledRides(limit = 25) {
+      const recovered=await pool.query(
+        "UPDATE scheduled_rides SET status=CASE WHEN scheduled_for>now()+interval '15 minutes' THEN 'scheduled' ELSE 'failed' END,updated_at=now() " +
+        "WHERE status='dispatching' AND updated_at<now()-interval '10 minutes' " +
+        "RETURNING id,passenger_user_id,status",
+      );
+      for(const row of recovered.rows) if(row.status==="failed") {
+        await notify(row.passenger_user_id,"Your Chaufr scheduled ride needs attention","We could not safely recover this scheduled pickup. Please book another ride or contact support.",{type:"scheduled_ride_failed",scheduleId:row.id});
+      }
       await pool.query(
         "INSERT INTO scheduled_rides (passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward,recurring_rule_id) " +
         "SELECT r.passenger_user_id, ((d.day::date + r.local_time) AT TIME ZONE r.timezone), r.pickup_label,r.destination_label,r.origin,r.destination,r.route_quote_token,r.vehicle_category,r.service_tier,r.redeem_reward,r.id " +
@@ -196,7 +204,7 @@ export function createMobilityService(pool, routesService, pushService = null, s
           dispatched.push({ scheduleId:row.id,error:error.message });
         } finally { client.release(); }
       }
-      return { processed:dispatched.length,remindersSent:reminders.rowCount,dispatched };
+      return { processed:dispatched.length,remindersSent:reminders.rowCount,recoveredDispatches:recovered.rowCount??recovered.rows.length,dispatched };
     },
 
     async addTrustedContact(user,input={}) {
