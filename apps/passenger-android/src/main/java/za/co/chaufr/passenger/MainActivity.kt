@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -115,6 +116,7 @@ private data class FarePreview(
 
 @Composable
 private fun PassengerHome() {
+    var selectedSection by remember { mutableStateOf("Home") }
     var pickup by remember { mutableStateOf("") }
     var destination by remember { mutableStateOf("") }
     var pickupPoint by remember { mutableStateOf<LatLng?>(null) }
@@ -210,9 +212,9 @@ private fun PassengerHome() {
         }
     }
     Surface(modifier = Modifier.fillMaxSize(), color = ChaufrBackground) {
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                if (selectedSection == "Home") {
             Column(
                 modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 27.dp)
             ) {
@@ -940,6 +942,84 @@ private fun PassengerHome() {
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(12.dp))
+            }
+                } else {
+                    Column(modifier = Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Text("CHAUFR", color = ChaufrBlue, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+                        Text(selectedSection, color = ChaufrNavy, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                        when (selectedSection) {
+                            "My Trips" -> {
+                                Text("Your active and previous journeys", color = ChaufrMuted, fontSize = 12.sp)
+                                if (activePassengerTripId != null) {
+                                    Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Text("ACTIVE JOURNEY", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            Text("Trip status: " + (tripStatusSnapshot?.optString("status") ?: "Loading"), color = ChaufrNavy, fontWeight = FontWeight.Bold)
+                                            Text("Trip reference: " + activePassengerTripId!!.take(8), color = ChaufrMuted, fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                                passengerTripHistory.forEach { trip ->
+                                    Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            Text(trip.pickup + " → " + trip.destination, color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text(trip.status.uppercase() + " · " + money(trip.farePaid), color = ChaufrMuted, fontSize = 11.sp)
+                                            Text(trip.requestedAt.replace("T", " ").take(16), color = ChaufrMuted, fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                                if (passengerTripHistory.isEmpty()) Text("Your trips will appear here after your first booking.", color = ChaufrMuted)
+                                OutlinedButton(onClick = { selectedSection = "Home" }) { Text("Book a ride") }
+                            }
+                            "Rewards" -> {
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("YOUR REWARD BALANCE", color = ChaufrMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Text("$rewardsTickets / 9 tickets", color = ChaufrNavy, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text("\${(rewardsTickets.coerceAtMost(9) * 100) / 9}% towards your next eligible free short ride", color = ChaufrMuted, fontSize = 11.sp)
+                                        Button(onClick = { refreshRewards(SecureTokenStore.load(context) ?: "") }, enabled = BuildConfig.CHAUFR_API_BASE_URL.isNotBlank()) { Text("Refresh rewards") }
+                                    }
+                                }
+                                rewardsHistory.forEach { item ->
+                                    Text(item.type.replace("_", " ") + " · " + (if (item.ticketsDelta >= 0) "+" else "") + item.ticketsDelta + " tickets · " + item.date, color = ChaufrNavy, fontSize = 12.sp)
+                                }
+                                if (rewardsMessage.isNotBlank()) Text(rewardsMessage, color = ChaufrMuted, fontSize = 11.sp)
+                            }
+                            "Safety" -> {
+                                Text("Your safety tools and trusted contacts", color = ChaufrMuted, fontSize = 12.sp)
+                                PassengerTrustedContactsPanel()
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("EMERGENCY NUMBERS", color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        listOf("112" to "Mobile emergency", "10111" to "Police", "10177" to "Ambulance").forEach { item ->
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(item.first, color = ChaufrNavy, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.weight(1f))
+                                                Text(item.second, color = ChaufrMuted, fontSize = 11.sp)
+                                            }
+                                        }
+                                        Text("Chaufr does not dispatch emergency services. Contact emergency services directly using your phone.", color = ChaufrMuted, fontSize = 10.sp)
+                                    }
+                                }
+                            }
+                            else -> {
+                                PassengerAccountCard()
+                                PassengerFeedbackSupportPanel()
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(16.dp)) {
+                                        Text("WALLET & PAYMENTS", color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        Text(if (BuildConfig.PAYMENTS_ENABLED) "Payment features are being prepared." else "Card payments and wallet controls will appear after the final payment-provider integration.", color = ChaufrMuted, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                listOf("Home", "My Trips", "Rewards", "Safety", "More").forEach { tab ->
+                    Text(tab, modifier = Modifier.weight(1f).clickable { selectedSection = tab }.padding(vertical = 10.dp).background(if (selectedSection == tab) Color(0xFFEAF2FF) else Color.Transparent, RoundedCornerShape(12.dp)).padding(vertical = 5.dp), color = if (selectedSection == tab) ChaufrBlue else ChaufrMuted, fontSize = 10.sp, fontWeight = if (selectedSection == tab) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center)
+                }
             }
         }
     }
