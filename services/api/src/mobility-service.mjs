@@ -268,7 +268,7 @@ export function createMobilityService(pool, routesService, pushService = null, s
           catch { smsFailed++; }
         }
       }
-      return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,verifiedContacts:contacts.rows.length,smsSent,smsFailed,message:"SOS recorded. The other trip participant and verified trusted contacts are alerted through configured push/SMS channels. If you are in immediate danger, call local emergency services."};
+      return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,contacts:contacts.rows.map(c=>({name:c.contact_name,phoneE164:c.phone_e164})),verifiedContacts:contacts.rows.length,smsSent,smsFailed,message:"SOS recorded. The other trip participant and verified trusted contacts are alerted through configured push/SMS channels. If you are in immediate danger, call local emergency services."};
     },
 
     async createTripShare(user,tripId) {
