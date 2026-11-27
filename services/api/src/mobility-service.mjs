@@ -230,7 +230,7 @@ export function createMobilityService(pool, routesService, pushService = null, s
           dispatched.push({ scheduleId:row.id,error:error.message });
         } finally { client.release(); }
       }
-      return { processed:dispatched.length,remindersSent:reminders.rowCount,recoveredDispatches:recovered.rowCount??recovered.rows.length,dispatched };
+      return { processed:dispatched.length,remindersSent:reminders.rowCount,recoveredDispatches:recovered.rowCount??recovered.rows.length,retriedDispatches,dispatched };
     },
 
     async addTrustedContact(user,input={}) {
