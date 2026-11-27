@@ -86,6 +86,7 @@ private fun DriverHome() {
   var selectedSection by remember { mutableStateOf("Home") }
   val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
   val scope = rememberCoroutineScope()
+  val context = LocalContext.current
   ModalNavigationDrawer(
     drawerState = drawerState,
     drawerContent = {
@@ -175,7 +176,7 @@ private fun DriverHome() {
                         Text(item.second, color = Muted, fontSize = 11.sp)
                       }
                       OutlinedButton(onClick = {
-                        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + item.first)))
+                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + item.first)))
                       }) { Text("Call") }
                     }
                   }
