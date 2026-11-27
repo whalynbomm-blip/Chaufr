@@ -752,8 +752,11 @@ private fun DriverCurrentTripCard() {
         Text("No accepted trip in progress.", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
       } else {
         val status = current.optString("status")
-        Text(if (status == "accepted") "Trip accepted · Head to pickup" else "Trip in progress",
-          color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(when (status) {
+          "accepted" -> "Trip accepted · Head to pickup"
+          "driver_arriving" -> "Arrived at pickup · Passenger boarding"
+          else -> "Trip in progress"
+        }, color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Text(current.optString("pickupLabel"), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Text("↓ " + current.optString("destinationLabel"), color = Muted, fontSize = 12.sp)
         if (current.optBoolean("isScheduled")) Text("SCHEDULED PICKUP · " + current.optString("scheduledFor").replace("T", " ").take(16), color = Blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -857,16 +860,24 @@ private fun DriverCurrentTripCard() {
             try {
               val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
               val id = current.optString("tripId")
-              if (status == "accepted") {
-                ChaufrApi.startTrip(apiUrl, token, id)
-                message = "Trip started. Drive safely."
-              } else {
-                ChaufrApi.completeTrip(apiUrl, token, id)
-                if (current.optBoolean("rewardRedemption")) {
-                  completedRewardTripId = id
-                  commissionRequested = false
+              when (status) {
+                "accepted" -> {
+                  ChaufrApi.markArrivedAtPickup(apiUrl, token, id)
+                  message = "Arrival at pickup confirmed. Start the trip when the passenger is safely onboard."
                 }
-                message = "Trip completed. Your trip has been recorded."
+                "driver_arriving" -> {
+                  ChaufrApi.startTrip(apiUrl, token, id)
+                  message = "Trip started. Drive safely."
+                }
+                "in_progress" -> {
+                  ChaufrApi.completeTrip(apiUrl, token, id)
+                  if (current.optBoolean("rewardRedemption")) {
+                    completedRewardTripId = id
+                    commissionRequested = false
+                  }
+                  message = "Trip completed. Your trip has been recorded."
+                }
+                else -> throw IllegalStateException("This trip cannot be advanced from its current status.")
               }
               refreshCurrent()
             } catch (error: Exception) {
@@ -874,7 +885,31 @@ private fun DriverCurrentTripCard() {
             } finally { busy = false }
           }
         }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-          Text(if (busy) "Updating trip…" else if (status == "accepted") "Start trip" else "Complete trip")
+          Text(if (busy) "Updating trip…" else when (status) {
+            "accepted" -> "Confirm arrival at pickup"
+            "driver_arriving" -> "Start trip"
+            "in_progress" -> "Complete trip"
+            else -> "Update trip"
+          })
+        }
+        if (status == "accepted" || status == "driver_arriving") {
+          OutlinedButton(
+            onClick = {
+              scope.launch {
+                busy = true
+                try {
+                  val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
+                  ChaufrApi.cancelAcceptedTrip(apiUrl, token, current.optString("tripId"))
+                  message = "Trip cancelled before start. The passenger was notified."
+                  refreshCurrent()
+                } catch (error: Exception) {
+                  message = error.message ?: "Unable to cancel this trip."
+                } finally { busy = false }
+              }
+            },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("Cancel before pickup") }
         }
       }
       if (completedRewardTripId != null) {
