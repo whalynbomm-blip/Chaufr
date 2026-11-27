@@ -194,6 +194,16 @@ private fun DriverHome() {
               DriverAdvantageSettingsCard()
               Text("RATINGS & SUPPORT", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
               DriverFeedbackSupportPanel()
+              Text("NOTIFICATION SETTINGS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                  Text("Trip offers, trip updates and safety alerts", color = Navy, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                  Text("Manage Chaufr notification permission and alert channels in Android settings.", color = Muted, fontSize = 10.sp)
+                  OutlinedButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName)))
+                  }, modifier = Modifier.fillMaxWidth()) { Text("Open notification settings") }
+                }
+              }
               Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.padding(16.dp)) {
                   Text("PAYMENTS & PAYOUTS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
