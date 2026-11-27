@@ -450,7 +450,7 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
           [driverId]);
         if (required.rows[0].licence_status === "approved") {
           await client.query("UPDATE driver_profiles SET verification_status='verified' WHERE user_id=$1", [driverId]);
-        } else {else {
+        } else {
           await client.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'suspended'", [driverId]);
           await client.query("UPDATE driver_presence SET is_online=false,updated_at=now() WHERE driver_user_id=$1", [driverId]);
         }
