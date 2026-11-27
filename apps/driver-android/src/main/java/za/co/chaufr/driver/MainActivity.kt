@@ -35,6 +35,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -79,9 +84,45 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun DriverHome() {
   var selectedSection by remember { mutableStateOf("Home") }
-  Surface(modifier = Modifier.fillMaxSize(), color = Page) {
-    Column(modifier = Modifier.fillMaxSize()) {
-      Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+  val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+  val scope = rememberCoroutineScope()
+  ModalNavigationDrawer(
+    drawerState = drawerState,
+    drawerContent = {
+      ModalDrawerSheet {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+          Text("CHAUFR", color = Navy, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+          Text("DRIVER PARTNER MENU", color = Muted, fontSize = 10.sp, letterSpacing = 1.2.sp)
+        }
+        HorizontalDivider()
+        listOf("Home", "My Trips", "Earnings", "Safety", "More").forEach { section ->
+          NavigationDrawerItem(
+            label = { Text(section, fontWeight = if (selectedSection == section) FontWeight.Bold else FontWeight.Medium) },
+            selected = selectedSection == section,
+            onClick = { selectedSection = section; scope.launch { drawerState.close() } },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
+          )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Drive with confidence.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
+      }
+    }
+  ) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Page) {
+      Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+          modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text("☰", modifier = Modifier.clickable { scope.launch { drawerState.open() } }.padding(end = 16.dp), color = Navy, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+          Column {
+            Text("CHAUFR", color = Navy, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+            Text(selectedSection.uppercase(), color = Muted, fontSize = 9.sp, letterSpacing = 1.2.sp)
+          }
+          Spacer(Modifier.weight(1f))
+          Text("MENU", modifier = Modifier.clickable { scope.launch { drawerState.open() } }, color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        }
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
         Column(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 25.dp)) {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Column {
@@ -145,13 +186,6 @@ private fun DriverHome() {
           Text("Chaufr information refreshes from the service when connected.", color = Muted, fontSize = 10.sp)
         }
       }
-      Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-        listOf("Home", "My Trips", "Earnings", "Safety", "More").forEach { tab ->
-          Column(modifier = Modifier.weight(1f).clickable { selectedSection = tab }.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(when(tab) { "Home" -> "⌂"; "My Trips" -> "▣"; "Earnings" -> "R"; "Safety" -> "♡"; else -> "•••" }, color = if (selectedSection == tab) Blue else Muted, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-            Text(tab, color = if (selectedSection == tab) Blue else Muted, fontSize = 10.sp, fontWeight = if (selectedSection == tab) FontWeight.Bold else FontWeight.Medium)
-          }
-        }
       }
     }
   }
