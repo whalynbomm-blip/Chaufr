@@ -8,10 +8,20 @@ These checks must be performed on physical Android devices after installing APKs
 - Add a trusted contact in each app and confirm it appears after leaving and reopening the screen.
 - Start a test trip, trigger SOS once from the passenger app, and confirm the API response shows the event was recorded.
 - Confirm the other trip participant receives the Chaufr push alert.
-- If the trusted contact has a Chaufr account and a registered push device, confirm that device receives the alert. A phone number alone does not currently guarantee SMS delivery; an SMS provider is not configured.
+- If the trusted contact has a Chaufr account and a registered push device, confirm that device receives the alert. A phone number alone does not receive SMS until it is verified. Configure Twilio and `SMS_VERIFICATION_SECRET` on the API, request a verification code from the trusted-contact panel, enter the six-digit code, and confirm the contact shows Verified. Then trigger SOS and confirm the contact receives an SMS even without a Chaufr account. If Twilio is not configured, the API reports SMS as not configured and continues push delivery where available.
 - Repeat SOS from the driver app and verify the passenger alert.
 - Verify that SOS controls are unavailable when there is no active trip.
 - Confirm the app clearly instructs users to call 112 / 10111 / 10177 directly in an emergency.
+
+## Owner support and identity-document review
+
+- Submit a support ticket from both passenger and driver apps.
+- Sign in to the owner console and confirm both tickets appear in the support inbox.
+- Reply to a ticket and confirm the account can see the owner response and updated status.
+- Upload a test ID/passport and driver's licence from the driver app using non-production test documents only.
+- Confirm document contents are encrypted at rest and not exposed in driver-facing list responses.
+- In the owner console, download each document, approve/reject it and confirm the review decision is audited.
+- Confirm driver verification is granted only when the latest identity document and driver's licence are approved.
 
 ## Trip sharing
 
@@ -48,6 +58,8 @@ These checks must be performed on physical Android devices after installing APKs
 - Test driver cancellation before arrival and after arrival but before start; confirm the passenger is notified and any reserved reward tickets are released.
 - Confirm driver cancellation is rejected once the trip is in progress.
 - Create a scheduled ride and a recurring ride; confirm they appear under Passenger > My Trips.
+- Confirm the API scheduled-ride worker materialises recurring occurrences, sends reminders when push is configured and dispatches rides at the scheduled pickup time.
+- Simulate an API restart leaving a schedule in `dispatching`; confirm the worker recovers a future schedule or marks an overdue one failed and notifies the passenger.
 - Cancel a scheduled ride and a recurring rule; confirm no future dispatch occurs for the cancelled booking.
 - Allow a scheduled ride to reach dispatch time in a controlled test environment and confirm it becomes an ordinary driver offer.
 
