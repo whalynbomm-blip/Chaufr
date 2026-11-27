@@ -21,6 +21,10 @@ Chaufr is an independent South African ride-hailing platform developed as a GitH
 
 The codebase includes trusted-contact management, SOS event recording, 12-hour live trip-sharing links, GPS-based route-deviation/unusual-stop alerts, report/block workflows, one-off scheduled rides, recurring weekday bookings, passenger pickup reminders, scheduled pickup indicators for drivers and Saver/Standard/Priority matching preferences. These features require production configuration and field testing; SOS is not an emergency-response service.
 
+## Mobile app redesign
+
+The approved role-based navigation and live-trip-map implementation plan is in [`docs/mobile-navigation-and-live-trip-map.md`](docs/mobile-navigation-and-live-trip-map.md). This is the implementation specification; the navigation UI and live-map integration still need to be built and tested.
+
 ## Current verification
 
 The feature branch `feature/payments-payouts-verification` contains the core passenger and driver workflows, Safety Shield, scheduled ride management, trusted contacts, ratings, support tickets, driver earnings and encrypted driver verification-document workflow. Payment adapter code remains in the branch but the Android payment UI is disabled by default with `chaufrPaymentsEnabled=false`; gateway setup and activation are reserved for the final stage.
