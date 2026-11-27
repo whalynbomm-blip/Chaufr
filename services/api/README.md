@@ -39,7 +39,7 @@ Configure two separate Google credentials in the API deployment environment:
 
 Do not put either server value in the Android app or commit them to Git. The Android Places/Maps key is separate and must be restricted to the Android package and signing certificate.
 
-The route preview endpoint is limited to 30 requests per source IP per minute. Production deployments should also use a shared rate limiter and provider quota/budget alerts.
+The route preview endpoint is limited to 30 requests per source IP per minute. Authentication registration/login endpoints are limited to 10 attempts per source IP and route per 15-minute window. The process-local rate-limit maps are now bounded and refuse new keys when saturated, preventing unbounded memory growth. These limits reset per API process and are not shared across replicas; production deployments still require a shared rate limiter and provider quota/budget alerts.
 
 ### Fare estimate
 ```sh
