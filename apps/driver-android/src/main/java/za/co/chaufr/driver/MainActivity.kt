@@ -322,19 +322,9 @@ private fun DriverComplianceCard() {
       }
       Spacer(Modifier.height(4.dp))
       Text("Manual driver document approval", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-      Text("Choose each document below. Files are encrypted and reviewed manually by Chaufr. PrDP, roadworthy and operating-licence uploads need an expiry date.", color = Muted, fontSize = 11.sp)
-      OutlinedTextField(value = documentExpiryDate, onValueChange = { documentExpiryDate = it.take(10) },
-        modifier = Modifier.fillMaxWidth(), label = { Text("Expiry date when applicable (YYYY-MM-DD)") }, singleLine = true)
+      Text("A valid South African driver’s licence is the only required document for this application. Upload it below for manual approval by Chaufr.", color = Muted, fontSize = 11.sp)
       val documentChoices = listOf(
-        "south_african_id" to "South African ID",
-        "passport" to "Passport (if applicable)",
-        "drivers_licence" to "Driver's licence",
-        "prdp" to "Professional Driving Permit (PrDP)",
-        "saps_criminal_record" to "SAPS criminal-record report",
-        "pending_investigation_declaration" to "Signed pending-investigation declaration",
-        "vehicle_registration" to "Vehicle registration",
-        "vehicle_roadworthy" to "Vehicle roadworthy certificate",
-        "vehicle_operating_licence" to "E-hailing operating licence"
+        "drivers_licence" to "Valid South African driver's licence"
       )
       documentChoices.forEach { (type, label) ->
         OutlinedButton(onClick = { pendingDocumentType = type; verificationPicker.launch("*/*") },
