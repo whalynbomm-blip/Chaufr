@@ -287,3 +287,68 @@ test("accepting a second active trip returns a conflict instead of an internal e
     else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
   }
 });
+
+test("successful trip acceptance uses the passenger ID from the locked trip row", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousBypass = process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+  process.env.NODE_ENV = "production";
+  delete process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+  const statements = [];
+  const notifications = [];
+  const acceptedTrip = {
+    id: "123e4567-e89b-12d3-a456-426614174000",
+    quoted_total: "100.00",
+    driver_earnings: "88.00",
+    pickup_label: "Pinelands",
+    destination_label: "Cape Town CBD",
+    accepted_at: new Date().toISOString(),
+    fare_locked_at: new Date().toISOString(),
+  };
+  const client = {
+    async query(sql) {
+      const query = String(sql);
+      statements.push(query);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(query)) return { rowCount: 0, rows: [] };
+      if (query.includes("FROM driver_daily_activations")) return { rowCount: 1, rows: [{ id: "activation-1" }] };
+      if (query.includes("FROM driver_profiles dp")) return { rowCount: 1, rows: [{ verification_status: "verified", is_online: true }] };
+      if (query.includes("FROM trips WHERE id = $1 FOR UPDATE")) return { rowCount: 1, rows: [{
+        id: acceptedTrip.id,
+        passenger_user_id: "passenger-locked-row",
+        status: "requested",
+        pickup_label: "Pinelands",
+        destination_label: "Cape Town CBD",
+        quoted_total: "100.00",
+        driver_earnings: "88.00",
+        quote_expires_at: new Date(Date.now() + 60_000),
+        vehicle_category: "standard",
+      }] };
+      if (query.includes("FROM trip_offers")) return { rowCount: 0, rows: [] };
+      if (query.includes("FROM vehicles")) return { rowCount: 1, rows: [{ id: "vehicle-1" }] };
+      if (query.includes("UPDATE trips SET status = 'accepted'")) return { rowCount: 1, rows: [acceptedTrip] };
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  const pool = {
+    connect: async () => client,
+    query: async () => { throw new Error("acceptance must not perform a second passenger lookup"); },
+  };
+  try {
+    const service = createTripService(pool, { dailyActivationFee: 30 }, null, {
+      async sendToUser(userId, payload) { notifications.push({ userId, payload }); },
+    });
+    const result = await service.acceptTrip(
+      { id: "driver-1", role: "driver" },
+      acceptedTrip.id,
+    );
+    assert.equal(result.status, "accepted");
+    assert.ok(statements.some((sql) => sql.includes("SELECT id, passenger_user_id")));
+    assert.equal(notifications[0].userId, "passenger-locked-row");
+    assert.equal(notifications[0].payload.data.tripId, acceptedTrip.id);
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousBypass === undefined) delete process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+    else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
+  }
+});
