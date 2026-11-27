@@ -66,7 +66,7 @@ For local pre-payment end-to-end testing only, the daily activation requirement 
 
 1. Select and authorize the hosting provider and deployment project.
 2. Configure production fare rules and verify the health endpoint.
-3. Connect PostgreSQL and apply versioned migrations through `0026`.
+3. Connect PostgreSQL and apply versioned migrations through `0027`.
 4. Provision the owner account securely through a trusted database operator; public registration must never grant owner privileges.
 5. Review the owner pricing console at `/owner`, approve all fare bands and verify audit events before allowing public trip requests.
 6. Connect a routing provider and calculate routes on trusted server-side infrastructure.
@@ -102,7 +102,7 @@ The production validator is not a substitute for confirming provider-side permis
 
 ## Driver identity verification — manual, no paid vendor
 
-Chaufr will launch with its own owner-controlled manual driver verification process. No paid third-party identity-verification provider, subscription or per-driver check is part of the launch plan. Drivers upload the required documents through the driver app; the API encrypts them before storage; the owner reviews each document and records approval or rejection with a reason. Drivers remain blocked from going online until the required checklist is approved and their vehicle is approved. For the initial application, only a valid South African driver's licence is mandatory and must be manually approved; vehicle approval and any legally required operating permits remain separate launch/compliance gates.
+Chaufr will launch with its own owner-controlled manual driver verification process. No paid third-party identity-verification provider, subscription or per-driver check is part of the launch plan. Drivers upload the required documents through the driver app; the API encrypts them before storage; the owner reviews each document and records approval or rejection with a reason. Drivers remain blocked from going online until the required checklist is approved and their vehicle is approved. For the initial application, a valid South African driver's licence and a clear, recent driver selfie are mandatory; the owner must compare the selfie with the licence photograph and approve both uploads; vehicle approval and any legally required operating permits remain separate launch/compliance gates.
 
 Manual review is not an automated authenticity check and does not guarantee that a document is genuine. Owners must inspect the original documents and follow applicable South African e-hailing rules. Keep access restricted, audit document views and decisions, and complete POPIA/legal review before collecting real identity documents.
 
