@@ -413,6 +413,40 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       }
     },
 
+    async getDriverEarnings(driver) {
+      requireRole(driver, "driver");
+      const summary = await pool.query(
+        "SELECT COUNT(*)::int AS lifetime_trips, COALESCE(SUM(driver_earnings),0)::numeric AS lifetime_earnings, " +
+        "COUNT(*) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg'))::int AS today_trips, " +
+        "COALESCE(SUM(driver_earnings) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg')),0)::numeric AS today_earnings " +
+        "FROM trips WHERE driver_user_id=$1 AND status='completed'",
+        [driver.id],
+      );
+      const recent = await pool.query(
+        "SELECT id, pickup_label, destination_label, driver_earnings, quoted_total, completed_at, " +
+        "COALESCE(fare_snapshot->>'rewardRedemption','false') AS reward_redemption, payment_status " +
+        "FROM trips WHERE driver_user_id=$1 AND status='completed' ORDER BY completed_at DESC LIMIT 20",
+        [driver.id],
+      );
+      const row = summary.rows[0] ?? {};
+      return {
+        todayEarnings: Number(row.today_earnings ?? 0),
+        todayTrips: Number(row.today_trips ?? 0),
+        lifetimeEarnings: Number(row.lifetime_earnings ?? 0),
+        lifetimeTrips: Number(row.lifetime_trips ?? 0),
+        recentTrips: recent.rows.map((trip) => ({
+          tripId: trip.id,
+          pickupLabel: trip.pickup_label,
+          destinationLabel: trip.destination_label,
+          driverEarnings: Number(trip.driver_earnings),
+          passengerFare: Number(trip.quoted_total),
+          completedAt: trip.completed_at,
+          rewardRide: trip.reward_redemption === "true",
+          paymentStatus: trip.payment_status,
+        })),
+      };
+    },
+
     async getCurrentDriverTrip(driver) {
       requireRole(driver, "driver");
       const activation = await hasPaidActivation(pool, driver.id);
