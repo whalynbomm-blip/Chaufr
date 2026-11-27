@@ -7,6 +7,7 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
 import android.net.Uri
+import android.provider.Settings
 import android.util.Base64
 import android.content.Intent
 import android.os.Build
@@ -576,6 +577,24 @@ private fun DriverAvailabilityCard() {
         )
       }
       Spacer(Modifier.height(12.dp))
+      val locationPermissionGranted =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+      Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F6FA))) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text("BACKGROUND GPS RELIABILITY", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Text(if (locationPermissionGranted) "Location permission is granted. For reliable tracking while online, allow background activity and set Chaufr battery usage to Unrestricted in Samsung settings."
+            else "Location permission is not currently granted. Chaufr cannot publish driver GPS until permission is enabled.",
+            color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+          OutlinedButton(
+            onClick = {
+              context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName)))
+            },
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("Review app location & battery settings") }
+        }
+      }
       Button(
         onClick = { requestPresence(!available) },
         enabled = !busy && activationPaid,
