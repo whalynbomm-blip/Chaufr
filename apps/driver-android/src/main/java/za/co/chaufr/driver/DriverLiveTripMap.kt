@@ -52,9 +52,7 @@ fun DriverLiveTripMap(trip: JSONObject) {
     val status = trip.optString("status")
     val duration = trip.optDouble("durationMinutes", 0.0)
     val started = trip.optString("startedAt")
-    val elapsed = 
-        if (started.isBlank()) 0.0 else try { Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0 } catch (_: Exception) { 0.0 }
-    }
+    val elapsed = if (started.isBlank()) 0.0 else try { Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0 } catch (_: Exception) { 0.0 }
     val progress = if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f,0.95f) else 0f
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
