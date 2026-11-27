@@ -59,9 +59,12 @@ When PostgreSQL is configured, the API exposes:
 - `POST /v1/auth/register` — creates a passenger or driver account and returns a bearer token.
 - `POST /v1/auth/login` — accepts an email address or E.164 phone number and password.
 - `GET /v1/auth/me` — returns the authenticated account; requires `Authorization: Bearer <token>`.
+- `GET /v1/auth/sessions` — lists the account's unexpired sessions and marks the current session.
+- `DELETE /v1/auth/sessions/:sessionId` — revokes another session belonging to the authenticated account; the current session cannot be revoked through this route.
+- `DELETE /v1/auth/sessions` — revokes all other active sessions while keeping the current session signed in.
 - `POST /v1/auth/logout` — revokes the supplied bearer session.
 
-Passwords must be 12–128 characters. Registration requires a display name and either an email address or international-format phone number. Public registration is restricted to passenger and driver roles; owner and operations accounts cannot be self-created. Driver accounts receive a pending driver profile. Access tokens are random opaque values; only their SHA-256 hashes are stored. Sessions expire after 30 days and can be revoked. Registration and login have a basic per-process IP rate limit.
+Passwords must be 12–128 characters. Registration requires a display name and either an email address or international-format phone number. Public registration is restricted to passenger and driver roles; owner and operations accounts cannot be self-created. Driver accounts receive a pending driver profile. Access tokens are random opaque values; only their SHA-256 hashes are stored. Sessions expire after 30 days and can be inspected and revoked by the account owner. Registration and login have a basic per-process IP rate limit.
 
 These endpoints provide the account foundation used by the passenger and driver Android account cards. Production identity hardening still requires email/phone ownership verification, password reset/recovery, stronger distributed rate limiting and secure owner account provisioning. The mobile apps require the production API URL before account and trip features can operate.
 
