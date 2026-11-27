@@ -207,39 +207,45 @@ private fun DriverComplianceCard() {
   Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
     colors = CardDefaults.cardColors(containerColor = Color.White)) {
     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-      Text("PAYOUTS & VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-      Text("Bank account for payouts", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-      OutlinedTextField(value = accountHolderName, onValueChange = { accountHolderName = it.take(100) },
-        modifier = Modifier.fillMaxWidth(), label = { Text("Account holder full name") }, singleLine = true)
-      OutlinedTextField(value = accountNumber, onValueChange = { accountNumber = it.filter(Char::isDigit).take(20) },
-        modifier = Modifier.fillMaxWidth(), label = { Text("Bank account number") }, singleLine = true)
-      OutlinedTextField(value = bankCode, onValueChange = { bankCode = it.filter(Char::isDigit).take(12) },
-        modifier = Modifier.fillMaxWidth(), label = { Text("Bank code") }, singleLine = true)
-      OutlinedTextField(value = bankName, onValueChange = { bankName = it.take(100) },
-        modifier = Modifier.fillMaxWidth(), label = { Text("Bank name") }, singleLine = true)
-      Button(onClick = {
-        val token = SecureTokenStore.load(context)
-        if (token.isNullOrBlank()) accountMessage = "Sign in to save your payout account."
-        else scope.launch {
-          busy = true
-          try {
-            val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, accountHolderName, bankCode, bankName)
-            accountMessage = "Payout recipient created for ${result.optString("accountName")}. Upload bank confirmation for owner approval."
-            accountNumber = ""
-          } catch (error: Exception) { accountMessage = error.message ?: "Could not save payout bank details." }
-          finally { busy = false }
-        }
-      }, enabled = !busy && accountNumber.length >= 6 && accountHolderName.trim().length >= 3 && bankCode.isNotBlank() && bankName.isNotBlank(),
-        modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Save payout bank details") }
-      Text(accountMessage, color = Muted, fontSize = 10.sp)
+      Text("DRIVER VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+      if (BuildConfig.PAYMENTS_ENABLED) {
+        Text("Bank account for payouts", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = accountHolderName, onValueChange = { accountHolderName = it.take(100) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Account holder full name") }, singleLine = true)
+        OutlinedTextField(value = accountNumber, onValueChange = { accountNumber = it.filter(Char::isDigit).take(20) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Bank account number") }, singleLine = true)
+        OutlinedTextField(value = bankCode, onValueChange = { bankCode = it.filter(Char::isDigit).take(12) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Bank code") }, singleLine = true)
+        OutlinedTextField(value = bankName, onValueChange = { bankName = it.take(100) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Bank name") }, singleLine = true)
+        Button(onClick = {
+          val token = SecureTokenStore.load(context)
+          if (token.isNullOrBlank()) accountMessage = "Sign in to save your payout account."
+          else scope.launch {
+            busy = true
+            try {
+              val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, accountHolderName, bankCode, bankName)
+              accountMessage = "Payout recipient created for ${result.optString("accountName")}. Upload bank confirmation for owner approval."
+              accountNumber = ""
+            } catch (error: Exception) { accountMessage = error.message ?: "Could not save payout bank details." }
+            finally { busy = false }
+          }
+        }, enabled = !busy && accountNumber.length >= 6 && accountHolderName.trim().length >= 3 && bankCode.isNotBlank() && bankName.isNotBlank(),
+          modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Save payout bank details") }
+        Text(accountMessage, color = Muted, fontSize = 10.sp)
+      } else {
+        Text("Bank account setup and bank confirmation upload are reserved for the final payment gateway stage. This build does not collect bank details.", color = Muted, fontSize = 11.sp)
+      }
       Spacer(Modifier.height(4.dp))
       Text("Driver identity documents", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-      Text("Upload a clear photo or PDF of your South African ID, driver licence and bank confirmation letter or statement. Files are encrypted before storage.", color = Muted, fontSize = 11.sp)
+      Text("Upload a clear photo or PDF of your South African ID and driver licence. Files are encrypted before storage.", color = Muted, fontSize = 11.sp)
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { idPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload ID") }
         OutlinedButton(onClick = { licencePicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload licence") }
       }
-      OutlinedButton(onClick = { bankProofPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload bank confirmation") }
+      if (BuildConfig.PAYMENTS_ENABLED) {
+        OutlinedButton(onClick = { bankProofPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload bank confirmation") }
+      }
       Text(documentSummary, color = Muted, fontSize = 10.sp)
       if (documentMessage.isNotBlank()) Text(documentMessage, color = if (documentMessage.startsWith("Document uploaded")) Green else Color(0xFFB42318), fontSize = 10.sp)
     }
@@ -777,21 +783,25 @@ private fun DriverCurrentTripCard() {
         }
       }
       if (completedRewardTripId != null) {
-        Text("Reward ride completed. You can request the platform-funded 50% driver payout.", color = Navy, fontSize = 12.sp)
-        Button(onClick = {
-          scope.launch {
-            busy = true
-            try {
-              val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
-              val result = ChaufrApi.requestRewardCommission(apiUrl, token, completedRewardTripId!!)
-              commissionRequested = true
-              message = "Payout request recorded: R " + String.format(Locale.US, "%.2f", result.optDouble("amount"))
-            } catch (error: Exception) {
-              message = error.message ?: "Unable to submit payout request."
-            } finally { busy = false }
+        if (BuildConfig.PAYMENTS_ENABLED) {
+          Text("Reward ride completed. You can request the platform-funded 50% driver payout.", color = Navy, fontSize = 12.sp)
+          Button(onClick = {
+            scope.launch {
+              busy = true
+              try {
+                val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
+                val result = ChaufrApi.requestRewardCommission(apiUrl, token, completedRewardTripId!!)
+                commissionRequested = true
+                message = "Payout request recorded: R " + String.format(Locale.US, "%.2f", result.optDouble("amount"))
+              } catch (error: Exception) {
+                message = error.message ?: "Unable to submit payout request."
+              } finally { busy = false }
+            }
+          }, enabled = !busy && !commissionRequested, modifier = Modifier.fillMaxWidth()) {
+            Text(if (commissionRequested) "Commission requested" else "Request commission")
           }
-        }, enabled = !busy && !commissionRequested, modifier = Modifier.fillMaxWidth()) {
-          Text(if (commissionRequested) "Commission requested" else "Request commission")
+        } else {
+          Text("Reward-ride payout requests will be enabled during the final payment gateway stage.", color = Muted, fontSize = 11.sp)
         }
       }
       if (message.isNotBlank()) Text(message, color = if (message.contains("started") || message.contains("completed")) Green else Color(0xFFB42318), fontSize = 11.sp, lineHeight = 16.sp)
