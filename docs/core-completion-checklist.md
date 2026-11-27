@@ -62,6 +62,7 @@ Payment gateway setup and activation are deliberately reserved for the final sta
 - [x] Scheduled reminder persistence and dispatch.
 - [x] Driver earnings and passenger history unit tests.
 - [ ] Email/phone ownership verification and password recovery.
+- [x] Bounded process-local rate-limit storage prevents unbounded key growth.
 - [ ] Shared/distributed rate limiting, production monitoring and stronger operational abuse controls.
 - [ ] Deploy API and managed PostgreSQL; apply migrations through 0027.
 - [ ] Validate migration rollback/restore strategy and backup restoration in staging.
