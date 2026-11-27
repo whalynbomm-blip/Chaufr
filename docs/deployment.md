@@ -66,7 +66,7 @@ For local pre-payment end-to-end testing only, the daily activation requirement 
 
 1. Select and authorize the hosting provider and deployment project.
 2. Configure production fare rules and verify the health endpoint.
-3. Connect PostgreSQL and apply versioned migrations through `0027`.
+3. Connect PostgreSQL and apply all versioned migrations through `0028`. Before applying `0028`, run the active-trip duplicate preflight in `services/api/migrations/README.md`; resolve any returned records through an authorised operational review before creating the unique index.
 4. Provision the owner account securely through a trusted database operator; public registration must never grant owner privileges.
 5. Review the owner pricing console at `/owner`, approve all fare bands and verify audit events before allowing public trip requests.
 6. Connect a routing provider and calculate routes on trusted server-side infrastructure.
