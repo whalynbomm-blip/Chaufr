@@ -118,3 +118,51 @@ test("scheduled ride worker recovers dispatches left behind by an API restart", 
   assert.equal(result.recoveredDispatches,1);
   assert.ok(calls.some(sql=>sql.includes("updated_at<now()-interval '10 minutes'")));
 });
+
+test("scheduled ride worker retries a committed trip that has no active driver offer", async () => {
+  const poolCalls = [];
+  const clientCalls = [];
+  let dispatchConnections = 0;
+  const client = {
+    async query(sql) {
+      const query = String(sql);
+      clientCalls.push(query);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(query)) return { rowCount: 0, rows: [] };
+      if (query.includes("FROM trips WHERE id = $1 FOR UPDATE")) {
+        return { rowCount: 1, rows: [{
+          id: tripId, status: "requested", driver_user_id: null,
+          passenger_user_id: passengerId, pickup_label: "Pinelands",
+          vehicle_category: "standard", service_tier: "standard",
+          quoted_total: "100", driver_earnings: "88", platform_commission: "12",
+          distance_km: "5", fuel_price: "20", operating_cost: "1",
+        }] };
+      }
+      if (query.includes("SELECT id, driver_user_id, expires_at FROM trip_offers")) return { rowCount: 0, rows: [] };
+      if (query.includes("SELECT p.driver_user_id")) return { rowCount: 0, rows: [] };
+      return { rowCount: 0, rows: [] };
+    },
+    release() {},
+  };
+  const pool = {
+    async query(sql) {
+      const query = String(sql);
+      poolCalls.push(query);
+      if (query.startsWith("UPDATE scheduled_rides SET status=CASE")) return { rowCount: 0, rows: [] };
+      if (query.includes("FROM scheduled_rides s JOIN trips t")) return {
+        rowCount: 1,
+        rows: [{ id: "schedule-retry", passenger_user_id: passengerId, trip_id: tripId, pickup_label: "Pinelands", origin: { latitude: -33.93, longitude: 18.51 } }],
+      };
+      if (query.startsWith("WITH due_reminders")) return { rowCount: 0, rows: [] };
+      if (query.startsWith("SELECT id,passenger_user_id,scheduled_for")) return { rowCount: 0, rows: [] };
+      return { rowCount: 0, rows: [] };
+    },
+    async connect() { dispatchConnections += 1; return client; },
+  };
+  const result = await createMobilityService(pool).processDueScheduledRides();
+  assert.equal(dispatchConnections, 1);
+  assert.equal(result.retriedDispatches.length, 1);
+  assert.equal(result.retriedDispatches[0].scheduleId, "schedule-retry");
+  assert.equal(result.retriedDispatches[0].dispatchStatus, "waiting_for_driver");
+  assert.ok(poolCalls.some((sql) => sql.includes("NOT EXISTS (SELECT 1 FROM trip_offers")));
+  assert.ok(clientCalls.some((sql) => sql.includes("FROM trips WHERE id = $1 FOR UPDATE")));
+});
