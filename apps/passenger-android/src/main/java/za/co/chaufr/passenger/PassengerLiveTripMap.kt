@@ -49,11 +49,11 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
     val duration = snapshot.optDouble("durationMinutes", 0.0)
     val started = snapshot.optString("startedAt")
     val elapsed = if (started.isBlank()) 0.0 else try { Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0 } catch (_: Exception) { 0.0 }
-    val progress = if (status == "completed") 1f else gpsProgress ?: if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f, 0.95f) else 0f
     val remaining = (duration - elapsed).coerceAtLeast(0.0)
     val gpsRouteProgress = if (status == "in_progress" && driverPoint != null) calculateRouteProgress(points, driverPoint) else null
     val gpsRemainingKm = gpsRouteProgress?.second
     val gpsProgress = gpsRouteProgress?.first
+    val progress = if (status == "completed") 1f else gpsProgress ?: if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f, 0.95f) else 0f
     val gpsEtaMinutes = if (gpsRemainingKm != null && snapshot.optDouble("distanceKm", 0.0) > 0 && duration > 0) {
         (gpsRemainingKm / (snapshot.optDouble("distanceKm") / duration)).toInt().coerceAtLeast(0)
     } else remaining.toInt()
