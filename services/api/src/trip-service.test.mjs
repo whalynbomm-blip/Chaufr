@@ -244,3 +244,46 @@ test("driver cannot use pre-start cancellation after a trip has started", async 
     /only before the trip has started/i,
   );
 });
+
+test("accepting a second active trip returns a conflict instead of an internal error", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousBypass = process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+  process.env.NODE_ENV = "production";
+  delete process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+  const client = {
+    async query(sql) {
+      const query = String(sql);
+      if (["BEGIN", "ROLLBACK", "COMMIT"].includes(query)) return { rowCount: 0, rows: [] };
+      if (query.includes("FROM driver_daily_activations")) return { rowCount: 1, rows: [{ id: "activation-1" }] };
+      if (query.includes("FROM driver_profiles dp")) return { rowCount: 1, rows: [{ verification_status: "verified", is_online: true }] };
+      if (query.includes("FROM trips WHERE id = $1 FOR UPDATE")) return { rowCount: 1, rows: [{
+        id: "123e4567-e89b-12d3-a456-426614174000", status: "requested",
+        pickup_label: "Pinelands", destination_label: "CBD", quoted_total: "100",
+        driver_earnings: "88", quote_expires_at: new Date(Date.now() + 60_000),
+        vehicle_category: "standard",
+      }] };
+      if (query.includes("FROM trip_offers")) return { rowCount: 0, rows: [] };
+      if (query.includes("FROM vehicles")) return { rowCount: 1, rows: [{ id: "vehicle-1" }] };
+      if (query.includes("UPDATE trips SET status = 'accepted'")) {
+        const error = new Error("duplicate key value violates unique constraint");
+        error.code = "23505";
+        error.constraint = "one_active_trip_per_driver";
+        throw error;
+      }
+      throw new Error("Unexpected query: " + query);
+    },
+    release() {},
+  };
+  try {
+    const service = createTripService({ connect: async () => client, query: async () => ({ rowCount: 0, rows: [] }) }, { dailyActivationFee: 30 });
+    await assert.rejects(
+      service.acceptTrip({ id: "driver-1", role: "driver" }, "123e4567-e89b-12d3-a456-426614174000"),
+      (error) => error.status === 409 && /already have an active trip/i.test(error.message),
+    );
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousBypass === undefined) delete process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+    else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
+  }
+});
