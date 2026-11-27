@@ -100,9 +100,11 @@ The production validator is not a substitute for confirming provider-side permis
 6. One-off and recurring scheduled rides materialise and dispatch at their intended local pickup times; test worker restart and duplicate prevention.
 7. Database backups can be restored, TLS is enforced, owner access is least-privilege, logs redact secrets and personal data, and rate limits/abuse monitoring are active.
 
-## Identity-provider decision
+## Driver identity verification — manual, no paid vendor
 
-The current implementation provides encrypted document upload and manual owner review. It does **not** integrate an automated third-party identity-verification vendor. Do not represent manual review as automated identity proofing. Select a provider only after Chaufr completes vendor due diligence for South African ID/passport and driver's-licence checks, POPIA operator terms, data residency/retention, fraud controls, pricing and API/webhook support. Keep manual review as the fallback until the selected provider is integrated and independently tested.
+Chaufr will launch with its own owner-controlled manual driver verification process. No paid third-party identity-verification provider, subscription or per-driver check is part of the launch plan. Drivers upload the required documents through the driver app; the API encrypts them before storage; the owner reviews each document and records approval or rejection with a reason. Drivers remain blocked from going online until the required checklist is approved and their vehicle is approved. PrDP, roadworthy and operating-licence expiry dates are recorded and expired documents block online access.
+
+Manual review is not an automated authenticity check and does not guarantee that a document is genuine. Owners must inspect the original documents and follow applicable South African e-hailing rules. Keep access restricted, audit document views and decisions, and complete POPIA/legal review before collecting real identity documents.
 
 ## Deployment status
 
