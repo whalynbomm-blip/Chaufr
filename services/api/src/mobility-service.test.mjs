@@ -79,3 +79,28 @@ test("SOS and trip sharing reject trips that are not active", async () => {
     /active trips/i,
   );
 });
+
+test("trusted contact phone verification sends a one-time code and confirms ownership", async () => {
+  const previousSecret=process.env.SMS_VERIFICATION_SECRET;
+  process.env.SMS_VERIFICATION_SECRET="test-secret-that-is-at-least-32-characters-long";
+  let storedHash=null, smsBody="";
+  const pool={async query(sql,params=[]) {
+    if(String(sql).startsWith("SELECT id,phone_e164 FROM trusted_contacts")) return {rowCount:1,rows:[{id:"123e4567-e89b-12d3-a456-426614174004",phone_e164:"+27821234567"}]};
+    if(String(sql).startsWith("UPDATE trusted_contacts SET verification_code_hash=")){storedHash=params[2];return {rowCount:1,rows:[]};}
+    if(String(sql).startsWith("SELECT verification_code_hash")) return {rowCount:1,rows:[{verification_code_hash:storedHash,verification_expires_at:new Date(Date.now()+600000),verification_attempts:0}]};
+    if(String(sql).startsWith("UPDATE trusted_contacts SET verified_at=")) return {rowCount:1,rows:[]};
+    return {rowCount:1,rows:[]};
+  }};
+  const service=createMobilityService(pool,null,null,{isConfigured:()=>true,async send(_to,body){smsBody=body;return {sent:true};}});
+  const contactId="123e4567-e89b-12d3-a456-426614174004";
+  try {
+    assert.deepEqual(await service.requestTrustedContactVerification({id:passengerId,role:"passenger"},contactId),{sent:true,expiresInSeconds:600});
+    const code=smsBody.match(/code is (\\d{6})/)[1];
+    assert.ok(storedHash);
+    const verified=await service.confirmTrustedContactVerification({id:passengerId,role:"passenger"},contactId,{code});
+    assert.equal(verified.verified,true);
+  } finally {
+    if(previousSecret===undefined) delete process.env.SMS_VERIFICATION_SECRET;
+    else process.env.SMS_VERIFICATION_SECRET=previousSecret;
+  }
+});
