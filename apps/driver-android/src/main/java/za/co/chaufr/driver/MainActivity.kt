@@ -155,15 +155,28 @@ private fun DriverHome() {
             }
             "Earnings" -> DriverEarningsSummary()
             "Safety" -> {
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Text("ACTIVE TRIP SAFETY", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text("SOS, trip sharing, passenger reporting and blocking controls are available from your active trip.", color = Muted, fontSize = 12.sp)
+                  Button(onClick = { selectedSection = "My Trips" }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open My Trips and safety controls")
+                  }
+                }
+              }
               DriverTrustedContactsPanel()
               Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                   Text("EMERGENCY DIALER", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                   listOf("112" to "Mobile emergency", "10111" to "Police", "10177" to "Ambulance").forEach { item ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                      Text(item.first, color = Navy, fontWeight = FontWeight.Bold)
-                      Spacer(Modifier.weight(1f))
-                      Text(item.second, color = Muted, fontSize = 11.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      Column(Modifier.weight(1f)) {
+                        Text(item.first, color = Navy, fontWeight = FontWeight.Bold)
+                        Text(item.second, color = Muted, fontSize = 11.sp)
+                      }
+                      OutlinedButton(onClick = {
+                        startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + item.first)))
+                      }) { Text("Call") }
                     }
                   }
                   Text("Chaufr does not dispatch emergency services. Use your phone dialer to contact emergency services.", color = Muted, fontSize = 10.sp)
