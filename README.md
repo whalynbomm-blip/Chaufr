@@ -29,15 +29,15 @@ The approved role-based navigation and live-trip-map implementation plan is in [
 
 The feature branch `feature/payments-payouts-verification` contains the core passenger and driver workflows, Safety Shield, scheduled ride management, trusted contacts, ratings, support tickets, driver earnings and encrypted driver verification-document workflow. Payment adapter code remains in the branch but the Android payment UI is disabled by default with `chaufrPaymentsEnabled=false`; gateway setup and activation are reserved for the final stage.
 
-At commit `dffdddf4e48f041b493ed953e0d24c6b3ae8fdaf`, the GitHub Actions API/fare test workflow and passenger/driver Android debug builds passed. The debug APK artifact is `chaufr-android-debug-apks`. These are review builds only; the production API URL and Google Maps key are not configured in CI, and these APKs are not signed release builds.
+GitHub Actions builds the API and runs PostgreSQL-backed integration tests on the feature branch. The Android workflow produces passenger and driver debug APKs as a downloadable artifact. The latest selfie-verification build is being checked; do not treat an older artifact as the latest build. Debug APKs are review builds only, not signed release builds.
 
 These are debug APKs for review, not production-signed release builds. The current feature work is in draft PR #1 and should not be merged until final review and deployment configuration are complete.
 
 ## Production launch gates
 
-The code is not yet a live ride-hailing service. Before public launch:
+The code is not yet a live ride-hailing service. Render staging infrastructure is described in `render.yaml`; creating it still requires the owner to connect the Render account. Before public launch:
 
-1. Deploy the API and managed PostgreSQL database; apply all migrations through `0024`.
+1. Deploy the API and managed PostgreSQL database; apply all migrations through `0027`.
 2. Configure private production secrets, Google Maps/Routes and Firebase.
 3. Complete POPIA, legal, security, data-retention, backup and incident-response reviews.
 4. Provision owner access securely, test both apps on physical devices, verify maps/location/push and validate all fare calculations.
@@ -45,7 +45,7 @@ The code is not yet a live ride-hailing service. Before public launch:
 6. Confirm Paystack has approved Chaufr's registered business and live transfer capability.
 7. Create signed release builds only after production API configuration, signing-key setup and final acceptance testing.
 
-See `docs/deployment.md`, `docs/payments-identity.md` and `services/api/README.md` for the operational setup. Never commit API keys, signing keys, bank details or real identity documents.
+See `docs/deployment.md`, `docs/owner-deployment-and-acceptance.md`, `docs/POPIA-and-e-hailing-readiness.md`, `docs/payments-identity.md` and `services/api/README.md` for the operational setup. Never commit API keys, signing keys, bank details or real identity documents.
 
 ## Optional emergency SMS configuration
 
