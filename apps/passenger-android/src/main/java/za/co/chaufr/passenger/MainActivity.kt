@@ -1163,8 +1163,11 @@ private fun PassengerHome() {
                                 }
                             }
                             else -> {
+                                Text("PROFILE & ACCOUNT", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 PassengerAccountCard()
+                                Text("HELP, RATINGS & SUPPORT", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 PassengerFeedbackSupportPanel()
+                                Text("PAYMENT SETTINGS", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                     Column(Modifier.padding(16.dp)) {
                                         Text("WALLET & PAYMENTS", color = ChaufrBlue, fontWeight = FontWeight.Bold, fontSize = 11.sp)
