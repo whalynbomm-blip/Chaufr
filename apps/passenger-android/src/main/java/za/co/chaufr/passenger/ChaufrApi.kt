@@ -171,6 +171,12 @@ object ChaufrApi {
     suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
         requestJson(baseUrl, "DELETE", "/v1/passenger/trusted-contacts/$id", token = token)
 
+    suspend fun requestTrustedContactVerification(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/verify", token = token)
+
+    suspend fun confirmTrustedContactVerification(baseUrl: String, token: String, id: String, code: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/confirm", JSONObject().put("code", code), token)
+
     suspend fun triggerSafetySos(baseUrl: String, token: String, tripId: String, note: String = ""): JSONObject =
         requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/sos", JSONObject().put("note", note), token)
 
