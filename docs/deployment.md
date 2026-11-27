@@ -85,14 +85,12 @@ The API validates core production configuration before opening its listening por
 - `DATABASE_URL` — PostgreSQL connection URL.
 - `VEHICLE_DATA_ENCRYPTION_KEY` and `DOCUMENT_ENCRYPTION_KEY` — independent base64-encoded 32-byte keys.
 - `FARE_QUOTE_SIGNING_SECRET` and `GOOGLE_MAPS_SERVER_API_KEY`.
-- `FIREBASE_SERVICE_ACCOUNT_JSON` — valid service-account JSON with project ID, client email and private key.
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` — sender number in E.164 format.
-- `SMS_VERIFICATION_SECRET` — at least 32 bytes.
+Firebase and Twilio are optional at startup and should remain unconfigured until their integrations are ready. If Firebase is configured, `FIREBASE_SERVICE_ACCOUNT_JSON` must be valid service-account JSON with project ID, client email and private key. If any Twilio variable is configured, all of `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` (E.164) and `SMS_VERIFICATION_SECRET` (at least 32 bytes) are required and validated together.
 
 Generate encryption keys independently with `openssl rand -base64 32`. Put values in the hosting provider's secret manager, not GitHub source files, Docker build arguments, Android resources or chat. Rotate any credential that has ever been committed or exposed. Use separate Firebase projects and credentials for staging and production where possible. Restrict Google server keys to the Routes API and appropriate server/network restrictions.
 
 The production validator is not a substitute for confirming provider-side permissions. After configuring secrets, deploy to a staging environment first, then verify:
-1. `GET /health` reports database connected, Firebase configured and emergency SMS configured.
+1. `GET /health` reports database connectivity and clearly shows whether optional Firebase push and Twilio SMS providers are configured.
 2. When Firebase is configured, it can deliver a test push to a registered test device in both app roles.
 3. When Twilio is configured, a verified, consenting test contact without a Chaufr account receives an SMS; record the Twilio message SID and final delivery status.
 4. Owner-console support reply round-trip works using separate test passenger, driver and owner accounts.
