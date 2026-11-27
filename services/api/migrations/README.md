@@ -18,7 +18,12 @@ The API applies pending SQL migrations in filename order at startup when `DATABA
 - `0018`–`0021` — encrypted identity/document workflows, payout processing and retry-safe payout records. Payment gateway activation is intentionally deferred until the core product is complete.
 - `0022` — passenger/driver trip ratings.
 - `0023` — customer-support tickets and owner replies.
-- `0024` — one-time scheduled-pickup reminder tracking.\n- `0025` — trusted-contact phone verification.\n- `0026` — manual driver approval and document expiry dates.\n- `0027` — driver selfie evidence type for owner-side face comparison.
+- `0024` — one-time scheduled-pickup reminder tracking.
+- `0025` — trusted-contact phone verification.
+- `0026` — manual driver approval and document expiry dates.
+- `0027` — driver selfie evidence type for owner-side face comparison.
+- `0028` — database-enforced limit of one active trip per driver.
+- `0028` — database-enforced limit of one active trip per driver.
 
 ## Important operating rules
 
