@@ -45,6 +45,15 @@ test("registration, login, session validation and logout work with PostgreSQL", 
     assert.equal(await auth.revokeSession(registered.user.id, oldSession.id, loggedIn.accessToken), true);
     assert.equal(await auth.authenticate(registered.accessToken), null);
     assert.equal(await auth.revokeSession(registered.user.id, sessions.sessions.find((session) => session.is_current).id, loggedIn.accessToken), false);
+    const replacementSession = await auth.login({
+      identifier: "passenger@example.com",
+      password: "a-long-test-password-123",
+    });
+    const revokedOthers = await auth.revokeOtherSessions(registered.user.id, replacementSession.accessToken);
+    assert.equal(revokedOthers.revokedCount, 1);
+    assert.equal(await auth.authenticate(loggedIn.accessToken), null);
+    assert.equal(await auth.authenticate(replacementSession.accessToken) !== null, true);
+
 
 
     await assert.rejects(
@@ -83,7 +92,7 @@ test("registration, login, session validation and logout work with PostgreSQL", 
     const base = `http://127.0.0.1:${server.address().port}`;
     try {
       const me = await fetch(`${base}/v1/auth/me`, {
-        headers: { authorization: `Bearer ${loggedIn.accessToken}` },
+        headers: { authorization: `Bearer ${replacementSession.accessToken}` },
       });
       assert.equal(me.status, 200);
       assert.equal((await me.json()).user.id, registered.user.id);
