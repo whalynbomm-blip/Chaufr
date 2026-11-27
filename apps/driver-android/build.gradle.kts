@@ -12,6 +12,8 @@ android {
     targetSdk = 35
     versionCode = 1
     versionName = "0.1.0"
+    val paymentsEnabled = providers.gradleProperty("chaufrPaymentsEnabled").orNull?.toBooleanStrictOrNull() ?: false
+    buildConfigField("boolean", "PAYMENTS_ENABLED", paymentsEnabled.toString())
     buildConfigField("String", "CHAUFR_API_BASE_URL", "\"${providers.gradleProperty("chaufrApiBaseUrl").orNull ?: ""}\"")
     buildConfigField("String", "FIREBASE_API_KEY", "\"${providers.gradleProperty("firebaseApiKey").orNull ?: ""}\"")
     buildConfigField("String", "FIREBASE_APP_ID", "\"${providers.gradleProperty("firebaseAppId").orNull ?: ""}\"")
