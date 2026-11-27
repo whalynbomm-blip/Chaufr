@@ -104,3 +104,17 @@ test("trusted contact phone verification sends a one-time code and confirms owne
     else process.env.SMS_VERIFICATION_SECRET=previousSecret;
   }
 });
+
+test("scheduled ride worker recovers dispatches left behind by an API restart", async () => {
+  const calls=[];
+  const pool={async query(sql,params=[]) {
+    calls.push(String(sql));
+    if(String(sql).startsWith("UPDATE scheduled_rides SET status=CASE")) return {rowCount:1,rows:[{id:"schedule-id",passenger_user_id:passengerId,status:"failed"}]};
+    if(String(sql).startsWith("WITH due_reminders")) return {rowCount:0,rows:[]};
+    if(String(sql).startsWith("SELECT id,passenger_user_id,scheduled_for")) return {rowCount:0,rows:[]};
+    return {rowCount:0,rows:[]};
+  }};
+  const result=await createMobilityService(pool).processDueScheduledRides();
+  assert.equal(result.recoveredDispatches,1);
+  assert.ok(calls.some(sql=>sql.includes("updated_at<now()-interval '10 minutes'")));
+});
