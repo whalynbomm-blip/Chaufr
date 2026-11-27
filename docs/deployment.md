@@ -76,3 +76,34 @@ For local pre-payment end-to-end testing only, the daily activation requirement 
 Dispatch, driver foreground location updates, passenger trip tracking and FCM notification plumbing are implemented in the codebase, but require production configuration and real-device verification. Passenger and driver Android screens include core trip, support, trusted-contact and document-verification workflows. The Paystack adapter code is present from earlier development, but payment gateway configuration, checkout activation, refunds and bank payouts are intentionally deferred until the core apps, backend, owner console and safety workflows are complete. Do not configure Paystack secrets during this build phase. The development-only driver activation bypass is permitted only with `NODE_ENV=development` and `CHAUFR_TEST_BYPASS_ACTIVATION=true`; never enable it in production. Trip ratings and support tickets are implemented in the core product. Account recovery, email/phone ownership verification, stronger distributed rate limiting, and production safety/contact verification remain outstanding. Payment transfer reconciliation is deferred with the payment gateway. The Android CI workflow currently produces debug APKs only; a signed release build requires a protected signing key and final release configuration.
 
 See [payments, payouts, refunds and identity verification](payments-identity.md) for the Paystack setup, endpoints, secrets and launch gates.
+
+
+## Production secrets and fail-closed startup
+
+The API now validates production configuration before opening its listening port. When `NODE_ENV=production`, startup fails if any of these are absent or malformed:
+
+- `DATABASE_URL` — PostgreSQL connection URL.
+- `VEHICLE_DATA_ENCRYPTION_KEY` and `DOCUMENT_ENCRYPTION_KEY` — independent base64-encoded 32-byte keys.
+- `FARE_QUOTE_SIGNING_SECRET` and `GOOGLE_MAPS_SERVER_API_KEY`.
+- `FIREBASE_SERVICE_ACCOUNT_JSON` — valid service-account JSON with project ID, client email and private key.
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` — sender number in E.164 format.
+- `SMS_VERIFICATION_SECRET` — at least 32 bytes.
+
+Generate encryption keys independently with `openssl rand -base64 32`. Put values in the hosting provider's secret manager, not GitHub source files, Docker build arguments, Android resources or chat. Rotate any credential that has ever been committed or exposed. Use separate Firebase projects and credentials for staging and production where possible. Restrict Google server keys to the Routes API and appropriate server/network restrictions.
+
+The production validator is not a substitute for confirming provider-side permissions. After configuring secrets, deploy to a staging environment first, then verify:
+1. `GET /health` reports database connected, Firebase configured and emergency SMS configured.
+2. Firebase can deliver a test push to a registered test device in both app roles.
+3. A verified, consenting test contact without a Chaufr account receives a Twilio SMS; record the Twilio message SID and final delivery status.
+4. Owner-console support reply round-trip works using separate test passenger, driver and owner accounts.
+5. Test identity documents can be downloaded, reviewed, approved/rejected and audited. Never upload real identity documents to staging.
+6. One-off and recurring scheduled rides materialise and dispatch at their intended local pickup times; test worker restart and duplicate prevention.
+7. Database backups can be restored, TLS is enforced, owner access is least-privilege, logs redact secrets and personal data, and rate limits/abuse monitoring are active.
+
+## Identity-provider decision
+
+The current implementation provides encrypted document upload and manual owner review. It does **not** integrate an automated third-party identity-verification vendor. Do not represent manual review as automated identity proofing. Select a provider only after Chaufr completes vendor due diligence for South African ID/passport and driver's-licence checks, POPIA operator terms, data residency/retention, fraud controls, pricing and API/webhook support. Keep manual review as the fallback until the selected provider is integrated and independently tested.
+
+## Deployment status
+
+No production host, database, domain, secret manager or live provider credentials are connected by this repository workflow. Deployment and real provider delivery therefore remain blocked until the owner provisions those external resources. Do not enable public rides or collect real identity documents before staging acceptance, POPIA/legal review and a tested backup/restore procedure.
