@@ -273,6 +273,7 @@ private fun DriverComplianceCard() {
         val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
         val result = ChaufrApi.uploadVerificationDocument(apiUrl, token, documentType, uri.lastPathSegment ?: "verification-document", mime, encoded, documentExpiryDate)
         documentMessage = "Document uploaded. Status: " + result.getJSONObject("document").optString("status")
+        documentExpiryDate = ""
         refreshDocuments(token)
       } catch (error: Exception) {
         documentMessage = error.message ?: "Document upload failed."
