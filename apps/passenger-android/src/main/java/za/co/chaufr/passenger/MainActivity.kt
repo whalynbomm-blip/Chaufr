@@ -122,6 +122,8 @@ private data class FarePreview(
 @Composable
 private fun PassengerHome() {
     var selectedSection by remember { mutableStateOf("Home") }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
     var pickup by remember { mutableStateOf("") }
     var destination by remember { mutableStateOf("") }
     var pickupPoint by remember { mutableStateOf<LatLng?>(null) }
@@ -216,8 +218,44 @@ private fun PassengerHome() {
             } catch (error: Exception) { rewardsMessage = error.message ?: "Unable to refresh reward tickets." }
         }
     }
-    Surface(modifier = Modifier.fillMaxSize(), color = ChaufrBackground) {
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet {
+                Column(Modifier.fillMaxWidth().background(ChaufrNavy).padding(20.dp)) {
+                    Text("CHAUFR", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+                    Text("PASSENGER MENU", color = Color(0xFFB8C7DA), fontSize = 10.sp, letterSpacing = 1.3.sp)
+                }
+                listOf("Home", "My Trips", "Rewards", "Safety", "More").forEach { section ->
+                    NavigationDrawerItem(
+                        label = { Text(section, fontWeight = if (selectedSection == section) FontWeight.Bold else FontWeight.Medium) },
+                        selected = selectedSection == section,
+                        onClick = {
+                            selectedSection = section
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("Your journey, your way.", color = ChaufrMuted, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
+            }
+        }
+    ) {
+      Surface(modifier = Modifier.fillMaxSize(), color = ChaufrBackground) {
         Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("☰", modifier = Modifier.clickable { scope.launch { drawerState.open() } }.padding(end = 16.dp), color = ChaufrNavy, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Column {
+                    Text("CHAUFR", color = ChaufrNavy, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+                    Text(selectedSection.uppercase(), color = ChaufrMuted, fontSize = 9.sp, letterSpacing = 1.2.sp)
+                }
+                Spacer(Modifier.weight(1f))
+                Text("MENU", modifier = Modifier.clickable { scope.launch { drawerState.open() } }, color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
             Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                 if (selectedSection == "Home") {
             Column(
@@ -1045,6 +1083,7 @@ private fun PassengerHome() {
             }
         }
       }
+    }
 }
 
 @Composable
