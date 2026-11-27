@@ -30,8 +30,8 @@ Payment gateway setup and activation are deliberately reserved for the final sta
 - [x] Route-deviation and unusual-stop heuristics.
 - [x] Report/block and owner moderation workflows.
 - [x] Direct emergency dialer shortcuts for South African mobile emergency (112), police (10111) and ambulance (10177).
-- [ ] Configure and field-test FCM; independently verify contact ownership.
-- [ ] SMS/voice alerts for contacts without Chaufr accounts and any external emergency-response integration require approved providers/operations. SOS does not dispatch emergency services.
+- [ ] Configure FCM and test delivery; independently verify contact ownership.
+- [ ] SMS alerts to contacts without Chaufr accounts require configured provider and delivery tests. SOS does not dispatch emergency services.
 
 ## 4. Scheduled rides
 - [x] One-off and recurring weekday ride APIs.
@@ -39,11 +39,12 @@ Payment gateway setup and activation are deliberately reserved for the final sta
 - [x] Recurring occurrence materialization and minute worker.
 - [x] One-time passenger push reminder around 30 minutes before pickup.
 - [x] Driver-visible scheduled pickup label/time when the ride is dispatched.
-- [ ] Verify timing, timezone and notification behavior with live FCM and real devices.
+- [ ] Verify timing, timezone, restart/recovery and notification behavior in staging and on devices.
 
 ## 5. Driver verification
 - [x] Encrypted ID/passport, licence, vehicle and supporting-document uploads.
-- [x] Owner review queue with approve/reject controls.
+- [x] Owner review queue with approve/reject controls and reason.
+- [x] Initial application requires SA driver's licence and selfie for manual comparison; PrDP is not an initial application gate.
 - [x] Driver online access blocked until required profile/vehicle/document checks pass.
 - [ ] Automated Home Affairs/licence-authority authenticity checks are not integrated.
 - [ ] Complete POPIA, consent, retention and secure document-access review before collecting real documents.
@@ -57,31 +58,34 @@ Payment gateway setup and activation are deliberately reserved for the final sta
 
 ## 7. Backend
 - [x] Authenticated driver earnings endpoint and recent trip history.
-- [x] Passenger history now includes persisted payment status.
+- [x] Passenger history includes persisted payment status.
 - [x] Scheduled reminder persistence and dispatch.
 - [x] Driver earnings and passenger history unit tests.
 - [ ] Email/phone ownership verification and password recovery.
 - [ ] Shared/distributed rate limiting, production monitoring and stronger operational abuse controls.
-- [ ] Deploy API and managed PostgreSQL; apply migrations through `0024`.
+- [ ] Deploy API and managed PostgreSQL; apply migrations through 0027.
+- [ ] Validate migration rollback/restore strategy and backup restoration in staging.
 
 ## 8. Notifications
 - [x] FCM device registration and core trip notification plumbing.
 - [x] Scheduled pickup reminder event.
-- [ ] Configure Firebase credentials and verify passenger/driver notification delivery on physical devices.
+- [ ] Configure Firebase credentials and verify delivery on physical devices.
+- [ ] Configure Twilio (optional) and verify SMS to non-Chaufr contacts; keep absent provider paths clearly reported as unavailable.
 
 ## 9. Testing
-- [x] API/fare test workflow passes on the current development line.
-- [x] Passenger and driver Android debug builds passed at the last verified build checkpoint.
-- [x] Re-run checks on the latest commit after the emergency dialer changes.
-- [ ] End-to-end passenger-to-driver testing with a deployed API and PostgreSQL.
+- [x] API/fare test workflow passes at latest verified commit 9786e791a0becccf21b818c81653dd4110e72d2a.
+- [x] Passenger and driver Android debug builds passed at baseline af5c851; app source unchanged since.
+- [ ] Run latest CI checks on commit 9786e791 after the migration-test formatting fix.
+- [ ] End-to-end passenger-to-driver testing with deployed API and PostgreSQL.
 - [ ] Security, concurrency, cancellation, refund and failure-path testing.
 - [ ] Physical Android device acceptance testing.
 
 ## 10. Release preparation
 - [x] Fresh debug APKs generated for UI review.
-- [ ] Deploy production API, database, Google Routes and Firebase.
+- [ ] Deploy staging API, database, Google Routes and Firebase.
 - [ ] Configure protected Android signing key and produce signed release APKs/AABs.
 - [ ] Final privacy/legal/security review and launch approval.
+- [ ] Confirm owner recovery procedure and incident contacts.
 
 ## 11. Payment gateway — last
 - [x] Keep Android checkout/activation UI disabled by default.
