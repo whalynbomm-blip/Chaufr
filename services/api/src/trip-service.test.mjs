@@ -177,3 +177,70 @@ test("passenger trip status returns a cached live traffic ETA from the latest dr
   assert.equal(second.liveTrafficEtaMinutes, 11);
   assert.equal(routeCalls, 1, "mobile refreshes should reuse the one-minute route cache");
 });
+
+
+test("driver arrival advances an accepted trip and notifies the passenger", async () => {
+  const events = [];
+  const notifications = [];
+  const pool = {
+    connect: async () => { throw new Error("connect should not be used"); },
+    query: async (sql, params = []) => {
+      events.push({ sql: String(sql), params });
+      if (String(sql).startsWith("UPDATE trips SET status = 'driver_arriving'")) {
+        return { rowCount: 1, rows: [{ id: "123e4567-e89b-12d3-a456-426614174000", passenger_user_id: "passenger-1", pickup_label: "Pinelands" }] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+  };
+  const service = createTripService(pool, { dailyActivationFee: 30 }, null, {
+    async sendToUser(userId, payload) { notifications.push({ userId, payload }); },
+  });
+  const result = await service.markDriverArrived({ id: "driver-1", role: "driver" }, "123e4567-e89b-12d3-a456-426614174000");
+  assert.equal(result.status, "driver_arriving");
+  assert.equal(notifications[0].userId, "passenger-1");
+  assert.ok(events.some((event) => event.sql.includes("driver_arrived_at_pickup")));
+});
+
+test("driver can cancel an accepted reward trip before start and reward tickets are released", async () => {
+  const calls = [];
+  const notifications = [];
+  const client = {
+    async query(sql, params = []) {
+      calls.push({ sql: String(sql), params });
+      if (String(sql) === "BEGIN" || String(sql) === "COMMIT" || String(sql) === "ROLLBACK") return { rowCount: 0, rows: [] };
+      if (String(sql).startsWith("SELECT id, passenger_user_id, status")) {
+        return { rowCount: 1, rows: [{ id: "123e4567-e89b-12d3-a456-426614174000", passenger_user_id: "passenger-1", status: "accepted", reward_redemption: "true" }] };
+      }
+      if (String(sql).startsWith("UPDATE passenger_reward_redemptions")) return { rowCount: 1, rows: [{ tickets_reserved: 9 }] };
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  const pool = { connect: async () => client, query: async () => ({ rows: [] }) };
+  const service = createTripService(pool, { dailyActivationFee: 30 }, null, {
+    async sendToUser(userId, payload) { notifications.push({ userId, payload }); },
+  });
+  const result = await service.cancelAcceptedTrip({ id: "driver-1", role: "driver" }, "123e4567-e89b-12d3-a456-426614174000");
+  assert.equal(result.status, "cancelled");
+  assert.ok(calls.some((call) => call.sql.includes("passenger_reward_accounts")));
+  assert.ok(calls.some((call) => call.sql.includes("'driver_cancelled'")));
+  assert.equal(notifications[0].userId, "passenger-1");
+});
+
+test("driver cannot use pre-start cancellation after a trip has started", async () => {
+  const client = {
+    async query(sql) {
+      if (String(sql) === "BEGIN" || String(sql) === "ROLLBACK") return { rowCount: 0, rows: [] };
+      if (String(sql).startsWith("SELECT id, passenger_user_id, status")) {
+        return { rowCount: 1, rows: [{ id: "123e4567-e89b-12d3-a456-426614174000", passenger_user_id: "passenger-1", status: "in_progress", reward_redemption: "false" }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+    release() {},
+  };
+  const service = createTripService({ connect: async () => client, query: async () => ({ rows: [] }) }, { dailyActivationFee: 30 });
+  await assert.rejects(
+    service.cancelAcceptedTrip({ id: "driver-1", role: "driver" }, "123e4567-e89b-12d3-a456-426614174000"),
+    /only before the trip has started/i,
+  );
+});
