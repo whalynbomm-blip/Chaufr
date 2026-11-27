@@ -234,7 +234,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
     async getPassengerTripHistory(passenger) {
       requireRole(passenger, "passenger");
       const result = await pool.query(
-        "SELECT id, status, pickup_label, destination_label, quoted_total, passenger_payable, " +
+        "SELECT id, status, payment_status, pickup_label, destination_label, quoted_total, passenger_payable, " +
         "distance_km, duration_minutes, requested_at, accepted_at, started_at, completed_at " +
         "FROM trips WHERE passenger_user_id = $1 ORDER BY requested_at DESC LIMIT 100",
         [passenger.id],
