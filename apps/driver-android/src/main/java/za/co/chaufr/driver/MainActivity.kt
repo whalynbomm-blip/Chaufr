@@ -267,6 +267,7 @@ private fun DriverComplianceCard() {
       try {
         val mime = context.contentResolver.getType(uri) ?: throw IllegalStateException("Unsupported file type.")
         if (mime !in listOf("image/jpeg", "image/png", "application/pdf")) throw IllegalStateException("Choose a JPG, PNG or PDF document.")
+        if (documentType == "driver_selfie" && mime !in listOf("image/jpeg", "image/png")) throw IllegalStateException("Your selfie must be a JPG or PNG image.")
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
           ?: throw IllegalStateException("Unable to read the selected document.")
         if (bytes.isEmpty() || bytes.size > 6 * 1024 * 1024) throw IllegalStateException("Document must be smaller than 6 MB.")
@@ -322,9 +323,10 @@ private fun DriverComplianceCard() {
       }
       Spacer(Modifier.height(4.dp))
       Text("Manual driver document approval", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-      Text("A valid South African driver’s licence is the only required document for this application. Upload it below for manual approval by Chaufr.", color = Muted, fontSize = 11.sp)
+      Text("Upload a valid South African driver’s licence and a clear, recent selfie. Chaufr will compare your selfie with the licence photograph during manual approval.", color = Muted, fontSize = 11.sp)
       val documentChoices = listOf(
-        "drivers_licence" to "Valid South African driver's licence"
+        "drivers_licence" to "Valid South African driver's licence",
+        "driver_selfie" to "Personal selfie (JPG or PNG)"
       )
       documentChoices.forEach { (type, label) ->
         OutlinedButton(onClick = { pendingDocumentType = type; verificationPicker.launch("*/*") },
