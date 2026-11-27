@@ -46,3 +46,7 @@ The code is not yet a live ride-hailing service. Before public launch:
 7. Create signed release builds only after production API configuration, signing-key setup and final acceptance testing.
 
 See `docs/deployment.md`, `docs/payments-identity.md` and `services/api/README.md` for the operational setup. Never commit API keys, signing keys, bank details or real identity documents.
+
+## Optional emergency SMS configuration
+
+Verified trusted contacts can receive emergency SMS when the API deployment has Twilio configured. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` as server-side secrets. Never put these credentials in either Android app. Phone verification codes expire after 10 minutes and allow at most five attempts. Without the provider settings, SMS is skipped while SOS events and push notifications continue.
