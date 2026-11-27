@@ -711,6 +711,14 @@ private fun DriverCurrentTripCard() {
                 }, modifier = Modifier.weight(1f)) { Text("Share trip") }
               }
               OutlinedTextField(value = safetyNotes, onValueChange = { safetyNotes = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("Report details (optional)") }, shape = RoundedCornerShape(12.dp), minLines = 2)
+              Text("If you are in immediate danger, contact emergency services directly. Chaufr SOS does not call emergency services.", color = Muted, fontSize = 10.sp)
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Mobile emergency" to "112", "Police" to "10111", "Ambulance" to "10177").forEach { (label, number) ->
+                  OutlinedButton(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + number)))
+                  }, modifier = Modifier.weight(1f)) { Text("$label\n$number", fontSize = 9.sp) }
+                }
+              }
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                   val token = SecureTokenStore.load(context)
