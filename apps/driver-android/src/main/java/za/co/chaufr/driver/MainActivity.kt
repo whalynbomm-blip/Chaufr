@@ -559,7 +559,7 @@ private fun DriverEarningsSummary() {
       if (message.isNotBlank()) Text(message, color = Muted, fontSize = 11.sp)
       val recent = data?.optJSONArray("recentTrips")
       if (recent != null && recent.length() > 0) {
-        Divider()
+        HorizontalDivider()
         Text("RECENT COMPLETED TRIPS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         for (index in 0 until minOf(recent.length(), 5)) {
           val trip = recent.optJSONObject(index) ?: continue
