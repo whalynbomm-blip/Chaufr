@@ -33,6 +33,29 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
   if (!pool || typeof pool.connect !== "function") throw new TypeError("A PostgreSQL pool is required");
   if (!fareConfig) throw new TypeError("Server fare configuration is required");
 
+  // Recalculate traffic-aware remaining routes at most once per trip per minute.
+  // This prevents frequent mobile refreshes from creating excessive Routes API calls.
+  const liveEtaCache = new Map();
+  const getLiveTrafficEstimate = async (tripId, origin, destination) => {
+    if (!routesService?.computeRoute || !origin || !destination) return null;
+    const now = Date.now();
+    const cached = liveEtaCache.get(tripId);
+    if (cached && now - cached.cachedAt < 60_000) return cached.estimate;
+    try {
+      const route = await routesService.computeRoute(origin, destination);
+      const estimate = {
+        liveTrafficEtaMinutes: Number(route.durationMinutes),
+        liveTrafficRemainingKm: Number(route.distanceKm),
+        liveTrafficCalculatedAt: new Date(now).toISOString(),
+      };
+      liveEtaCache.set(tripId, { cachedAt: now, estimate });
+      if (liveEtaCache.size > 200) liveEtaCache.delete(liveEtaCache.keys().next().value);
+      return estimate;
+    } catch {
+      return null;
+    }
+  };
+
   const notify = async (userId, title, body, data) => {
     if (!pushService || !userId) return;
     try { await pushService.sendToUser(userId, { title, body, data }); } catch { /* push delivery must not block trip state changes */ }
@@ -275,6 +298,12 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const trip = result.rows[0];
       if (!trip) throw new AuthError("Trip not found", 404);
       const locationIsRecent = trip.last_seen_at && (Date.now() - new Date(trip.last_seen_at).getTime()) <= 90_000;
+      const liveTrafficEstimate = locationIsRecent && trip.driver_latitude != null && trip.driver_longitude != null &&
+        ["accepted", "driver_arriving", "in_progress"].includes(trip.status)
+        ? await getLiveTrafficEstimate(trip.id,
+            { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude) },
+            trip.destination_location)
+        : null;
       return {
         tripId: trip.id,
         status: trip.status,
@@ -283,6 +312,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         passengerPayable: Number(trip.passenger_payable ?? trip.quoted_total),
         distanceKm: Number(trip.distance_km),
         durationMinutes: Number(trip.duration_minutes),
+        ...(liveTrafficEstimate ?? {}),
         route: { encodedPolyline: trip.encoded_polyline ?? null, pickup: trip.pickup_location ?? null, destination: trip.destination_location ?? null },
         requestedAt: trip.requested_at,
         acceptedAt: trip.accepted_at,
@@ -485,6 +515,13 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         [driver.id],
       );
       const trip = result.rows[0];
+      const driverLocationIsRecent = trip?.driver_latitude != null && trip?.last_seen_at &&
+        (Date.now() - new Date(trip.last_seen_at).getTime()) <= 90_000;
+      const liveTrafficEstimate = trip && driverLocationIsRecent && trip.status === "in_progress"
+        ? await getLiveTrafficEstimate(trip.id,
+            { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude) },
+            trip.destination_location)
+        : null;
       return { trip: trip ? {
         tripId: trip.id,
         passengerUserId: trip.passenger_user_id,
@@ -493,6 +530,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         destinationLabel: trip.destination_label,
         distanceKm: Number(trip.distance_km),
         durationMinutes: Number(trip.duration_minutes),
+        ...(liveTrafficEstimate ?? {}),
         route: { encodedPolyline: trip.encoded_polyline ?? null, pickup: trip.pickup_location ?? null, destination: trip.destination_location ?? null },
         driverLocation: trip.driver_latitude == null || !trip.last_seen_at || (Date.now() - new Date(trip.last_seen_at).getTime()) > 90_000 ? null : { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude), lastSeenAt: trip.last_seen_at },
         passengerFare: Number(trip.quoted_total),
