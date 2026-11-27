@@ -563,6 +563,8 @@ private fun PassengerHome() {
                                                 color = ChaufrMuted, fontSize = 10.sp
                                             )
                                         }
+                                        Spacer(Modifier.height(10.dp))
+                                        PassengerLiveTripMap(snapshot)
                                         if (snapshot.optString("status") == "requested") {
                                             Button(
                                                 onClick = {
