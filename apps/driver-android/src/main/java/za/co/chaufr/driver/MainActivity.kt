@@ -102,11 +102,7 @@ private fun DriverHome() {
         AvailableTripsCard()
         DriverCurrentTripCard()
 
-        Text("TODAY'S SUMMARY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          SummaryCard("EARNINGS", "R 0.00", Modifier.weight(1f))
-          SummaryCard("TRIPS", "0", Modifier.weight(1f))
-        }
+        DriverEarningsSummary()
 
         Card(
           modifier = Modifier.fillMaxWidth(),
@@ -124,22 +120,10 @@ private fun DriverHome() {
           }
         }
 
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          shape = RoundedCornerShape(18.dp),
-          colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF1FC))
-        ) {
-          Column(modifier = Modifier.padding(17.dp)) {
-            Text("TRIP REQUESTS", color = Navy, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text("No live trip offers yet. Passenger requests, driver matching, navigation and trip status updates will be enabled when the shared backend is connected.", color = Color(0xFF53647A), fontSize = 12.sp, lineHeight = 18.sp)
-          }
-        }
-
         DriverFeedbackSupportPanel()
         Spacer(Modifier.height(14.dp))
         Text(
-          "Chaufr Driver · Development preview. Earnings and availability shown here are not live account data.",
+          "Trip offers, active-trip status and earnings refresh from the Chaufr service when connected.",
           modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
           color = Muted,
           fontSize = 10.sp,
@@ -509,6 +493,87 @@ private fun DriverAvailabilityCard() {
         Spacer(Modifier.height(6.dp))
         Text("Connect the Chaufr API to enable live availability.", color = Muted, fontSize = 10.sp)
       }
+    }
+  }
+}
+
+@Composable
+private fun DriverEarningsSummary() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var summary by remember { mutableStateOf<JSONObject?>(null) }
+  var loading by remember { mutableStateOf(false) }
+  var message by remember { mutableStateOf("") }
+
+  suspend fun refresh() {
+    if (apiUrl.isBlank()) {
+      message = "Connect the Chaufr API to view your live earnings."
+      return
+    }
+    val token = SecureTokenStore.load(context)
+    if (token.isNullOrBlank()) {
+      message = "Sign in to view your earnings."
+      return
+    }
+    loading = true
+    try {
+      summary = ChaufrApi.driverEarnings(apiUrl, token)
+      message = ""
+    } catch (error: Exception) {
+      message = error.message ?: "Unable to load earnings."
+    } finally {
+      loading = false
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    while (true) {
+      refresh()
+      delay(60_000)
+    }
+  }
+
+  val data = summary
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("YOUR EARNINGS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+          Text("Completed trips only", color = Muted, fontSize = 11.sp)
+        }
+        OutlinedButton(onClick = { scope.launch { refresh() } }, enabled = !loading) {
+          Text(if (loading) "Refreshing…" else "Refresh")
+        }
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SummaryCard("TODAY", "R " + String.format(Locale.US, "%.2f", data?.optDouble("todayEarnings", 0.0) ?: 0.0), Modifier.weight(1f))
+        SummaryCard("TRIPS", (data?.optInt("todayTrips", 0) ?: 0).toString(), Modifier.weight(1f))
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SummaryCard("LIFETIME", "R " + String.format(Locale.US, "%.2f", data?.optDouble("lifetimeEarnings", 0.0) ?: 0.0), Modifier.weight(1f))
+        SummaryCard("COMPLETED", (data?.optInt("lifetimeTrips", 0) ?: 0).toString(), Modifier.weight(1f))
+      }
+      if (message.isNotBlank()) Text(message, color = Muted, fontSize = 11.sp)
+      val recent = data?.optJSONArray("recentTrips")
+      if (recent != null && recent.length() > 0) {
+        Divider()
+        Text("RECENT COMPLETED TRIPS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        for (index in 0 until minOf(recent.length(), 5)) {
+          val trip = recent.optJSONObject(index) ?: continue
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(trip.optString("pickupLabel") + " → " + trip.optString("destinationLabel"), color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+              Text(if (trip.optBoolean("rewardRide")) "Reward ride" else "Standard trip", color = Muted, fontSize = 10.sp)
+            }
+            Text("R " + String.format(Locale.US, "%.2f", trip.optDouble("driverEarnings", 0.0)), color = Green, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          }
+        }
+      } else if (data != null) {
+        Text("Your completed trips will appear here.", color = Muted, fontSize = 11.sp)
+      }
+      Text("Earnings are recorded by the Chaufr server after trip completion. Bank settlement is shown separately when payouts are enabled.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
     }
   }
 }
