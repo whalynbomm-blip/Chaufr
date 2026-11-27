@@ -329,9 +329,11 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
           [reference,transfer.transfer_code]);
         return { tripId, amount: amountMinor/100, status:"processing", transferCode:transfer.transfer_code };
       } catch (error) {
-        const definitiveFailure = error.status === 502;
-        await pool.query("UPDATE driver_payouts SET status=$2,failure_reason=$3,updated_at=now() WHERE provider_reference=$1",
-          [reference,definitiveFailure ? "failed" : "processing",String(error.message).slice(0,300)]);
+        // A timeout or provider error can happen after Paystack accepted the transfer.
+        // Keep the payout processing until a signed webhook or owner reconciliation
+        // establishes its final state; never make the source payable again here.
+        await pool.query("UPDATE driver_payouts SET status='processing',failure_reason=$2,updated_at=now() WHERE provider_reference=$1",
+          [reference,String(error.message).slice(0,300)]);
         throw error;
       }
     },
@@ -358,12 +360,10 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
           await pool.query("UPDATE driver_payouts SET status='processing',provider_transfer_code=$2,updated_at=now() WHERE provider_reference=$1", [reference, transfer.transfer_code]);
           return { payoutId: requestId, status: "processing", transferCode: transfer.transfer_code };
         } catch (error) {
-          const definitiveFailure = error.status === 502;
-          await pool.query("UPDATE driver_payouts SET status=$2,failure_reason=$3,updated_at=now() WHERE provider_reference=$1",
-            [reference, definitiveFailure ? "failed" : "processing", String(error.message).slice(0,300)]);
-          if (definitiveFailure) {
-            await pool.query("UPDATE reward_driver_commission_requests SET status='approved',updated_at=now() WHERE id=$1 AND status='processing'", [requestId]);
-          }
+          // Do not reopen a commission request on an ambiguous provider response:
+          // Paystack may have accepted the transfer even if the API call timed out.
+          await pool.query("UPDATE driver_payouts SET status='processing',failure_reason=$2,updated_at=now() WHERE provider_reference=$1",
+            [reference, String(error.message).slice(0,300)]);
           throw error;
         }
       } catch (error) {
