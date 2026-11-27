@@ -25,7 +25,7 @@ The codebase includes trusted-contact management, SOS event recording, 12-hour l
 
 The feature branch `feature/payments-payouts-verification` contains the core passenger and driver workflows, Safety Shield, scheduled ride management, trusted contacts, ratings, support tickets, driver earnings and encrypted driver verification-document workflow. Payment adapter code remains in the branch but the Android payment UI is disabled by default with `chaufrPaymentsEnabled=false`; gateway setup and activation are reserved for the final stage.
 
-The earlier baseline API and Android debug build checks passed. Additional core-feature changes are being validated by GitHub Actions on the current branch; do not treat the latest build as verified until those checks finish.
+At commit `dffdddf4e48f041b493ed953e0d24c6b3ae8fdaf`, the GitHub Actions API/fare test workflow and passenger/driver Android debug builds passed. The debug APK artifact is `chaufr-android-debug-apks`. These are review builds only; the production API URL and Google Maps key are not configured in CI, and these APKs are not signed release builds.
 
 These are debug APKs for review, not production-signed release builds. The current feature work is in draft PR #1 and should not be merged until final review and deployment configuration are complete.
 
