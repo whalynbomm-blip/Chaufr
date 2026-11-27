@@ -114,11 +114,12 @@ export function createOwnerService(pool, fareConfig) {
         await client.query("BEGIN");
         if (status === "verified") {
           const evidence = await client.query(
-            "SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1",
+            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status, " +
+            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='driver_selfie' ORDER BY created_at DESC LIMIT 1) AS selfie_status",
             [driverId],
           );
-          if (evidence.rows[0]?.status !== "approved") {
-            throw new AuthError("Approve a valid South African driver's licence before verifying this driver", 409);
+          if (evidence.rows[0]?.licence_status !== "approved" || evidence.rows[0]?.selfie_status !== "approved") {
+            throw new AuthError("Approve both the driver's licence and matching driver selfie before verifying this driver", 409);
           }
         }
         const updated = await client.query(
