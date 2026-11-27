@@ -59,13 +59,13 @@ Do not use sample values as live commercial pricing without approval and validat
 
 1. Select and authorize the hosting provider and deployment project.
 2. Configure production fare rules and verify the health endpoint.
-3. Connect PostgreSQL and apply versioned migrations.
+3. Connect PostgreSQL and apply versioned migrations through `0024`.
 4. Provision the owner account securely through a trusted database operator; public registration must never grant owner privileges.
 5. Review the owner pricing console at `/owner`, approve all fare bands and verify audit events before allowing public trip requests.
 6. Connect a routing provider and calculate routes on trusted server-side infrastructure.
 7. Configure monitoring, backups, privacy controls and incident response.
 8. Complete security and South African legal/compliance review.
 
-Dispatch, driver foreground location updates, passenger trip tracking and FCM notification plumbing are implemented in the codebase, but require production configuration and real-device verification. Passenger and driver Android screens now include the Paystack checkout, refund-request, document-upload and payout-bank onboarding flows. The Paystack adapter includes signed webhooks, server-side transaction verification, refunds and bank-transfer initiation; all financial flows still require provider credentials, production deployment and end-to-end sandbox tests. Ratings, customer-support workflows, transfer settlement reconciliation and some account-recovery/ownership-verification controls remain outstanding. The Android CI workflow currently produces debug APKs only; a signed release build requires a protected signing key and final release configuration.
+Dispatch, driver foreground location updates, passenger trip tracking and FCM notification plumbing are implemented in the codebase, but require production configuration and real-device verification. Passenger and driver Android screens include core trip, support, trusted-contact and document-verification workflows. The Paystack adapter code is present from earlier development, but payment gateway configuration, checkout activation, refunds and bank payouts are intentionally deferred until the core apps, backend, owner console and safety workflows are complete. Do not configure Paystack secrets during this build phase. The development-only driver activation bypass is permitted only with `NODE_ENV=development` and `CHAUFR_TEST_BYPASS_ACTIVATION=true`; never enable it in production. Ratings, customer-support workflows, transfer settlement reconciliation and some account-recovery/ownership-verification controls remain outstanding. The Android CI workflow currently produces debug APKs only; a signed release build requires a protected signing key and final release configuration.
 
 See [payments, payouts, refunds and identity verification](payments-identity.md) for the Paystack setup, endpoints, secrets and launch gates.
