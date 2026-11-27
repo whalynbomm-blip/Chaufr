@@ -114,7 +114,7 @@ export function createOwnerService(pool, fareConfig) {
         await client.query("BEGIN");
         if (status === "verified") {
           const evidence = await client.query(
-            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status, " +
+            "SELECT (SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status, " +
             "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='driver_selfie' ORDER BY created_at DESC LIMIT 1) AS selfie_status",
             [driverId],
           );
