@@ -72,7 +72,7 @@ Payment gateway setup and activation are deliberately reserved for the final sta
 ## 9. Testing
 - [x] API/fare test workflow passes on the current development line.
 - [x] Passenger and driver Android debug builds passed at the last verified build checkpoint.
-- [ ] Re-run checks on the latest commit after the emergency dialer changes.
+- [x] Re-run checks on the latest commit after the emergency dialer changes.
 - [ ] End-to-end passenger-to-driver testing with a deployed API and PostgreSQL.
 - [ ] Security, concurrency, cancellation, refund and failure-path testing.
 - [ ] Physical Android device acceptance testing.
