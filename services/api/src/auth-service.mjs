@@ -159,7 +159,7 @@ export function createAuthService(pool) {
         `SELECT id, created_at, last_used_at, expires_at, revoked_at,
                 (token_hash = $2) AS is_current
          FROM auth_sessions
-         WHERE user_id = $1 AND expires_at > now()
+         WHERE user_id = $1 AND expires_at > now() AND revoked_at IS NULL
          ORDER BY created_at DESC LIMIT 100`,
         [userId, currentHash],
       );
@@ -185,7 +185,7 @@ export function createAuthService(pool) {
       catch { throw new AuthError("Invalid session", 401); }
       const result = await pool.query(
         `UPDATE auth_sessions SET revoked_at = now()
-         WHERE user_id = $1 AND revoked_at IS NULL AND token_hash <> $2
+         WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now() AND token_hash <> $2
          RETURNING id`,
         [userId, currentHash],
       );
