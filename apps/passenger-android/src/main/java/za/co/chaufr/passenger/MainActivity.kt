@@ -993,7 +993,81 @@ private fun PassengerHome() {
                         Text(selectedSection, color = ChaufrNavy, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
                         when (selectedSection) {
                             "My Trips" -> {
-                                Text("Your active and previous journeys", color = ChaufrMuted, fontSize = 12.sp)
+                                Text("Your active, scheduled and previous journeys", color = ChaufrMuted, fontSize = 12.sp)
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("SCHEDULED RIDES", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        Button(
+                                            onClick = {
+                                                scope.launch {
+                                                    scheduleActionBusy = true
+                                                    try {
+                                                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                                        val result = ChaufrApi.passengerScheduledRides(BuildConfig.CHAUFR_API_BASE_URL, token)
+                                                        val scheduled = result.optJSONArray("scheduled")
+                                                        val recurring = result.optJSONArray("recurring")
+                                                        scheduledRideRows = (0 until (scheduled?.length() ?: 0)).mapNotNull { scheduled?.optJSONObject(it) }
+                                                        recurringRideRows = (0 until (recurring?.length() ?: 0)).mapNotNull { recurring?.optJSONObject(it) }
+                                                        scheduleSummary = ""
+                                                    } catch (error: Exception) {
+                                                        scheduleSummary = error.message ?: "Unable to load scheduled rides."
+                                                    } finally { scheduleActionBusy = false }
+                                                }
+                                            },
+                                            enabled = !scheduleActionBusy,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) { Text(if (scheduleActionBusy) "Refreshing…" else "Refresh scheduled rides") }
+                                        scheduledRideRows.filter { it.optString("status") in listOf("scheduled", "active") }.forEach { row ->
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    Text(row.optString("pickup_label") + " → " + row.optString("destination_label"), color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                    Text(row.optString("scheduled_for").replace("T", " ").take(16) + " · " + row.optString("status").uppercase(), color = ChaufrMuted, fontSize = 10.sp)
+                                                }
+                                                OutlinedButton(
+                                                    enabled = !scheduleActionBusy,
+                                                    onClick = {
+                                                        scope.launch {
+                                                            scheduleActionBusy = true
+                                                            try {
+                                                                val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                                                ChaufrApi.cancelScheduledRide(BuildConfig.CHAUFR_API_BASE_URL, token, row.optString("id"))
+                                                                scheduledRideRows = scheduledRideRows.filterNot { it.optString("id") == row.optString("id") }
+                                                                scheduleSummary = "Scheduled ride cancelled."
+                                                            } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to cancel scheduled ride." }
+                                                            finally { scheduleActionBusy = false }
+                                                        }
+                                                    }
+                                                ) { Text("Cancel") }
+                                            }
+                                            Divider(color = Color(0xFFE8ECF2))
+                                        }
+                                        recurringRideRows.filter { it.optString("status") == "active" }.forEach { row ->
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                                    Text(row.optString("pickup_label") + " → " + row.optString("destination_label"), color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                    Text("Recurring · " + row.optString("local_time") + " · " + row.optString("status").uppercase(), color = ChaufrMuted, fontSize = 10.sp)
+                                                }
+                                                OutlinedButton(
+                                                    enabled = !scheduleActionBusy,
+                                                    onClick = {
+                                                        scope.launch {
+                                                            scheduleActionBusy = true
+                                                            try {
+                                                                val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                                                ChaufrApi.cancelRecurringRide(BuildConfig.CHAUFR_API_BASE_URL, token, row.optString("id"))
+                                                                recurringRideRows = recurringRideRows.filterNot { it.optString("id") == row.optString("id") }
+                                                                scheduleSummary = "Recurring ride cancelled."
+                                                            } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to cancel recurring ride." }
+                                                            finally { scheduleActionBusy = false }
+                                                        }
+                                                    }
+                                                ) { Text("Stop") }
+                                            }
+                                        }
+                                        if (scheduledRideRows.isEmpty() && recurringRideRows.isEmpty()) Text("Your upcoming and recurring bookings will appear here after you refresh.", color = ChaufrMuted, fontSize = 10.sp)
+                                        if (scheduleSummary.isNotBlank()) Text(scheduleSummary, color = ChaufrMuted, fontSize = 10.sp)
+                                    }
+                                }
                                 if (activePassengerTripId != null) {
                                     Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
