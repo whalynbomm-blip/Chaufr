@@ -475,7 +475,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
           return json(response, 200, await authService.revokeOtherSessions(user.id, token));
         }
-        const revokeSessionMatch = /^\\/v1\\/auth\\/sessions\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        const revokeSessionMatch = new RegExp("^/v1/auth/sessions/([0-9a-f-]{36})$", "i").exec(url.pathname);
         if (request.method === "DELETE" && revokeSessionMatch) {
           const token = getBearerToken(request);
           if (!token) return json(response, 401, { error: "Authentication required", requestId });
