@@ -249,6 +249,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         passengerPayable: Number(trip.passenger_payable ?? trip.quoted_total),
         distanceKm: Number(trip.distance_km),
         durationMinutes: Number(trip.duration_minutes),
+        route: { encodedPolyline: trip.encoded_polyline ?? null, pickup: trip.pickup_location ?? null, destination: trip.destination_location ?? null },
         requestedAt: trip.requested_at,
         acceptedAt: trip.accepted_at,
         startedAt: trip.started_at,
@@ -261,7 +262,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
       const result = await pool.query(
         "SELECT t.id, t.status, t.payment_status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
-        "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, " +
+        "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, t.fare_snapshot->>'encodedPolyline' AS encoded_polyline, t.fare_snapshot->'pickupLocation' AS pickup_location, t.fare_snapshot->'destinationLocation' AS destination_location, " +
         "u.id AS driver_user_id, u.display_name AS driver_name, dp.rating AS driver_rating, v.make AS vehicle_make, v.model AS vehicle_model, " +
         "v.category AS vehicle_category, p.latitude AS driver_latitude, p.longitude AS driver_longitude, " +
         "p.location_accuracy_m, p.last_seen_at " +
@@ -345,6 +346,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         breakdown: { ...fare.breakdown },
         rewardRedemption: redeemReward,
         pickupLocation: { latitude: Number(input.origin.latitude), longitude: Number(input.origin.longitude) },
+        destinationLocation: { latitude: Number(input.destination.latitude), longitude: Number(input.destination.longitude) },
       };
       const client = await pool.connect();
       try {
@@ -469,8 +471,11 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       if (!activation) throw activationRequired();
       const result = await pool.query(
         "SELECT t.id, t.passenger_user_id, t.status, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
-        "t.quoted_total, t.driver_earnings, t.accepted_at, t.started_at, t.fare_snapshot->>'rewardRedemption' AS reward_redemption, sr.scheduled_for " +
+        "t.quoted_total, t.driver_earnings, t.accepted_at, t.started_at, t.fare_snapshot->>'rewardRedemption' AS reward_redemption, " +
+        "t.fare_snapshot->>'encodedPolyline' AS encoded_polyline, t.fare_snapshot->'pickupLocation' AS pickup_location, " +
+        "t.fare_snapshot->'destinationLocation' AS destination_location, p.latitude AS driver_latitude, p.longitude AS driver_longitude, p.last_seen_at, sr.scheduled_for " +
         "FROM trips t LEFT JOIN scheduled_rides sr ON sr.trip_id=t.id " +
+        "LEFT JOIN driver_presence p ON p.driver_user_id=t.driver_user_id " +
         "WHERE t.driver_user_id = $1 AND t.status IN ('accepted', 'in_progress') " +
         "ORDER BY t.accepted_at DESC LIMIT 1",
         [driver.id],
@@ -484,6 +489,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         destinationLabel: trip.destination_label,
         distanceKm: Number(trip.distance_km),
         durationMinutes: Number(trip.duration_minutes),
+        route: { encodedPolyline: trip.encoded_polyline ?? null, pickup: trip.pickup_location ?? null, destination: trip.destination_location ?? null },
+        driverLocation: trip.driver_latitude == null || !trip.last_seen_at || (Date.now() - new Date(trip.last_seen_at).getTime()) > 90_000 ? null : { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude), lastSeenAt: trip.last_seen_at },
         passengerFare: Number(trip.quoted_total),
         expectedDriverEarnings: Number(trip.driver_earnings),
         rewardRedemption: trip.reward_redemption === "true",
