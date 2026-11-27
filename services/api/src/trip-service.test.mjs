@@ -93,3 +93,34 @@ test("activation bypass is ignored in production even when the flag is present",
     else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
   }
 });
+
+test("passenger trip history includes the persisted payment status", async () => {
+  let queryText = "";
+  const pool = {
+    connect: async () => {},
+    query: async (sql, params) => {
+      queryText = sql;
+      assert.equal(params[0], "passenger-1");
+      return { rows: [{
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        status: "completed",
+        payment_status: "unpaid",
+        pickup_label: "Pinelands",
+        destination_label: "Cape Town CBD",
+        quoted_total: "100.00",
+        passenger_payable: "100.00",
+        distance_km: "8.5",
+        duration_minutes: "22",
+        requested_at: "2026-11-27T00:00:00.000Z",
+        accepted_at: null,
+        started_at: null,
+        completed_at: "2026-11-27T00:30:00.000Z",
+      }] };
+    },
+  };
+  const service = createTripService(pool, { dailyActivationFee: 30 });
+  const history = await service.getPassengerTripHistory({ id: "passenger-1", role: "passenger" });
+  assert.match(queryText, /payment_status/);
+  assert.equal(history[0].paymentStatus, "unpaid");
+  assert.equal(history[0].status, "completed");
+});
