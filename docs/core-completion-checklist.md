@@ -94,3 +94,11 @@ Payment gateway setup and activation are deliberately reserved for the final sta
 - [ ] Enable `chaufrPaymentsEnabled=true` only after final approval.
 
 Never set `CHAUFR_TEST_BYPASS_ACTIVATION=true` outside `NODE_ENV=development`; never enable it in production. Approved fares, commissions, rewards and matching rules must remain unchanged.
+
+## 12. Operations and privacy
+- [x] Staging acceptance test matrix drafted.
+- [x] CodeQL workflow and weekly Dependabot configuration added.
+- [x] Incident response runbook drafted: [incident-response-runbook.md](incident-response-runbook.md).
+- [x] Privacy and data-retention checklist drafted: [privacy-retention-checklist.md](privacy-retention-checklist.md).
+- [ ] Owner review and legal/privacy approval; establish retention periods, incident contacts and request workflow.
+- [ ] Verify backups, restore drill, monitoring, alert thresholds and access audit trail.
