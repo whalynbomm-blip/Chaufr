@@ -21,6 +21,8 @@ fun DriverTrustedContactsPanel() {
     var contacts by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var verificationCode by remember { mutableStateOf("") }
+    var verifyingContactId by remember { mutableStateOf("") }
 
     suspend fun refresh() {
         val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to manage trusted contacts.")
@@ -39,7 +41,7 @@ fun DriverTrustedContactsPanel() {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("TRUSTED EMERGENCY CONTACTS", style = MaterialTheme.typography.titleMedium)
-            Text("Manage who should be notified by Chaufr safety alerts. Contact ownership is not yet independently verified.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text("Verify each contact by SMS so emergency alerts can reach them even if they do not have a Chaufr account.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             OutlinedTextField(name, { name = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Contact name") }, singleLine = true)
             OutlinedTextField(phone, { phone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("International phone (+2782...)") }, singleLine = true)
             OutlinedTextField(relationship, { relationship = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Relationship") }, singleLine = true)
@@ -63,11 +65,36 @@ fun DriverTrustedContactsPanel() {
                     catch (error: Exception) { message = error.message ?: "Unable to refresh contacts." }
                     finally { busy = false }
                 } }) { Text("Refresh contacts") }
+            if (verifyingContactId.isNotBlank()) {
+                OutlinedTextField(verificationCode, { verificationCode = it.filter(Char::isDigit).take(6) }, modifier = Modifier.fillMaxWidth(), label = { Text("6-digit SMS verification code") }, singleLine = true)
+                Button(modifier = Modifier.fillMaxWidth(), enabled = !busy && verificationCode.length == 6, onClick = { scope.launch {
+                    busy = true
+                    try {
+                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                        ChaufrApi.confirmTrustedContactVerification(apiUrl, token, verifyingContactId, verificationCode)
+                        verifyingContactId = ""; verificationCode = ""; refresh(); message = "Trusted contact verified. They can now receive emergency SMS."
+                    } catch (error: Exception) { message = error.message ?: "Unable to verify contact." }
+                    finally { busy = false }
+                } }) { Text("Confirm phone number") }
+            }
             contacts.forEach { contact ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f)) {
                         Text(contact.optString("contact_name"), style = MaterialTheme.typography.bodyMedium)
                         Text(contact.optString("phone_e164") + " · " + contact.optString("relationship"), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text(if (contact.isNull("verified_at")) "Not verified" else "Verified for emergency SMS", style = MaterialTheme.typography.labelSmall, color = if (contact.isNull("verified_at")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    }
+                    if (contact.isNull("verified_at")) {
+                        TextButton(enabled = !busy, onClick = { scope.launch {
+                            busy = true
+                            try {
+                                val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                ChaufrApi.requestTrustedContactVerification(apiUrl, token, contact.optString("id"))
+                                verifyingContactId = contact.optString("id")
+                                message = "Verification code sent by SMS."
+                            } catch (error: Exception) { message = error.message ?: "Unable to send verification code." }
+                            finally { busy = false }
+                        } }) { Text("Verify") }
                     }
                     TextButton(enabled = !busy, onClick = { scope.launch {
                         busy = true
