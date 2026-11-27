@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -77,60 +78,80 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun DriverHome() {
+  var selectedSection by remember { mutableStateOf("Home") }
   Surface(modifier = Modifier.fillMaxSize(), color = Page) {
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-      Column(
-        modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 27.dp)
-      ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Column {
-            Text("CHAUFR", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
-            Text("DRIVER PARTNER", color = Color(0xFFB8C7DA), fontSize = 10.sp, letterSpacing = 1.5.sp)
+    Column(modifier = Modifier.fillMaxSize()) {
+      Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 25.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+              Text("CHAUFR", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+              Text("DRIVER PARTNER", color = Color(0xFFB8C7DA), fontSize = 10.sp, letterSpacing = 1.5.sp)
+            }
+            Spacer(Modifier.weight(1f))
+            Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
           }
-          Spacer(Modifier.weight(1f))
-          Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Spacer(Modifier.height(18.dp))
+          Text(when(selectedSection) { "Home" -> "Ready to roll?"; "My Trips" -> "Your trips"; "Earnings" -> "Your earnings"; "Safety" -> "Safety centre"; else -> "Driver tools" }, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+          Text(when(selectedSection) { "Home" -> "Your next great trip starts here."; "My Trips" -> "Manage current and scheduled journeys."; "Earnings" -> "Track completed trips and earnings."; "Safety" -> "Safety tools for every journey."; else -> "Your profile, vehicle and preferences." }, color = Color(0xFFB8C7DA), fontSize = 13.sp)
         }
-        Spacer(Modifier.height(24.dp))
-        Text("Ready to roll?", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Your next great trip starts here.", color = Color(0xFFB8C7DA), fontSize = 13.sp)
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          when(selectedSection) {
+            "Home" -> {
+              DriverAvailabilityCard()
+              AvailableTripsCard()
+              DriverCurrentTripCard()
+            }
+            "My Trips" -> {
+              DriverCurrentTripCard()
+              AvailableTripsCard()
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp)) {
+                  Text("SCHEDULED PICKUPS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text("Scheduled trip offers appear here when dispatched, with pickup times.", color = Muted, fontSize = 12.sp)
+                }
+              }
+            }
+            "Earnings" -> DriverEarningsSummary()
+            "Safety" -> {
+              DriverTrustedContactsPanel()
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Text("EMERGENCY DIALER", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  listOf("112" to "Mobile emergency", "10111" to "Police", "10177" to "Ambulance").forEach { item ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                      Text(item.first, color = Navy, fontWeight = FontWeight.Bold)
+                      Spacer(Modifier.weight(1f))
+                      Text(item.second, color = Muted, fontSize = 11.sp)
+                    }
+                  }
+                  Text("Chaufr does not dispatch emergency services. Use your phone dialer to contact emergency services.", color = Muted, fontSize = 10.sp)
+                }
+              }
+            }
+            else -> {
+              DriverAccountCard()
+              DriverComplianceCard()
+              DriverAdvantageSettingsCard()
+              DriverFeedbackSupportPanel()
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp)) {
+                  Text("PAYMENTS & PAYOUTS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text(if (BuildConfig.PAYMENTS_ENABLED) "Payout setup is available." else "Bank and payout controls remain disabled until the final payment-provider stage.", color = Muted, fontSize = 11.sp)
+                }
+              }
+            }
+          }
+          Text("Chaufr information refreshes from the service when connected.", color = Muted, fontSize = 10.sp)
+        }
       }
-
-      Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DriverAccountCard()
-        DriverComplianceCard()
-        DriverTrustedContactsPanel()
-        DriverAdvantageSettingsCard()
-        DriverAvailabilityCard()
-        AvailableTripsCard()
-        DriverCurrentTripCard()
-
-        DriverEarningsSummary()
-
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          shape = RoundedCornerShape(26.dp),
-          colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-          Column(modifier = Modifier.padding(17.dp)) {
-            Text("YOUR VEHICLE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("Vehicle onboarding", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text("Submit your vehicle and driver licence details in the Driver Account section above. Chaufr will require approval before you can go online.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            Spacer(Modifier.height(12.dp))
-            Text("DRIVER VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text("Check your verification status in the Driver Account section.", color = Navy, fontSize = 12.sp)
+      Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        listOf("Home", "My Trips", "Earnings", "Safety", "More").forEach { tab ->
+          Column(modifier = Modifier.weight(1f).clickable { selectedSection = tab }.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(when(tab) { "Home" -> "⌂"; "My Trips" -> "▣"; "Earnings" -> "R"; "Safety" -> "♡"; else -> "•••" }, color = if (selectedSection == tab) Blue else Muted, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Text(tab, color = if (selectedSection == tab) Blue else Muted, fontSize = 10.sp, fontWeight = if (selectedSection == tab) FontWeight.Bold else FontWeight.Medium)
           }
         }
-
-        DriverFeedbackSupportPanel()
-        Spacer(Modifier.height(14.dp))
-        Text(
-          "Trip offers, active-trip status and earnings refresh from the Chaufr service when connected.",
-          modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-          color = Muted,
-          fontSize = 10.sp,
-          lineHeight = 15.sp
-        )
       }
     }
   }
