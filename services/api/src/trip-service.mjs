@@ -510,7 +510,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         "t.fare_snapshot->'destinationLocation' AS destination_location, p.latitude AS driver_latitude, p.longitude AS driver_longitude, p.last_seen_at, sr.scheduled_for " +
         "FROM trips t LEFT JOIN scheduled_rides sr ON sr.trip_id=t.id " +
         "LEFT JOIN driver_presence p ON p.driver_user_id=t.driver_user_id " +
-        "WHERE t.driver_user_id = $1 AND t.status IN ('accepted', 'in_progress') " +
+        "WHERE t.driver_user_id = $1 AND t.status IN ('accepted', 'driver_arriving', 'in_progress') " +
         "ORDER BY t.accepted_at DESC LIMIT 1",
         [driver.id],
       );
@@ -716,6 +716,73 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       }
     },
 
+    async markDriverArrived(driver, tripId) {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const result = await pool.query(
+        "UPDATE trips SET status = 'driver_arriving' WHERE id = $1 AND driver_user_id = $2 AND status = 'accepted' RETURNING id, passenger_user_id, pickup_label",
+        [tripId, driver.id],
+      );
+      if (!result.rowCount) throw new AuthError("Only the assigned driver can mark an accepted trip as arrived at pickup", 409);
+      await pool.query(
+        "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'driver_arrived_at_pickup')",
+        [tripId, driver.id],
+      );
+      await notify(result.rows[0].passenger_user_id, "Your Chaufr driver has arrived", "Your driver is waiting at the pickup location.", { type: "driver_arrived", tripId });
+      return { tripId, status: "driver_arriving", pickupLabel: result.rows[0].pickup_label };
+    },
+
+    async cancelAcceptedTrip(driver, tripId, reason = "driver_unavailable") {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const selected = await client.query(
+          "SELECT id, passenger_user_id, status, fare_snapshot->>'rewardRedemption' AS reward_redemption FROM trips WHERE id = $1 AND driver_user_id = $2 FOR UPDATE",
+          [tripId, driver.id],
+        );
+        const trip = selected.rows[0];
+        if (!trip) throw new AuthError("Trip not found", 404);
+        if (trip.status !== "accepted" && trip.status !== "driver_arriving") {
+          throw new AuthError("A driver can cancel only before the trip has started. Contact support if a trip is already in progress.", 409);
+        }
+        await client.query(
+          "UPDATE trips SET status = 'cancelled', cancelled_at = now() WHERE id = $1",
+          [tripId],
+        );
+        if (trip.reward_redemption === "true") {
+          const redemption = await client.query(
+            "UPDATE passenger_reward_redemptions SET status = 'released', updated_at = now() WHERE trip_id = $1 AND passenger_user_id = $2 AND status = 'reserved' RETURNING tickets_reserved",
+            [tripId, trip.passenger_user_id],
+          );
+          if (redemption.rowCount) {
+            const tickets = Number(redemption.rows[0].tickets_reserved);
+            await client.query(
+              "INSERT INTO passenger_reward_accounts (passenger_user_id, tickets_balance, updated_at) VALUES ($1, $2, now()) ON CONFLICT (passenger_user_id) DO UPDATE SET tickets_balance = passenger_reward_accounts.tickets_balance + EXCLUDED.tickets_balance, updated_at = now()",
+              [trip.passenger_user_id, tickets],
+            );
+            await client.query(
+              "INSERT INTO passenger_reward_ledger (passenger_user_id, trip_id, entry_type, tickets_delta) VALUES ($1, $2, 'released', $3) ON CONFLICT (trip_id, entry_type) DO NOTHING",
+              [trip.passenger_user_id, tripId, tickets],
+            );
+          }
+        }
+        await client.query(
+          "INSERT INTO trip_events (trip_id, actor_user_id, event_type, details) VALUES ($1, $2, 'driver_cancelled', $3::jsonb)",
+          [tripId, driver.id, JSON.stringify({ reason: String(reason).slice(0, 120) })],
+        );
+        await client.query("COMMIT");
+        await notify(trip.passenger_user_id, "Your Chaufr driver cancelled", "Your driver could not complete the pickup. Please request another ride.", { type: "driver_cancelled", tripId });
+        return { tripId, status: "cancelled", message: "Trip cancelled before start. The passenger can request another driver." };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
     async startTrip(driver, tripId) {
       requireRole(driver, "driver");
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
@@ -724,7 +791,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         await client.query("BEGIN");
         const result = await client.query(
           "UPDATE trips SET status = 'in_progress', started_at = now() " +
-          "WHERE id = $1 AND driver_user_id = $2 AND status = 'accepted' " +
+          "WHERE id = $1 AND driver_user_id = $2 AND status IN ('accepted', 'driver_arriving') " +
           "RETURNING id, pickup_label, destination_label, quoted_total, driver_earnings, started_at",
           [tripId, driver.id],
         );
