@@ -38,6 +38,14 @@ test("registration, login, session validation and logout work with PostgreSQL", 
     });
     assert.equal(loggedIn.user.id, registered.user.id);
     assert.equal(await auth.authenticate(loggedIn.accessToken) !== null, true);
+    const sessions = await auth.listSessions(registered.user.id, loggedIn.accessToken);
+    assert.equal(sessions.sessions.length, 2);
+    assert.equal(sessions.sessions.filter((session) => session.is_current).length, 1);
+    const oldSession = sessions.sessions.find((session) => !session.is_current);
+    assert.equal(await auth.revokeSession(registered.user.id, oldSession.id, loggedIn.accessToken), true);
+    assert.equal(await auth.authenticate(registered.accessToken), null);
+    assert.equal(await auth.revokeSession(registered.user.id, sessions.sessions.find((session) => session.is_current).id, loggedIn.accessToken), false);
+
 
     await assert.rejects(
       () => auth.login({ identifier: "passenger@example.com", password: "wrong-password" }),
