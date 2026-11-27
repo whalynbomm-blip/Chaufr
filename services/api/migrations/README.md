@@ -24,6 +24,21 @@ The API applies pending SQL migrations in filename order at startup when `DATABA
 - `0027` — driver selfie evidence type for owner-side face comparison.
 - `0028` — database-enforced limit of one active trip per driver.
 
+### Migration 0028 deployment check
+
+Migration 0028 intentionally stops without changing trip records if any driver already has more than one trip in `accepted`, `driver_arriving` or `in_progress` status. Before applying it to an existing database, run:
+
+```sql
+SELECT driver_user_id, COUNT(*) AS active_trip_count, ARRAY_AGG(id ORDER BY requested_at) AS trip_ids
+FROM trips
+WHERE driver_user_id IS NOT NULL
+  AND status IN ('accepted', 'driver_arriving', 'in_progress')
+GROUP BY driver_user_id
+HAVING COUNT(*) > 1;
+```
+
+Resolve any returned trips through an authorised operational review; do not automatically cancel or reassign rides to make the migration pass. The unique index then prevents a driver from acquiring another active trip concurrently.
+
 ## Important operating rules
 
 - Driver presence and trip offers are authenticated API operations; a driver must be verified and meet activation requirements before going online or accessing offers.
