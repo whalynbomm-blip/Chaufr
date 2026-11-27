@@ -39,6 +39,12 @@ object ChaufrApi {
     suspend fun currentDriverTrip(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/current", token = token)
 
+    suspend fun markArrivedAtPickup(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/arrive", token = token)
+
+    suspend fun cancelAcceptedTrip(baseUrl: String, token: String, tripId: String, reason: String = "driver_unavailable"): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/cancel", JSONObject().put("reason", reason), token)
+
     suspend fun startTrip(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/start", token = token)
 
