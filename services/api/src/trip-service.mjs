@@ -436,7 +436,9 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const summary = await pool.query(
         "SELECT COUNT(*)::int AS lifetime_trips, COALESCE(SUM(driver_earnings),0)::numeric AS lifetime_earnings, " +
         "COUNT(*) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg'))::int AS today_trips, " +
-        "COALESCE(SUM(driver_earnings) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg')),0)::numeric AS today_earnings " +
+        "COALESCE(SUM(driver_earnings) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg')),0)::numeric AS today_earnings, " +
+        "COALESCE(SUM(platform_commission),0)::numeric AS lifetime_commission, " +
+        "COALESCE(SUM(platform_commission) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg')),0)::numeric AS today_commission " +
         "FROM trips WHERE driver_user_id=$1 AND status='completed'",
         [driver.id],
       );
@@ -452,6 +454,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         todayTrips: Number(row.today_trips ?? 0),
         lifetimeEarnings: Number(row.lifetime_earnings ?? 0),
         lifetimeTrips: Number(row.lifetime_trips ?? 0),
+        todayPlatformCommission: Number(row.today_commission ?? 0),
+        lifetimePlatformCommission: Number(row.lifetime_commission ?? 0),
         recentTrips: recent.rows.map((trip) => ({
           tripId: trip.id,
           pickupLabel: trip.pickup_label,
