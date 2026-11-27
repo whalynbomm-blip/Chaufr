@@ -8,6 +8,7 @@ import { createTripService } from "./trip-service.mjs";
 import { createOwnerService } from "./owner-service.mjs";
 import { createGoogleRoutesService } from "./google-routes.mjs";
 import { createPushService } from "./push-service.mjs";
+import { createSmsSender } from "./sms-sender.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
 import { createMobilityService } from "./mobility-service.mjs";
@@ -93,8 +94,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const fcmSender = createFcmSender();
   const pushService = database ? createPushService(database, fcmSender) : null;
+  const smsSender = createSmsSender();
   const safetyService = database ? createSafetyService(database) : null;
-  const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
+  const mobilityService = database ? createMobilityService(database, routesService, pushService, smsSender) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
   const paystackService = database ? createPaystackService(database) : null;
   const verificationService = database ? createDriverVerificationService(database) : null;
@@ -161,7 +163,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/arrive", "POST /v1/driver/trips/:tripId/cancel", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
-            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
+            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts", "POST /v1/safety/trusted-contacts/:id/verify", "POST /v1/safety/trusted-contacts/:id/confirm",
             "POST /v1/payments/checkout", "POST /v1/passenger/trips/:tripId/refund-request", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "GET /v1/owner/driver-earnings/eligible", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
             "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger", "POST /v1/trips/:tripId/rating", "GET /v1/me/ratings", "POST/GET /v1/support/tickets", "GET /v1/support/owner/tickets", "PATCH /v1/support/owner/tickets/:ticketId",
           ],
@@ -193,6 +195,10 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         const sosMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/sos$/i.exec(url.pathname);
         if (request.method === "POST" && sosMatch) return json(response, 201, await mobilityService.triggerSos(user, sosMatch[1], await readJson(request)));
+        const contactVerifyMatch = /^\/v1\/safety\/trusted-contacts\/([0-9a-f-]{36})\/verify$/i.exec(url.pathname);
+        if (request.method === "POST" && contactVerifyMatch) return json(response, 200, await mobilityService.requestTrustedContactVerification(user,contactVerifyMatch[1]));
+        const contactConfirmMatch = /^\/v1\/safety\/trusted-contacts\/([0-9a-f-]{36})\/confirm$/i.exec(url.pathname);
+        if (request.method === "POST" && contactConfirmMatch) return json(response, 200, await mobilityService.confirmTrustedContactVerification(user,contactConfirmMatch[1],await readJson(request)));
         const shareMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/share$/i.exec(url.pathname);
         if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
         if (request.method !== "POST" || !["/v1/safety/block", "/v1/safety/report"].includes(url.pathname)) {
