@@ -33,6 +33,9 @@ object ChaufrApi {
     suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
         requestJson(baseUrl, "DELETE", "/v1/driver/trusted-contacts/$id", token = token)
 
+    suspend fun driverEarnings(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/earnings", token = token)
+
     suspend fun currentDriverTrip(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/current", token = token)
 
