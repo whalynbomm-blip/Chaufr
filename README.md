@@ -50,3 +50,7 @@ See `docs/deployment.md`, `docs/payments-identity.md` and `services/api/README.m
 ## Optional emergency SMS configuration
 
 Verified trusted contacts can receive emergency SMS when the API deployment has Twilio configured. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` as server-side secrets. Never put these credentials in either Android app. Phone verification codes expire after 10 minutes and allow at most five attempts. Without the provider settings, SMS is skipped while SOS events and push notifications continue.
+
+### Production push notifications
+
+Set `FIREBASE_SERVICE_ACCOUNT_JSON` as a server-side secret containing the Firebase service-account JSON for the same Firebase project used by the passenger and driver Android builds. The `/health` response reports whether Firebase push and Twilio emergency SMS are configured; it never returns credentials. FCM delivery now reports sent, failed and invalid-token counts and deactivates unregistered device tokens.
