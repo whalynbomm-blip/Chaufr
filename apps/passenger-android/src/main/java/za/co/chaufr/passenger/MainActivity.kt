@@ -1010,6 +1010,14 @@ private fun PassengerHome() {
                                             Text(trip.pickup + " → " + trip.destination, color = ChaufrNavy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                             Text(trip.status.uppercase() + " · " + money(trip.farePaid), color = ChaufrMuted, fontSize = 11.sp)
                                             Text(trip.requestedAt.replace("T", " ").take(16), color = ChaufrMuted, fontSize = 10.sp)
+                                            Divider(color = Color(0xFFE8ECF2))
+                                            Text("TRIP RECEIPT", color = ChaufrBlue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            Text("Reference: " + trip.tripId.take(12), color = ChaufrMuted, fontSize = 10.sp)
+                                            Text(String.format(Locale("en", "ZA"), "%.1f km · %.0f min", trip.distanceKm, trip.durationMinutes), color = ChaufrMuted, fontSize = 10.sp)
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                                Text("Total fare", color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                Text(money(trip.farePaid), color = ChaufrNavy, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
                                     }
                                 }
@@ -1021,7 +1029,21 @@ private fun PassengerHome() {
                                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text("YOUR REWARD BALANCE", color = ChaufrMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         Text("$rewardsTickets / 9 tickets", color = ChaufrNavy, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                                        Text("\${(rewardsTickets.coerceAtMost(9) * 100) / 9}% towards your next eligible free short ride", color = ChaufrMuted, fontSize = 11.sp)
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                            repeat(9) { index ->
+                                                Box(
+                                                    modifier = Modifier.weight(1f).height(30.dp)
+                                                        .background(if (index < rewardsTickets.coerceIn(0, 9)) ChaufrBlue else Color(0xFFE8EDF4), RoundedCornerShape(8.dp)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(if (index < rewardsTickets.coerceIn(0, 9)) "✓" else (index + 1).toString(),
+                                                        color = if (index < rewardsTickets.coerceIn(0, 9)) Color.White else ChaufrMuted,
+                                                        fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                        Text(if (rewardsTickets >= 9) "You're eligible to redeem one free short ride (5–20 minutes)." else "${(rewardsTickets.coerceAtMost(9) * 100) / 9}% towards an eligible free short ride. Earn 9 tickets to unlock it.",
+                                            color = ChaufrMuted, fontSize = 11.sp)
                                         Button(onClick = { refreshRewards(SecureTokenStore.load(context) ?: "") }, enabled = BuildConfig.CHAUFR_API_BASE_URL.isNotBlank()) { Text("Refresh rewards") }
                                     }
                                 }
