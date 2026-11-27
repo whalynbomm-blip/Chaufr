@@ -52,7 +52,7 @@ function fareSnapshot(payload) {
   };
 }
 
-export function createMobilityService(pool, routesService, pushService = null) {
+export function createMobilityService(pool, routesService, pushService = null, smsSender = null) {
   const notify = async (userId, title, body, data) => {
     if (pushService && userId) {
       try { await pushService.sendToUser(userId, { title, body, data }); } catch { /* notification failure must not block safety action */ }
@@ -205,6 +205,34 @@ export function createMobilityService(pool, routesService, pushService = null) {
       return result.rows[0];
     },
 
+    async requestTrustedContactVerification(user,contactId) {
+      member(user);
+      if (!UUID.test(String(contactId))) throw new AuthError("Contact ID is invalid");
+      if (!smsSender?.isConfigured?.()) throw new AuthError("SMS delivery is not configured. Contact Chaufr support.",503);
+      const contact=await pool.query("SELECT id,phone_e164 FROM trusted_contacts WHERE id=$1 AND user_id=$2",[contactId,user.id]);
+      if (!contact.rowCount) throw new AuthError("Trusted contact not found",404);
+      const code=String(randomBytes(4).readUInt32BE(0)%1000000).padStart(6,"0");
+      await pool.query("UPDATE trusted_contacts SET verification_code_hash=$3,verification_expires_at=now()+interval '10 minutes',verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id,hash(contactId+":"+code)]);
+      try { await smsSender.send(contact.rows[0].phone_e164,"Your Chaufr trusted-contact verification code is "+code+". It expires in 10 minutes. Do not share this code."); }
+      catch { await pool.query("UPDATE trusted_contacts SET verification_code_hash=NULL,verification_expires_at=NULL,verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("We could not deliver the verification SMS. Please try again later.",502); }
+      return {sent:true,expiresInSeconds:600};
+    },
+
+    async confirmTrustedContactVerification(user,contactId,input={}) {
+      member(user);
+      if (!UUID.test(String(contactId))) throw new AuthError("Contact ID is invalid");
+      const code=String(input.code??"").trim();
+      if (!/^\d{6}$/.test(code)) throw new AuthError("Enter the six-digit verification code");
+      const result=await pool.query("SELECT verification_code_hash,verification_expires_at,verification_attempts FROM trusted_contacts WHERE id=$1 AND user_id=$2",[contactId,user.id]);
+      if (!result.rowCount) throw new AuthError("Trusted contact not found",404);
+      const row=result.rows[0];
+      if (!row.verification_code_hash || !row.verification_expires_at || new Date(row.verification_expires_at).getTime()<=Date.now()) throw new AuthError("Verification code expired. Request a new code.",410);
+      if (Number(row.verification_attempts)>=5) throw new AuthError("Too many verification attempts. Request a new code.",429);
+      if (row.verification_code_hash!==hash(contactId+":"+code)) { await pool.query("UPDATE trusted_contacts SET verification_attempts=verification_attempts+1 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("The verification code is incorrect"); }
+      await pool.query("UPDATE trusted_contacts SET verified_at=now(),verification_code_hash=NULL,verification_expires_at=NULL,verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id]);
+      return {verified:true,contactId};
+    },
+
     async listTrustedContacts(user) {
       member(user);
       const result=await pool.query("SELECT id,contact_name,phone_e164,relationship,verified_at,created_at FROM trusted_contacts WHERE user_id=$1 ORDER BY created_at",[user.id]);
@@ -226,16 +254,21 @@ export function createMobilityService(pool, routesService, pushService = null) {
       const row=trip.rows[0];
       if (!row) throw new AuthError("Trip not found",404);
       if (!["accepted","in_progress","driver_arriving"].includes(row.status)) throw new AuthError("SOS is available only for an active trip",409);
-      const contacts=await pool.query("SELECT contact_name,phone_e164 FROM trusted_contacts WHERE user_id=$1",[user.id]);
+      const contacts=await pool.query("SELECT contact_name,phone_e164 FROM trusted_contacts WHERE user_id=$1 AND verified_at IS NOT NULL",[user.id]);
       const event=await pool.query("INSERT INTO trip_safety_events(trip_id,actor_user_id,event_type,details) VALUES($1,$2,'sos',$3::jsonb) RETURNING id,created_at",
         [tripId,user.id,JSON.stringify({note:typeof input.note==="string"?input.note.slice(0,300):"",contactCount:contacts.rowCount})]);
       const otherId=user.id===row.passenger_user_id?row.driver_user_id:row.passenger_user_id;
       await notify(otherId,"Chaufr Safety SOS","The other trip participant has triggered an SOS. Follow your emergency procedures.",{type:"safety_sos",tripId});
+      let smsSent=0,smsFailed=0;
       for (const contact of contacts.rows) {
         const linked = await pool.query("SELECT id FROM users WHERE phone_e164=$1 AND status <> 'suspended' AND status <> 'closed' LIMIT 1",[contact.phone_e164]);
         if (linked.rowCount) await notify(linked.rows[0].id,"Chaufr emergency alert","A person who listed you as a trusted contact has triggered an SOS.",{type:"trusted_contact_sos",tripId});
+        if (smsSender) {
+          try { const delivery=await smsSender.send(contact.phone_e164,"CHAUFR EMERGENCY: A trusted contact has triggered an SOS during a Chaufr trip. Route: "+row.pickup_label+" to "+row.destination_label+". Please contact them and call emergency services if needed. Trip reference: "+tripId+"."); if(delivery?.sent)smsSent++;else smsFailed++; }
+          catch { smsFailed++; }
+        }
       }
-      return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,contacts:contacts.rows.map(c=>({name:c.contact_name,phoneE164:c.phone_e164})),message:"SOS recorded and the other trip participant was alerted where push delivery is available. Trusted-contact SMS/calling requires a configured messaging provider; if you are in immediate danger, call local emergency services."};
+      return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,verifiedContacts:contacts.rows.length,smsSent,smsFailed,message:"SOS recorded. The other trip participant and verified trusted contacts are alerted through configured push/SMS channels. If you are in immediate danger, call local emergency services."};
     },
 
     async createTripShare(user,tripId) {
