@@ -80,6 +80,15 @@ test("driver activation gates access and accepted trips retain a locked fare", {
 
     await pool.query("UPDATE driver_profiles SET verification_status = 'verified' WHERE user_id = $1", [account.user.id]);
     await pool.query("UPDATE vehicles SET status = 'approved' WHERE id = $1", [submitted.vehicle.id]);
+    for (const documentType of ["vehicle_roadworthy", "vehicle_operating_licence"]) {
+      await pool.query(
+        "INSERT INTO driver_verification_documents " +
+        "(driver_user_id, document_type, file_name, mime_type, file_size, encrypted_content, encryption_iv, encryption_tag, status) " +
+        "VALUES ($1, $2, $3, 'application/pdf', 128, $4, $5, $6, 'approved')",
+        [account.user.id, documentType, documentType + ".pdf", Buffer.from("encrypted-document"),
+          Buffer.alloc(12, 1), Buffer.alloc(16, 2)],
+      );
+    }
 
     await assert.rejects(
       () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
