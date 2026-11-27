@@ -14,7 +14,7 @@ test("SOS records an event and alerts the other trip participant and linked trus
     async query(sql, params = []) {
       calls.push({ sql: String(sql), params });
       if (String(sql).startsWith("SELECT id,passenger_user_id")) {
-        return { rows: [{ id: tripId, passenger_user_id: passengerId, driver_user_id: driverId, status: "in_progress" }] };
+        return { rowCount: 1, rows: [{ id: tripId, passenger_user_id: passengerId, driver_user_id: driverId, status: "in_progress" }] };
       }
       if (String(sql).startsWith("SELECT contact_name,phone_e164")) {
         return { rows: [{ contact_name: "Emergency Contact", phone_e164: "+27821234567" }] };
@@ -23,7 +23,7 @@ test("SOS records an event and alerts the other trip participant and linked trus
         return { rows: [{ id: 77, created_at: "2026-11-27T10:00:00Z" }] };
       }
       if (String(sql).startsWith("SELECT id FROM users WHERE phone_e164")) {
-        return { rows: [{ id: contactUserId }] };
+        return { rowCount: 1, rows: [{ id: contactUserId }] };
       }
       return { rows: [], rowCount: 1 };
     },
@@ -44,7 +44,7 @@ test("trip sharing creates a high-entropy link and stores only its hash", async 
   const pool = {
     async query(sql, params = []) {
       calls.push({ sql: String(sql), params });
-      if (String(sql).startsWith("SELECT id,status FROM trips")) return { rows: [{ id: tripId, status: "in_progress" }] };
+      if (String(sql).startsWith("SELECT id,status FROM trips")) return { rowCount: 1, rows: [{ id: tripId, status: "in_progress" }] };
       if (String(sql).startsWith("INSERT INTO trip_share_tokens")) return { rows: [{ expires_at: "2026-11-27T22:00:00Z" }] };
       return { rows: [], rowCount: 1 };
     },
@@ -63,9 +63,9 @@ test("SOS and trip sharing reject trips that are not active", async () => {
   const pool = {
     async query(sql) {
       if (String(sql).startsWith("SELECT id,passenger_user_id")) {
-        return { rows: [{ id: tripId, passenger_user_id: passengerId, driver_user_id: driverId, status: "completed" }] };
+        return { rowCount: 1, rows: [{ id: tripId, passenger_user_id: passengerId, driver_user_id: driverId, status: "completed" }] };
       }
-      if (String(sql).startsWith("SELECT id,status FROM trips")) return { rows: [{ id: tripId, status: "completed" }] };
+      if (String(sql).startsWith("SELECT id,status FROM trips")) return { rowCount: 1, rows: [{ id: tripId, status: "completed" }] };
       return { rows: [] };
     },
   };
