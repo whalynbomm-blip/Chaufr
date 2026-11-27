@@ -231,7 +231,9 @@ private fun DriverComplianceCard() {
   var bankName by remember { mutableStateOf("") }
   var accountMessage by remember { mutableStateOf("Add a bank account to receive completed-trip and reward-ride payouts.") }
   var documentMessage by remember { mutableStateOf("") }
-  var documentSummary by remember { mutableStateOf("Identity and driver's licence documents are required before verification.") }
+  var documentSummary by remember { mutableStateOf("Upload every required document. Your account stays offline until the owner approves them.") }
+  var documentExpiryDate by remember { mutableStateOf("") }
+  var pendingDocumentType by remember { mutableStateOf("south_african_id") }
   var busy by remember { mutableStateOf(false) }
 
   suspend fun refreshDocuments(token: String) {
@@ -269,7 +271,7 @@ private fun DriverComplianceCard() {
           ?: throw IllegalStateException("Unable to read the selected document.")
         if (bytes.isEmpty() || bytes.size > 6 * 1024 * 1024) throw IllegalStateException("Document must be smaller than 6 MB.")
         val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
-        val result = ChaufrApi.uploadVerificationDocument(apiUrl, token, documentType, uri.lastPathSegment ?: "verification-document", mime, encoded)
+        val result = ChaufrApi.uploadVerificationDocument(apiUrl, token, documentType, uri.lastPathSegment ?: "verification-document", mime, encoded, documentExpiryDate)
         documentMessage = "Document uploaded. Status: " + result.getJSONObject("document").optString("status")
         refreshDocuments(token)
       } catch (error: Exception) {
@@ -278,11 +280,8 @@ private fun DriverComplianceCard() {
     }
   }
 
-  val idPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-    uploadDocument(uri, "south_african_id")
-  }
-  val licencePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-    uploadDocument(uri, "drivers_licence")
+  val verificationPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    uploadDocument(uri, pendingDocumentType)
   }
   val bankProofPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
     uploadDocument(uri, "bank_confirmation")
@@ -321,11 +320,24 @@ private fun DriverComplianceCard() {
         Text("Bank account setup and bank confirmation upload are reserved for the final payment gateway stage. This build does not collect bank details.", color = Muted, fontSize = 11.sp)
       }
       Spacer(Modifier.height(4.dp))
-      Text("Driver identity documents", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-      Text("Upload a clear photo or PDF of your South African ID and driver licence. Files are encrypted before storage.", color = Muted, fontSize = 11.sp)
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(onClick = { idPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload ID") }
-        OutlinedButton(onClick = { licencePicker.launch("*/*") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Upload licence") }
+      Text("Manual driver document approval", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+      Text("Choose each document below. Files are encrypted and reviewed manually by Chaufr. PrDP, roadworthy and operating-licence uploads need an expiry date.", color = Muted, fontSize = 11.sp)
+      OutlinedTextField(value = documentExpiryDate, onValueChange = { documentExpiryDate = it.take(10) },
+        modifier = Modifier.fillMaxWidth(), label = { Text("Expiry date when applicable (YYYY-MM-DD)") }, singleLine = true)
+      val documentChoices = listOf(
+        "south_african_id" to "South African ID",
+        "passport" to "Passport (if applicable)",
+        "drivers_licence" to "Driver's licence",
+        "prdp" to "Professional Driving Permit (PrDP)",
+        "saps_criminal_record" to "SAPS criminal-record report",
+        "pending_investigation_declaration" to "Signed pending-investigation declaration",
+        "vehicle_registration" to "Vehicle registration",
+        "vehicle_roadworthy" to "Vehicle roadworthy certificate",
+        "vehicle_operating_licence" to "E-hailing operating licence"
+      )
+      documentChoices.forEach { (type, label) ->
+        OutlinedButton(onClick = { pendingDocumentType = type; verificationPicker.launch("*/*") },
+          enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload $label") }
       }
       if (BuildConfig.PAYMENTS_ENABLED) {
         OutlinedButton(onClick = { bankProofPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload bank confirmation") }
