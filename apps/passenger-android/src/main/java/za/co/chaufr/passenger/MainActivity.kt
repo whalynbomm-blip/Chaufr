@@ -28,6 +28,11 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -1019,12 +1024,8 @@ private fun PassengerHome() {
                     }
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 4.dp, vertical = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                listOf("Home", "My Trips", "Rewards", "Safety", "More").forEach { tab ->
-                    Text(tab, modifier = Modifier.weight(1f).clickable { selectedSection = tab }.padding(vertical = 10.dp).background(if (selectedSection == tab) Color(0xFFEAF2FF) else Color.Transparent, RoundedCornerShape(12.dp)).padding(vertical = 5.dp), color = if (selectedSection == tab) ChaufrBlue else ChaufrMuted, fontSize = 10.sp, fontWeight = if (selectedSection == tab) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center)
-                }
-            }
         }
+      }
     }
 }
 
