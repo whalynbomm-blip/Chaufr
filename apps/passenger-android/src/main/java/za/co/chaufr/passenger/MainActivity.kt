@@ -1026,7 +1026,6 @@ private fun PassengerHome() {
             }
         }
       }
-    }
 }
 
 @Composable
