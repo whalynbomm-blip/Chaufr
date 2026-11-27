@@ -6,7 +6,7 @@ The API is container-ready (`services/api/Dockerfile`) and exposes `GET /health`
 
 ## Hosting requirements
 
-Choose a provider that supports:
+Selected provider: Render. A root-level render.yaml Blueprint is included for a temporary free staging environment. Do not use its free PostgreSQL database for real user data: free databases expire after 30 days and have no backups. Upgrade to paid always-on compute and paid PostgreSQL with backups/PITR before production.\n\nRender supports:
 - Docker deployments from the GitHub repository;
 - Node.js 22 / the included Dockerfile;
 - HTTPS public service URL;
@@ -35,7 +35,7 @@ Set secrets and fare configuration only in the hosting provider's private enviro
 | `VEHICLE_DATA_ENCRYPTION_KEY` | Private base64-encoded 32-byte key for encrypted driver vehicle/licence data |
 | `FARE_QUOTE_SIGNING_SECRET` | Private random signing key for server-issued route quotes |
 | `GOOGLE_MAPS_SERVER_API_KEY` | Server-restricted key with Google Routes API enabled |
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | Full Firebase service-account JSON used by the API to send FCM notifications |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Optional until push is enabled; full Firebase service-account JSON used by the API to send FCM notifications |
 | `DOCUMENT_ENCRYPTION_KEY` | Separate base64 32-byte key for encrypted identity and vehicle documents |
 | `FARE_RULE_VERSION` | Identifier for the active fare rules |
 | `FARE_CURRENCY` | Currency code; use `ZAR` for South Africa |
@@ -80,7 +80,7 @@ See [payments, payouts, refunds and identity verification](payments-identity.md)
 
 ## Production secrets and fail-closed startup
 
-The API now validates production configuration before opening its listening port. When `NODE_ENV=production`, startup fails if any of these are absent or malformed:
+The API validates core production configuration before opening its listening port. When `NODE_ENV=production`, startup fails if any core settings are absent or malformed:
 
 - `DATABASE_URL` — PostgreSQL connection URL.
 - `VEHICLE_DATA_ENCRYPTION_KEY` and `DOCUMENT_ENCRYPTION_KEY` — independent base64-encoded 32-byte keys.
@@ -93,8 +93,8 @@ Generate encryption keys independently with `openssl rand -base64 32`. Put value
 
 The production validator is not a substitute for confirming provider-side permissions. After configuring secrets, deploy to a staging environment first, then verify:
 1. `GET /health` reports database connected, Firebase configured and emergency SMS configured.
-2. Firebase can deliver a test push to a registered test device in both app roles.
-3. A verified, consenting test contact without a Chaufr account receives a Twilio SMS; record the Twilio message SID and final delivery status.
+2. When Firebase is configured, it can deliver a test push to a registered test device in both app roles.
+3. When Twilio is configured, a verified, consenting test contact without a Chaufr account receives an SMS; record the Twilio message SID and final delivery status.
 4. Owner-console support reply round-trip works using separate test passenger, driver and owner accounts.
 5. Test identity documents can be downloaded, reviewed, approved/rejected and audited. Never upload real identity documents to staging.
 6. One-off and recurring scheduled rides materialise and dispatch at their intended local pickup times; test worker restart and duplicate prevention.
