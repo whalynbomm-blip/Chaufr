@@ -75,9 +75,13 @@ fun DriverLiveTripMap(trip: JSONObject) {
             }
             Text(if (status == "accepted") "Navigate to pickup" else "Navigate to destination", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
+            val liveTrafficEta = trip.optInt("liveTrafficEtaMinutes", -1)
+            val liveTrafficDistance = trip.optDouble("liveTrafficRemainingKm", -1.0)
             Text(
                 if (status == "in_progress") {
-                    if (gpsRemainingKm != null) "GPS route remaining: ${String.format("%.1f", gpsRemainingKm)} km · ETA ~${gpsEtaMinutes} min"
+                    if (liveTrafficEta >= 0) "Live traffic ETA: ~${liveTrafficEta} min" +
+                        if (liveTrafficDistance >= 0) " · ${String.format("%.1f", liveTrafficDistance)} km remaining" else ""
+                    else if (gpsRemainingKm != null) "GPS route remaining: ${String.format("%.1f", gpsRemainingKm)} km · ETA ~${gpsEtaMinutes} min"
                     else "Route estimate: about ${(duration - elapsed).coerceAtLeast(0.0).toInt()} min remaining"
                 } else "Planned route: ${duration.toInt()} min · ${String.format("%.1f", trip.optDouble("distanceKm"))} km",
                 color = Color(0xFF64748B)
