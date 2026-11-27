@@ -1167,6 +1167,16 @@ private fun PassengerHome() {
                                 PassengerAccountCard()
                                 Text("HELP, RATINGS & SUPPORT", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 PassengerFeedbackSupportPanel()
+                                Text("NOTIFICATION SETTINGS", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                                Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                        Text("Trip updates, reminders and safety alerts", color = ChaufrNavy, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                                        Text("Manage Chaufr notification permission and alert channels in Android settings.", color = ChaufrMuted, fontSize = 10.sp)
+                                        OutlinedButton(onClick = {
+                                            context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName)))
+                                        }, modifier = Modifier.fillMaxWidth()) { Text("Open notification settings") }
+                                    }
+                                }
                                 Text("PAYMENT SETTINGS", color = ChaufrBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                                 Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
                                     Column(Modifier.padding(16.dp)) {
