@@ -28,6 +28,52 @@ test("Paystack webhook accepts an authentic event and stores it idempotently", a
   assert.match(calls[0].sql, /payment_provider_events/);
 });
 
+test("duplicate successful Paystack charge event is claimed once before ledger processing", async () => {
+  const intentId = "11111111-1111-4111-8111-111111111111";
+  const raw = Buffer.from(JSON.stringify({
+    event: "charge.success",
+    data: { id: 987654, reference: "chf_duplicate_test" },
+  }));
+  const signature = createHmac("sha512", "test_secret").update(raw).digest("hex");
+  const clientCalls = [];
+  const client = {
+    query: async (sql, params) => {
+      clientCalls.push({ sql, params });
+      if (sql.includes("INSERT INTO payment_provider_events")) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 0 };
+    },
+    release: () => {},
+  };
+  const pool = {
+    query: async (sql) => {
+      assert.match(sql, /FROM payment_intents WHERE id=\$1/);
+      return { rows: [{
+        id: intentId, amount_minor: 3000, user_id: "22222222-2222-4222-8222-222222222222",
+        purpose: "driver_activation", trip_id: null, activation_id: "33333333-3333-4333-8333-333333333333",
+        status: "paid", provider_reference: "chf_duplicate_test",
+      }], rowCount: 1 };
+    },
+    connect: async () => client,
+  };
+  const service = createPaystackService(pool, {
+    secretKey: "test_secret",
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        status: true,
+        data: {
+          status: "success", currency: "ZAR", amount: 3000,
+          reference: "chf_duplicate_test", metadata: { chaufrIntentId: intentId },
+        },
+      }),
+    }),
+  });
+  const result = await service.handleWebhook(raw, signature);
+  assert.equal(result.duplicate, true);
+  assert.equal(clientCalls.filter((call) => call.sql.includes("INSERT INTO payment_provider_events")).length, 1);
+  assert.equal(clientCalls.some((call) => call.sql.includes("UPDATE payment_intents SET status='paid'")), false);
+});
+
 test("driver verification documents cannot be uploaded by a passenger", async () => {
   const service = createDriverVerificationService({ query: async () => { throw new Error("Database must not be touched"); } }, {
     encryptionKey: Buffer.alloc(32, 1).toString("base64"),
