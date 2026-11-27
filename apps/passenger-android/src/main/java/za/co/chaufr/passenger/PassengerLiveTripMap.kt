@@ -68,10 +68,20 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
                 Text(if (status == "in_progress") "In progress" else status.replace("_", " ").replaceFirstChar { it.uppercase() }, color = Color(0xFF14243A), fontWeight = FontWeight.Bold)
             }
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(if (status == "in_progress") "Route estimate: ~${remaining.toInt()} min remaining" else "Route estimate: ${duration.toInt()} min", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
-                Text(location?.optString("lastSeenAt")?.take(16)?.replace("T", " ")?.let { "GPS $it" } ?: "Waiting for driver GPS", color = Color(0xFF64748B))
-            }
+            Text(if (status == "in_progress") "Route estimate: ~${remaining.toInt()} min remaining" else "Route estimate: ${duration.toInt()} min", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
+            val lastSeen = location?.optString("lastSeenAt").orEmpty()
+            val ageSeconds = if (lastSeen.isBlank()) null else try {
+                Duration.between(Instant.parse(lastSeen), Instant.now()).seconds.coerceAtLeast(0)
+            } catch (_: Exception) { null }
+            val accuracy = location?.optDouble("accuracyMeters", Double.NaN)
+            Text(
+                when {
+                    ageSeconds == null -> "Driver GPS: waiting for a fresh location update."
+                    ageSeconds <= 30 -> "Driver GPS updated ${ageSeconds}s ago" + if (accuracy != null && accuracy.isFinite()) " · accuracy ±${accuracy.toInt()} m" else ""
+                    else -> "Driver GPS is ${ageSeconds}s old. The displayed position may be stale."
+                },
+                color = if (ageSeconds != null && ageSeconds <= 30) Color(0xFF16865B) else Color(0xFFB45309)
+            )
             Text("ETA and progress are estimates from the original Google route duration and elapsed time, not live traffic or GPS-distance calculations.", color = Color(0xFF64748B))
         }
     }
