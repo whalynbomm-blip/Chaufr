@@ -130,6 +130,9 @@ private fun PassengerHome() {
     var schedulingMessage by remember { mutableStateOf("") }
     var schedulingBusy by remember { mutableStateOf(false) }
     var scheduleSummary by remember { mutableStateOf("") }
+    var scheduledRideRows by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var recurringRideRows by remember { mutableStateOf<List<org.json.JSONObject>>(emptyList()) }
+    var scheduleActionBusy by remember { mutableStateOf(false) }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
@@ -828,21 +831,69 @@ private fun PassengerHome() {
                         if (schedulingMessage.isNotBlank()) Text(schedulingMessage, color = ChaufrGreen, fontSize = 11.sp)
                         Button(
                             modifier = Modifier.fillMaxWidth(),
+                            enabled = !scheduleActionBusy,
                             onClick = {
                                 scope.launch {
+                                    scheduleActionBusy = true
                                     try {
                                         val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
                                         val result = ChaufrApi.passengerScheduledRides(BuildConfig.CHAUFR_API_BASE_URL, token)
                                         val scheduled = result.optJSONArray("scheduled")
                                         val recurring = result.optJSONArray("recurring")
-                                        val next = (0 until (scheduled?.length() ?: 0)).mapNotNull { scheduled?.optJSONObject(it)?.let { row -> "Pickup " + row.optString("scheduled_for") + " · " + row.optString("status") } }
-                                        val repeats = (0 until (recurring?.length() ?: 0)).mapNotNull { recurring?.optJSONObject(it)?.let { row -> "Repeat " + row.optString("weekdays") + " at " + row.optString("local_time") + " · " + row.optString("status") } }
-                                        scheduleSummary = (next + repeats).take(8).joinToString("\n").ifBlank { "No future bookings or recurring commutes yet." }
+                                        scheduledRideRows = (0 until (scheduled?.length() ?: 0)).mapNotNull { scheduled?.optJSONObject(it) }
+                                        recurringRideRows = (0 until (recurring?.length() ?: 0)).mapNotNull { recurring?.optJSONObject(it) }
+                                        scheduleSummary = ""
                                     } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to load bookings." }
+                                    finally { scheduleActionBusy = false }
                                 }
                             }
-                        ) { Text("View my scheduled rides") }
+                        ) { Text(if (scheduleActionBusy) "Loading…" else "View and manage my scheduled rides") }
                         if (scheduleSummary.isNotBlank()) Text(scheduleSummary, color = ChaufrMuted, fontSize = 10.sp, lineHeight = 15.sp)
+                        scheduledRideRows.filter { it.optString("status") in listOf("scheduled", "dispatching") }.forEach { row ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(row.optString("pickup_label") + " → " + row.optString("destination_label"), color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(row.optString("scheduled_for").replace("T", " ").take(16) + " · " + row.optString("status"), color = ChaufrMuted, fontSize = 10.sp)
+                                }
+                                Button(enabled = !scheduleActionBusy && row.optString("status") == "scheduled", onClick = {
+                                    scope.launch {
+                                        scheduleActionBusy = true
+                                        try {
+                                            val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                            ChaufrApi.cancelScheduledRide(BuildConfig.CHAUFR_API_BASE_URL, token, row.optString("id"))
+                                            scheduledRideRows = scheduledRideRows.filterNot { it.optString("id") == row.optString("id") }
+                                            scheduleSummary = "Scheduled ride cancelled."
+                                        } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to cancel scheduled ride." }
+                                        finally { scheduleActionBusy = false }
+                                    }
+                                }) { Text("Cancel") }
+                            }
+                            Divider(color = Color(0xFFE8ECF2))
+                        }
+                        recurringRideRows.filter { it.optString("status") == "active" }.forEach { row ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(row.optString("pickup_label") + " → " + row.optString("destination_label"), color = ChaufrNavy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Repeat " + row.optString("weekdays") + " at " + row.optString("local_time") + " · " + row.optString("starts_on") + " to " + row.optString("ends_on"), color = ChaufrMuted, fontSize = 10.sp)
+                                }
+                                Button(enabled = !scheduleActionBusy, onClick = {
+                                    scope.launch {
+                                        scheduleActionBusy = true
+                                        try {
+                                            val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
+                                            ChaufrApi.cancelRecurringRide(BuildConfig.CHAUFR_API_BASE_URL, token, row.optString("id"))
+                                            recurringRideRows = recurringRideRows.filterNot { it.optString("id") == row.optString("id") }
+                                            scheduleSummary = "Recurring commute cancelled. Future generated rides were stopped."
+                                        } catch (error: Exception) { scheduleSummary = error.message ?: "Unable to cancel recurring commute." }
+                                        finally { scheduleActionBusy = false }
+                                    }
+                                }) { Text("Stop") }
+                            }
+                            Divider(color = Color(0xFFE8ECF2))
+                        }
+                        if (scheduledRideRows.isEmpty() && recurringRideRows.isEmpty() && scheduleSummary.isBlank()) {
+                            Text("No upcoming bookings or recurring commutes.", color = ChaufrMuted, fontSize = 10.sp)
+                        }
                         Divider(color = Color(0xFFE8ECF2))
                         PassengerTrustedContactsPanel()
                     }
