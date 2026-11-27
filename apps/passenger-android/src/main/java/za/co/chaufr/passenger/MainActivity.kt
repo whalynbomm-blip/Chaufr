@@ -129,9 +129,6 @@ private fun PassengerHome() {
     var recurringLocalTime by remember { mutableStateOf("08:00") }
     var schedulingMessage by remember { mutableStateOf("") }
     var schedulingBusy by remember { mutableStateOf(false) }
-    var trustedContactName by remember { mutableStateOf("") }
-    var trustedContactPhone by remember { mutableStateOf("") }
-    var trustedContactMessage by remember { mutableStateOf("") }
     var scheduleSummary by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
@@ -847,24 +844,7 @@ private fun PassengerHome() {
                         ) { Text("View my scheduled rides") }
                         if (scheduleSummary.isNotBlank()) Text(scheduleSummary, color = ChaufrMuted, fontSize = 10.sp, lineHeight = 15.sp)
                         Divider(color = Color(0xFFE8ECF2))
-                        Text("Trusted emergency contact", color = ChaufrNavy, fontWeight = FontWeight.SemiBold)
-                        Text("Save someone Chaufr can identify if you trigger SOS. Use international format, e.g. +27821234567.", color = ChaufrMuted, fontSize = 10.sp)
-                        OutlinedTextField(value = trustedContactName, onValueChange = { trustedContactName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Contact name") }, singleLine = true)
-                        OutlinedTextField(value = trustedContactPhone, onValueChange = { trustedContactPhone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Phone number (+27...)") }, singleLine = true)
-                        Button(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in first.")
-                                        ChaufrApi.addTrustedContact(BuildConfig.CHAUFR_API_BASE_URL, token, trustedContactName, trustedContactPhone, "trusted contact")
-                                        trustedContactMessage = "Trusted contact saved."
-                                        trustedContactName = ""; trustedContactPhone = ""
-                                    } catch (error: Exception) { trustedContactMessage = error.message ?: "Could not save contact." }
-                                }
-                            }
-                        ) { Text("Save trusted contact") }
-                        if (trustedContactMessage.isNotBlank()) Text(trustedContactMessage, color = ChaufrMuted, fontSize = 10.sp)
+                        PassengerTrustedContactsPanel()
                     }
                 }
                 Spacer(Modifier.height(14.dp))
