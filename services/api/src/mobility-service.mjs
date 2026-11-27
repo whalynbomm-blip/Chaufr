@@ -1,10 +1,16 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { AuthError } from "./auth-service.mjs";
 import { offerTripToNextDriver } from "./dispatch-service.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIERS = new Set(["saver", "standard", "priority"]);
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const trustedContactCodeHash=(contactId,code)=>{
+  const secret=process.env.SMS_VERIFICATION_SECRET;
+  if(!secret||secret.length<32) throw new AuthError("Trusted-contact verification secret is not configured",503);
+  return createHmac("sha256",secret).update(contactId+":"+code).digest("hex");
+};
+
 const member = (user) => {
   if (!user || !["passenger", "driver"].includes(user.role)) throw new AuthError("Passenger or driver account required", 403);
 };
@@ -209,10 +215,11 @@ export function createMobilityService(pool, routesService, pushService = null, s
       member(user);
       if (!UUID.test(String(contactId))) throw new AuthError("Contact ID is invalid");
       if (!smsSender?.isConfigured?.()) throw new AuthError("SMS delivery is not configured. Contact Chaufr support.",503);
+      if (!process.env.SMS_VERIFICATION_SECRET || process.env.SMS_VERIFICATION_SECRET.length < 32) throw new AuthError("Trusted-contact verification secret is not configured",503);
       const contact=await pool.query("SELECT id,phone_e164 FROM trusted_contacts WHERE id=$1 AND user_id=$2",[contactId,user.id]);
       if (!contact.rowCount) throw new AuthError("Trusted contact not found",404);
       const code=String(randomBytes(4).readUInt32BE(0)%1000000).padStart(6,"0");
-      await pool.query("UPDATE trusted_contacts SET verification_code_hash=$3,verification_expires_at=now()+interval '10 minutes',verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id,hash(contactId+":"+code)]);
+      await pool.query("UPDATE trusted_contacts SET verification_code_hash=$3,verification_expires_at=now()+interval '10 minutes',verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id,trustedContactCodeHash(contactId,code)]);
       try { await smsSender.send(contact.rows[0].phone_e164,"Your Chaufr trusted-contact verification code is "+code+". It expires in 10 minutes. Do not share this code."); }
       catch { await pool.query("UPDATE trusted_contacts SET verification_code_hash=NULL,verification_expires_at=NULL,verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("We could not deliver the verification SMS. Please try again later.",502); }
       return {sent:true,expiresInSeconds:600};
