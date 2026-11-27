@@ -3,6 +3,8 @@ import { offerTripToNextDriver, declineTripOffer } from "./dispatch-service.mjs"
 import { estimateDriverTripProfit } from "./chaufr-advantage.mjs";
 
 const SA_DATE_SQL = "(now() AT TIME ZONE 'Africa/Johannesburg')::date";
+const testActivationBypassEnabled = () =>
+  process.env.NODE_ENV === "development" && process.env.CHAUFR_TEST_BYPASS_ACTIVATION === "true";
 const activationRequired = () => new AuthError(
   "Pay the daily Chaufr activation fee before going online or accessing trip requests",
   403,
@@ -17,6 +19,7 @@ function cleanLabel(value, field) {
   return value.trim();
 }
 async function hasPaidActivation(queryable, driverUserId) {
+  if (testActivationBypassEnabled()) return { status: "test_bypass", operating_date: null };
   const result = await queryable.query(
     "SELECT id, operating_date, amount, currency, paid_at, non_refundable_at " +
     "FROM driver_daily_activations WHERE driver_user_id = $1 AND operating_date = " +
@@ -38,6 +41,18 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
   return {
     async getActivationStatus(driver) {
       requireRole(driver, "driver");
+      if (testActivationBypassEnabled()) {
+        return {
+          operatingDate: null,
+          amount: fareConfig.dailyActivationFee ?? 30,
+          currency: "ZAR",
+          status: "test_bypass",
+          isPaid: true,
+          testBypass: true,
+          paidAt: null,
+          nonRefundableAt: null,
+        };
+      }
       const result = await pool.query(
         "SELECT operating_date, amount, currency, status, paid_at, non_refundable_at " +
         "FROM driver_daily_activations WHERE driver_user_id = $1 AND operating_date = " +
@@ -51,6 +66,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         currency: "ZAR",
         status: activation?.status ?? "unpaid",
         isPaid: activation?.status === "paid",
+        testBypass: false,
         paidAt: activation?.paid_at ?? null,
         nonRefundableAt: activation?.non_refundable_at ?? null,
       };
