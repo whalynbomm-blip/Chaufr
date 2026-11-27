@@ -458,28 +458,32 @@ private fun DriverAvailabilityCard() {
             Text("DAILY ACTIVATION · R30", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Text("Pay today's non-refundable activation fee before going online or viewing trip requests.", color = Navy, fontSize = 11.sp)
             Spacer(Modifier.height(8.dp))
-            Button(
-              onClick = {
-                val token = SecureTokenStore.load(context)
-                if (token != null && !activationBusy) scope.launch {
-                  activationBusy = true
-                  activationMessage = ""
-                  try {
-                    val checkout = ChaufrApi.createActivationCheckout(apiUrl, token)
-                    val checkoutUrl = checkout.optString("checkoutUrl")
-                    if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("Secure payment link unavailable.")
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
-                    activationMessage = "Secure Paystack checkout opened. Activation updates after payment verification."
-                  } catch (error: Exception) {
-                    activationMessage = error.message ?: "Unable to start activation payment."
-                  } finally { activationBusy = false }
-                }
-              },
-              enabled = !activationBusy && apiUrl.isNotBlank(),
-              modifier = Modifier.fillMaxWidth(),
-              colors = ButtonDefaults.buttonColors(containerColor = Blue)
-            ) { Text(if (activationBusy) "Opening checkout..." else "Pay R30 securely") }
-            if (activationMessage.isNotBlank()) Text(activationMessage, color = Muted, fontSize = 10.sp)
+            if (BuildConfig.PAYMENTS_ENABLED) {
+              Button(
+                onClick = {
+                  val token = SecureTokenStore.load(context)
+                  if (token != null && !activationBusy) scope.launch {
+                    activationBusy = true
+                    activationMessage = ""
+                    try {
+                      val checkout = ChaufrApi.createActivationCheckout(apiUrl, token)
+                      val checkoutUrl = checkout.optString("checkoutUrl")
+                      if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("Secure payment link unavailable.")
+                      context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                      activationMessage = "Secure card checkout opened. Activation updates after payment verification."
+                    } catch (error: Exception) {
+                      activationMessage = error.message ?: "Unable to start activation payment."
+                    } finally { activationBusy = false }
+                  }
+                },
+                enabled = !activationBusy && apiUrl.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+              ) { Text(if (activationBusy) "Opening checkout..." else "Pay R30 securely") }
+              if (activationMessage.isNotBlank()) Text(activationMessage, color = Muted, fontSize = 10.sp)
+            } else {
+              Text("Card payments are intentionally disabled in this test build. Use the development-only activation bypass for local trip testing; production will require the R30 fee.", color = Muted, fontSize = 10.sp)
+            }
           }
         }
       } else {
