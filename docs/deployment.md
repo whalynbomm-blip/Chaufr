@@ -47,7 +47,7 @@ Set secrets and fare configuration only in the hosting provider's private enviro
 | `FARE_FUEL_PRICE_PER_LITRE` | Configured fuel price per litre |
 | `FARE_FUEL_STANDARD_L100KM`, `FARE_FUEL_COMFORT_L100KM`, `FARE_FUEL_XL_L100KM` | Fuel consumption assumptions by vehicle category |
 
-Generate private keys with `openssl rand -base64 32`. The Android Firebase configuration values are separate CI secrets: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, and `FIREBASE_SENDER_ID`. Android builds also need `chaufrApiBaseUrl` and passenger map key `chaufrGoogleMapsApiKey` as protected Gradle properties. Restrict the Android Maps key to the passenger app package and signing certificate, and restrict the server key to Routes API.
+Generate private keys with `openssl rand -base64 32`. The Android Firebase configuration values are separate CI secrets: `FIREBASE_API_KEY`, `FIREBASE_APP_ID`, `FIREBASE_PROJECT_ID`, and `FIREBASE_SENDER_ID`. Android builds also need `chaufrApiBaseUrl` and passenger map key `chaufrGoogleMapsApiKey` as protected Gradle properties. The `chaufrPaymentsEnabled` Gradle property defaults to `false`; leave it false throughout core development and enable it only in the final payment-gateway stage. Restrict the Android Maps key to the passenger app package and signing certificate, and restrict the server key to Routes API.
 
 Do not use sample values as live commercial pricing without approval and validation.
 
