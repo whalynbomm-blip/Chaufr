@@ -145,6 +145,19 @@ export function createMobilityService(pool, routesService, pushService = null) {
         "WHERE r.status='active' AND EXTRACT(ISODOW FROM d.day)=ANY(r.weekdays) AND ((d.day::date + r.local_time) AT TIME ZONE r.timezone)>now()+interval '15 minutes' " +
         "ON CONFLICT (recurring_rule_id,scheduled_for) WHERE recurring_rule_id IS NOT NULL DO NOTHING"
       );
+      const reminders = await pool.query(
+        "WITH due_reminders AS (SELECT id FROM scheduled_rides WHERE status='scheduled' AND reminder_sent_at IS NULL " +
+        "AND scheduled_for > now() + interval '2 minutes' AND scheduled_for <= now() + interval '32 minutes' " +
+        "ORDER BY scheduled_for LIMIT $1 FOR UPDATE SKIP LOCKED) " +
+        "UPDATE scheduled_rides s SET reminder_sent_at=now(),updated_at=now() FROM due_reminders d WHERE s.id=d.id " +
+        "RETURNING s.id,s.passenger_user_id,s.scheduled_for,s.pickup_label,s.destination_label",
+        [limit],
+      );
+      for (const ride of reminders.rows) {
+        await notify(ride.passenger_user_id,"Your Chaufr pickup is coming up",
+          "Your scheduled pickup is approaching. Please be ready at " + ride.pickup_label + ".",
+          {type:"scheduled_ride_reminder",scheduleId:ride.id,scheduledFor:ride.scheduled_for});
+      }
       const due = await pool.query(
         "SELECT id,passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward " +
         "FROM scheduled_rides WHERE status='scheduled' AND scheduled_for <= now() + interval '2 minutes' ORDER BY scheduled_for LIMIT $1",
@@ -176,7 +189,7 @@ export function createMobilityService(pool, routesService, pushService = null) {
           dispatched.push({ scheduleId:row.id,error:error.message });
         } finally { client.release(); }
       }
-      return { processed:dispatched.length,dispatched };
+      return { processed:dispatched.length,remindersSent:reminders.rowCount,dispatched };
     },
 
     async addTrustedContact(user,input={}) {
