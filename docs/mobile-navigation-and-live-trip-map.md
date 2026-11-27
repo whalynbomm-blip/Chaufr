@@ -6,7 +6,7 @@ Give the passenger and driver Android apps a clear, section-based navigation sys
 
 ## Navigation model
 
-Use a persistent five-destination bottom navigation bar. Each destination opens a dedicated screen with its own title, content and scroll state. Less frequently used tools live in a structured More screen. Do not place every feature on one scrolling dashboard.
+Use a top app bar with a hamburger control that opens an expandable side drawer. Keep the primary five destinations visible in the drawer; selecting a destination opens its dedicated screen and closes the drawer. Less frequently used tools live in a structured More destination. Keep the current destination clearly indicated and preserve a visible way back to Home. Do not place every feature on one scrolling dashboard.
 
 ### Passenger destinations
 
@@ -65,7 +65,7 @@ If location permission, network, API, Maps key or route data is unavailable, sho
 
 ## Implementation sequence
 
-1. Add role-specific navigation shell and dedicated destination screens, extracting existing feature panels into the appropriate destinations without deleting or duplicating business logic.
+1. Keep the role-specific top app bar and expandable side drawer consistent across Passenger and Driver apps. Ensure each destination opens its own screen, closes the drawer after selection and preserves existing feature panels without deleting or duplicating business logic.
 2. Move existing active-trip content into My Trips and integrate the Google Maps composables in both apps.
 3. Connect passenger map markers to the authorized live driver-location field returned by the active-trip API; connect driver map to actual device GPS and current trip coordinates.
 4. Add refresh lifecycle, stale-location UI, permission handling, route refresh and tests for completed/cancelled trips.
