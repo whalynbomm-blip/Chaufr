@@ -666,6 +666,7 @@ private fun DriverCurrentTripCard() {
           color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Text(current.optString("pickupLabel"), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Text("↓ " + current.optString("destinationLabel"), color = Muted, fontSize = 12.sp)
+        if (current.optBoolean("isScheduled")) Text("SCHEDULED PICKUP · " + current.optString("scheduledFor").replace("T", " ").take(16), color = Blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text(String.format(Locale.US, "%.1f km · %d min", current.optDouble("distanceKm", 0.0),
           current.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
         Text("Expected earnings: R " + String.format(Locale.US, "%.2f",
@@ -842,6 +843,7 @@ private fun AvailableTripsCard() {
           Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(trip.optString("pickupLabel", "Pickup"), color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Text("↓ " + trip.optString("destinationLabel", "Destination"), color = Muted, fontSize = 12.sp)
+            if (trip.optBoolean("isScheduled")) Text("SCHEDULED PICKUP · " + trip.optString("scheduledFor").replace("T", " ").take(16), color = Blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(String.format(Locale.US, "%.1f km · %d min", trip.optDouble("distanceKm", 0.0), trip.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
             Text("Driver earnings after commission: R " + String.format(Locale.US, "%.2f", trip.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text("Estimated vehicle costs: R " + String.format(Locale.US, "%.2f", trip.optDouble("estimatedOperatingCost", 0.0)), color = Muted, fontSize = 12.sp)
