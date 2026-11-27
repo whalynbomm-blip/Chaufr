@@ -181,8 +181,7 @@ private fun PassengerHome() {
                 val snapshot = ChaufrApi.passengerTripStatus(apiBase, token, tripId)
                 tripStatusSnapshot = snapshot
                 val status = snapshot.optString("status")
-                if (status in listOf("completed", "cancelled", "expired") &&
-                    (status != "completed" || snapshot.optString("paymentStatus") in listOf("paid", "refunded") || snapshot.optDouble("passengerPayable", 0.0) <= 0.0)) {
+                if (status in listOf("completed", "cancelled", "expired")) {
                     try {
                         val rewards = ChaufrApi.passengerRewards(apiBase, token)
                         rewardsTickets = rewards.optInt("tickets", rewardsTickets)
@@ -482,29 +481,33 @@ private fun PassengerHome() {
                                             snapshot.optString("paymentStatus") !in listOf("paid", "refunded") &&
                                             snapshot.optString("status") !in listOf("cancelled", "expired")) {
                                             Spacer(Modifier.height(10.dp))
-                                            Button(
-                                                onClick = {
-                                                    val tripId = activePassengerTripId
-                                                    val token = SecureTokenStore.load(context)
-                                                    if (tripId != null && token != null && !paymentLoading) scope.launch {
-                                                        paymentLoading = true
-                                                        paymentMessage = ""
-                                                        try {
-                                                            val checkout = ChaufrApi.createPaymentCheckout(BuildConfig.CHAUFR_API_BASE_URL, token, tripId)
-                                                            val checkoutUrl = checkout.optString("checkoutUrl")
-                                                            if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("The secure payment link was not returned.")
-                                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
-                                                            paymentMessage = "Secure Paystack checkout opened. Your trip will update after payment is verified."
-                                                        } catch (error: Exception) {
-                                                            paymentMessage = error.message ?: "Unable to start payment."
-                                                        } finally { paymentLoading = false }
-                                                    }
-                                                },
-                                                enabled = !paymentLoading,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.buttonColors(containerColor = ChaufrBlue)
-                                            ) { Text(if (paymentLoading) "Opening secure checkout..." else "Pay securely by card") }
-                                            if (paymentMessage.isNotBlank()) Text(paymentMessage, color = ChaufrMuted, fontSize = 10.sp)
+                                            if (BuildConfig.PAYMENTS_ENABLED) {
+                                                Button(
+                                                    onClick = {
+                                                        val tripId = activePassengerTripId
+                                                        val token = SecureTokenStore.load(context)
+                                                        if (tripId != null && token != null && !paymentLoading) scope.launch {
+                                                            paymentLoading = true
+                                                            paymentMessage = ""
+                                                            try {
+                                                                val checkout = ChaufrApi.createPaymentCheckout(BuildConfig.CHAUFR_API_BASE_URL, token, tripId)
+                                                                val checkoutUrl = checkout.optString("checkoutUrl")
+                                                                if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("The secure payment link was not returned.")
+                                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                                                                paymentMessage = "Secure card checkout opened. Your trip will update after payment is verified."
+                                                            } catch (error: Exception) {
+                                                                paymentMessage = error.message ?: "Unable to start payment."
+                                                            } finally { paymentLoading = false }
+                                                        }
+                                                    },
+                                                    enabled = !paymentLoading,
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = ChaufrBlue)
+                                                ) { Text(if (paymentLoading) "Opening secure checkout..." else "Pay securely by card") }
+                                                if (paymentMessage.isNotBlank()) Text(paymentMessage, color = ChaufrMuted, fontSize = 10.sp)
+                                            } else {
+                                                Text("Card payments are intentionally disabled in this test build. Payment setup will be completed at the final launch stage.", color = ChaufrMuted, fontSize = 10.sp)
+                                            }
                                         } else if (snapshot.optString("paymentStatus") == "paid") {
                                             Text("Payment confirmed", color = ChaufrGreen, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                             if (snapshot.optString("status") == "completed") {
