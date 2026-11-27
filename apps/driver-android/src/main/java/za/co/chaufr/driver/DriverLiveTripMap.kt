@@ -73,7 +73,7 @@ fun DriverLiveTripMap(trip: JSONObject) {
                     if (points.size > 1) Polyline(points = points, color = Color(0xFF2878F0), width = 8f)
                 }
             }
-            Text(if (status == "accepted") "Navigate to pickup" else "Navigate to destination", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
+            Text(if (status == "accepted" || status == "driver_arriving") "Navigate to pickup" else "Navigate to destination", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
             val liveTrafficEta = trip.optInt("liveTrafficEtaMinutes", -1)
             val liveTrafficDistance = trip.optDouble("liveTrafficRemainingKm", -1.0)
