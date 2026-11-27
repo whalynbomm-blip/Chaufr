@@ -70,6 +70,19 @@ fun DriverLiveTripMap(trip: JSONObject) {
             Text(if (status == "accepted") "Navigate to pickup" else "Navigate to destination", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
             Text(if (status == "in_progress") "Route estimate: about ${(duration - elapsed).coerceAtLeast(0.0).toInt()} min remaining" else "Planned route: ${duration.toInt()} min · ${String.format("%.1f", trip.optDouble("distanceKm"))} km", color = Color(0xFF64748B))
+            val locationSeenAt = driverLocation?.optString("lastSeenAt").orEmpty()
+            val locationAgeSeconds = if (locationSeenAt.isBlank()) null else try {
+                Duration.between(Instant.parse(locationSeenAt), Instant.now()).seconds.coerceAtLeast(0)
+            } catch (_: Exception) { null }
+            val accuracy = driverLocation?.optDouble("accuracyMeters", Double.NaN)
+            Text(
+                when {
+                    locationAgeSeconds == null -> "GPS status: waiting for a fresh server location update."
+                    locationAgeSeconds <= 30 -> "GPS status: updated ${locationAgeSeconds}s ago" + if (accuracy != null && accuracy.isFinite()) " · ±${accuracy.toInt()} m" else ""
+                    else -> "GPS status: last update ${locationAgeSeconds}s ago · location may be stale"
+                },
+                color = if (locationAgeSeconds != null && locationAgeSeconds <= 30) Color(0xFF16865B) else Color(0xFFB45309)
+            )
             Text("ETA and progress use the original Google route estimate and elapsed time, not live traffic or GPS-distance calculations. Follow road signs and drive safely.", color = Color(0xFF64748B))
         }
     }
