@@ -144,7 +144,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           endpoints: [
             "GET /health", "GET /v1", "POST /v1/fare-quotes", "POST /v1/routes/preview",
             "POST /v1/auth/register", "POST /v1/auth/login",
-            "GET /v1/auth/me", "POST /v1/auth/logout", "POST/DELETE /v1/push-devices",
+            "GET /v1/auth/me", "GET/DELETE /v1/auth/sessions", "DELETE /v1/auth/sessions/:sessionId", "POST /v1/auth/logout", "POST/DELETE /v1/push-devices",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence", "GET/PUT /v1/driver/advantage-settings",
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
             "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/arrive", "POST /v1/driver/trips/:tripId/cancel", "POST /v1/driver/trips/:tripId/start",
@@ -460,6 +460,29 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           const user = await authService.authenticate(token);
           if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
           return json(response, 200, { user });
+        }
+        if (request.method === "GET" && url.pathname === "/v1/auth/sessions") {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          return json(response, 200, await authService.listSessions(user.id, token));
+        }
+        if (request.method === "DELETE" && url.pathname === "/v1/auth/sessions") {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          return json(response, 200, await authService.revokeOtherSessions(user.id, token));
+        }
+        const revokeSessionMatch = /^\\/v1\\/auth\\/sessions\\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "DELETE" && revokeSessionMatch) {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          const revoked = await authService.revokeSession(user.id, revokeSessionMatch[1], token);
+          return json(response, revoked ? 200 : 404, revoked ? { ok: true } : { error: "Session not found, already revoked, or current session", requestId });
         }
         if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
           const token = getBearerToken(request);
