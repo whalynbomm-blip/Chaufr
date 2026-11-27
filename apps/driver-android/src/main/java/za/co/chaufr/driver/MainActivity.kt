@@ -651,6 +651,21 @@ private fun DriverEarningsSummary() {
         SummaryCard("LIFETIME", "R " + String.format(Locale.US, "%.2f", data?.optDouble("lifetimeEarnings", 0.0) ?: 0.0), Modifier.weight(1f))
         SummaryCard("COMPLETED", (data?.optInt("lifetimeTrips", 0) ?: 0).toString(), Modifier.weight(1f))
       }
+      Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F6FA))) {
+        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text("COMMISSION BREAKDOWN", color = Navy, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Today's platform commission", color = Muted, fontSize = 11.sp)
+            Text("R " + String.format(Locale.US, "%.2f", data?.optDouble("todayPlatformCommission", 0.0) ?: 0.0), color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          }
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Lifetime platform commission", color = Muted, fontSize = 11.sp)
+            Text("R " + String.format(Locale.US, "%.2f", data?.optDouble("lifetimePlatformCommission", 0.0) ?: 0.0), color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          }
+          Text("Your earnings above are the driver's recorded share after platform commission. Commission is shown separately for transparency.", color = Muted, fontSize = 10.sp)
+        }
+      }
       if (message.isNotBlank()) Text(message, color = Muted, fontSize = 11.sp)
       val recent = data?.optJSONArray("recentTrips")
       if (recent != null && recent.length() > 0) {
