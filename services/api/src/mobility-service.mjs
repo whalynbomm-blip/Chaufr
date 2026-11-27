@@ -48,6 +48,7 @@ function fareSnapshot(payload) {
     passengerTotal: fare.passengerTotal, driverEarnings: fare.breakdown.driverEarnings,
     platformCommission: fare.breakdown.platformCommission, breakdown: { ...fare.breakdown },
     rewardRedemption: payload.redeemReward, pickupLocation: payload.origin,
+    destinationLocation: payload.destination,
   };
 }
 
