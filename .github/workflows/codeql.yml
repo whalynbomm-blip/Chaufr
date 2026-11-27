@@ -24,7 +24,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [javascript, java-kotlin]
+        include:
+          - language: javascript
+            build-mode: autobuild
+          - language: java-kotlin
+            build-mode: none
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,8 +36,10 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
           queries: security-extended
-      - name: Autobuild
+      - name: Autobuild (JavaScript)
+        if: matrix.language == 'javascript'
         uses: github/codeql-action/autobuild@v3
       - name: Analyze
         uses: github/codeql-action/analyze@v3
