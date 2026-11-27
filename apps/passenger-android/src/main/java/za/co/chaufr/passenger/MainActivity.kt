@@ -146,7 +146,6 @@ private fun PassengerHome() {
     var preview by remember { mutableStateOf<FarePreview?>(null) }
     var message by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var bookingLoading by remember { mutableStateOf(false) }
     var bookingMessage by remember { mutableStateOf("") }
