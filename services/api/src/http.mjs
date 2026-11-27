@@ -146,7 +146,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (database) await database.query("SELECT 1");
         return json(response, 200, {
           status: "ok", service: "chaufr-api",
-          dependencies: { database: database ? "connected" : "not_configured" },
+          dependencies: { database: database ? "connected" : "not_configured", pushNotifications: fcmSender.isConfigured() ? "configured" : "not_configured", emergencySms: smsSender.isConfigured() ? "configured" : "not_configured" },
           requestId,
         });
       }
