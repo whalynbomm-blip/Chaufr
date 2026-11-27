@@ -593,7 +593,11 @@ private fun DriverEarningsSummary() {
       } else if (data != null) {
         Text("Your completed trips will appear here.", color = Muted, fontSize = 11.sp)
       }
-      Text("Earnings are recorded by the Chaufr server after trip completion. Bank settlement is shown separately when payouts are enabled.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
+      Text(
+        if (BuildConfig.PAYMENTS_ENABLED) "Trip earnings are recorded after completion. Bank settlement is shown separately after verified payout."
+        else "Test build: these are indicative trip earnings only. Card settlement and bank payouts are disabled until the final gateway stage.",
+        color = Muted, fontSize = 10.sp, lineHeight = 14.sp
+      )
     }
   }
 }
