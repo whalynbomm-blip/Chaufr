@@ -698,6 +698,8 @@ private fun DriverCurrentTripCard() {
           current.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
         Text("Expected earnings: R " + String.format(Locale.US, "%.2f",
           current.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Spacer(Modifier.height(8.dp))
+        DriverLiveTripMap(current)
         current.optString("passengerUserId").takeIf { it.isNotBlank() }?.let { passengerUserId ->
           Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED))) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
