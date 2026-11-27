@@ -710,6 +710,9 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         };
       } catch (error) {
         await client.query("ROLLBACK");
+        if (error?.code === "23505" && error?.constraint === "one_active_trip_per_driver") {
+          throw new AuthError("You already have an active trip. Complete or cancel it before accepting another ride.", 409);
+        }
         throw error;
       } finally {
         client.release();
