@@ -647,7 +647,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         }
         if (!driverCheck.rows[0].is_online) throw new AuthError("You must be online to accept a trip", 403);
         const tripResult = await client.query(
-          "SELECT id, status, pickup_label, destination_label, quoted_total, driver_earnings, " +
+          "SELECT id, passenger_user_id, status, pickup_label, destination_label, quoted_total, driver_earnings, " +
           "quote_expires_at, fare_snapshot->>'vehicleCategory' AS vehicle_category " +
           "FROM trips WHERE id = $1 FOR UPDATE",
           [tripId],
@@ -694,8 +694,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         await client.query("COMMIT");
         const accepted = updated.rows[0];
         if (pushService) {
-          const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
-          await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
+          await notify(trip.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
         }
         return {
           tripId: accepted.id,
