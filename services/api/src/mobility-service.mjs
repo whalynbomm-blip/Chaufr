@@ -173,6 +173,32 @@ export function createMobilityService(pool, routesService, pushService = null, s
           "Your scheduled pickup is approaching. Please be ready at " + ride.pickup_label + ".",
           {type:"scheduled_ride_reminder",scheduleId:ride.id,scheduledFor:ride.scheduled_for});
       }
+      // A scheduled ride can be committed successfully while the dispatch
+      // attempt is interrupted by a process restart or a temporary DB/provider
+      // failure. Retry those still-unassigned trips on subsequent worker ticks.
+      const retryable = await pool.query(
+        "SELECT s.id,s.passenger_user_id,s.trip_id,s.pickup_label,s.origin " +
+        "FROM scheduled_rides s JOIN trips t ON t.id=s.trip_id " +
+        "WHERE s.status='dispatched' AND t.status IN ('requested','offered') " +
+        "AND NOT EXISTS (SELECT 1 FROM trip_offers o WHERE o.trip_id=s.trip_id " +
+        "AND o.status='pending' AND o.expires_at>now()) " +
+        "ORDER BY s.scheduled_for LIMIT $1",
+        [limit],
+      );
+      const retriedDispatches = [];
+      for (const ride of retryable.rows) {
+        try {
+          const dispatch = await offerTripToNextDriver(pool,ride.trip_id,ride.origin,routesService);
+          if (dispatch.driverUserId) {
+            await notify(dispatch.driverUserId,"New Chaufr scheduled ride",ride.pickup_label,{type:"trip_offer",tripId:ride.trip_id});
+          }
+          retriedDispatches.push({scheduleId:ride.id,tripId:ride.trip_id,dispatchStatus:dispatch.status});
+        } catch (error) {
+          // Keep the scheduled ride and trip intact; the next worker tick retries.
+          retriedDispatches.push({scheduleId:ride.id,tripId:ride.trip_id,error:error.message});
+        }
+      }
+
       const due = await pool.query(
         "SELECT id,passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward " +
         "FROM scheduled_rides WHERE status='scheduled' AND scheduled_for <= now() + interval '2 minutes' ORDER BY scheduled_for LIMIT $1",
