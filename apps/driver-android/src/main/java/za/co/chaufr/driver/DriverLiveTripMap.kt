@@ -52,7 +52,7 @@ fun DriverLiveTripMap(trip: JSONObject) {
     val status = trip.optString("status")
     val duration = trip.optDouble("durationMinutes", 0.0)
     val started = trip.optString("startedAt")
-    val elapsed = remember(started, status) {
+    val elapsed = 
         if (started.isBlank()) 0.0 else try { Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0 } catch (_: Exception) { 0.0 }
     }
     val progress = if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f,0.95f) else 0f
@@ -72,7 +72,7 @@ fun DriverLiveTripMap(trip: JSONObject) {
             Text(if (status == "accepted") "Navigate to pickup" else "Navigate to destination", color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold)
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
             Text(if (status == "in_progress") "Route estimate: about ${(duration - elapsed).coerceAtLeast(0.0).toInt()} min remaining" else "Planned route: ${duration.toInt()} min · ${String.format("%.1f", trip.optDouble("distanceKm"))} km", color = Color(0xFF64748B))
-            Text("Route and ETA use the original Google route estimate. Follow road signs and drive safely.", color = Color(0xFF64748B))
+            Text("ETA and progress use the original Google route estimate and elapsed time, not live traffic or GPS-distance calculations. Follow road signs and drive safely.", color = Color(0xFF64748B))
         }
     }
 }
