@@ -47,3 +47,27 @@ test("driver earnings endpoint service rejects non-driver accounts", async () =>
     /driver account required/i,
   );
 });
+
+test("development-only activation bypass is explicitly labelled and avoids payment setup", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousBypass = process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+  process.env.NODE_ENV = "development";
+  process.env.CHAUFR_TEST_BYPASS_ACTIVATION = "true";
+  try {
+    const pool = {
+      connect: async () => { throw new Error("connect should not be used"); },
+      query: async () => { throw new Error("development bypass should not query payment records"); },
+    };
+    const service = createTripService(pool, { dailyActivationFee: 30 });
+    const status = await service.getActivationStatus({ id: "driver-1", role: "driver" });
+    assert.equal(status.isPaid, true);
+    assert.equal(status.testBypass, true);
+    assert.equal(status.status, "test_bypass");
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousBypass === undefined) delete process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+    else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
+  }
+});
+
