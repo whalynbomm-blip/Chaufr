@@ -374,7 +374,7 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
     async upload(driver, input = {}) {
       if (driver?.role !== "driver") throw new AuthError("Driver account required", 403);
       configured();
-      const allowed = new Set(["drivers_licence","south_african_id","passport","proof_of_address","saps_criminal_record","pending_investigation_declaration","vehicle_registration","vehicle_roadworthy","vehicle_operating_licence","bank_confirmation"]);
+      const allowed = new Set(["drivers_licence","driver_selfie","south_african_id","passport","proof_of_address","saps_criminal_record","pending_investigation_declaration","vehicle_registration","vehicle_roadworthy","vehicle_operating_licence","bank_confirmation"]);
       const expiryRequired = new Set(["vehicle_roadworthy","vehicle_operating_licence"]);
       const expiryDate = input.expiryDate == null || input.expiryDate === "" ? null : String(input.expiryDate);
       if (expiryRequired.has(input.documentType) && (!expiryDate || !/^\\d{4}-\\d{2}-\\d{2}$/.test(expiryDate) || Number.isNaN(Date.parse(expiryDate)))) {
@@ -388,6 +388,9 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         : input.mimeType === "image/png" ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
         : bytes.subarray(0,5).toString("ascii") === "%PDF-";
       if (!validSignature) throw new AuthError("The uploaded file content does not match its declared file type");
+      if (input.documentType === "driver_selfie" && !input.mimeType.startsWith("image/")) {
+        throw new AuthError("A driver selfie must be uploaded as a JPG or PNG image");
+      }
       const fileName = String(input.fileName || "document." + types[input.mimeType]).replace(/[^a-zA-Z0-9._-]/g,"_").slice(0,100);
       const iv = randomBytes(12);
       const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -398,7 +401,7 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         "VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id,document_type,file_name,mime_type,file_size,status,expiry_date,created_at",
         [driver.id,input.documentType,fileName,input.mimeType,bytes.length,encrypted,iv,tag,expiryDate],
       );
-      if (["drivers_licence","south_african_id","passport","saps_criminal_record","pending_investigation_declaration","vehicle_registration","vehicle_roadworthy","vehicle_operating_licence"].includes(input.documentType)) {
+      if (["drivers_licence","driver_selfie","south_african_id","passport","saps_criminal_record","pending_investigation_declaration","vehicle_registration","vehicle_roadworthy","vehicle_operating_licence"].includes(input.documentType)) {
         await pool.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'suspended'", [driver.id]);
         await pool.query("UPDATE driver_presence SET is_online=false,updated_at=now() WHERE driver_user_id=$1", [driver.id]);
       }
@@ -446,9 +449,11 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
           );
         }
         const required = await client.query(
-          "SELECT (SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status",
+          "SELECT " +
+          "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status, " +
+          "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='driver_selfie' ORDER BY created_at DESC LIMIT 1) AS selfie_status",
           [driverId]);
-        if (required.rows[0].licence_status === "approved") {
+        if (required.rows[0].licence_status === "approved" && required.rows[0].selfie_status === "approved") {
           await client.query("UPDATE driver_profiles SET verification_status='verified' WHERE user_id=$1", [driverId]);
         } else {
           await client.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'suspended'", [driverId]);
