@@ -47,11 +47,7 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
     val status = snapshot.optString("status")
     val duration = snapshot.optDouble("durationMinutes", 0.0)
     val started = snapshot.optString("startedAt")
-    val elapsed = 
-        if (started.isBlank()) 0.0 else try {
-            Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0
-        } catch (_: Exception) { 0.0 }
-    }
+    val elapsed = if (started.isBlank()) 0.0 else try { Duration.between(Instant.parse(started), Instant.now()).seconds.coerceAtLeast(0) / 60.0 } catch (_: Exception) { 0.0 }
     val progress = if (status == "completed") 1f else if (status == "in_progress" && duration > 0) (elapsed / duration).toFloat().coerceIn(0f, 0.95f) else 0f
     val remaining = (duration - elapsed).coerceAtLeast(0.0)
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
