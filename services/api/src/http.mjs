@@ -424,6 +424,15 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "POST" && declineMatch) {
           return json(response, 200, await tripService.declineTripOffer(user, declineMatch[1]));
         }
+        const arriveMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/arrive$/i.exec(url.pathname);
+        if (request.method === "POST" && arriveMatch) {
+          return json(response, 200, await tripService.markDriverArrived(user, arriveMatch[1]));
+        }
+        const driverCancelMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/cancel$/i.exec(url.pathname);
+        if (request.method === "POST" && driverCancelMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await tripService.cancelAcceptedTrip(user, driverCancelMatch[1], body.reason));
+        }
         const startMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/start$/i.exec(url.pathname);
         if (request.method === "POST" && startMatch) {
           return json(response, 200, await tripService.startTrip(user, startMatch[1]));
