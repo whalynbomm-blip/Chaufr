@@ -326,6 +326,7 @@ private fun DriverAvailabilityCard() {
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
   var activationPaid by remember { mutableStateOf(false) }
+  var activationTestBypass by remember { mutableStateOf(false) }
   var activationBusy by remember { mutableStateOf(false) }
   var activationMessage by remember { mutableStateOf("") }
 
@@ -335,7 +336,9 @@ private fun DriverAvailabilityCard() {
       try {
         val profile = ChaufrApi.driverProfile(apiUrl, token)
         available = profile.optBoolean("isOnline", false)
-        activationPaid = ChaufrApi.driverActivation(apiUrl, token).optBoolean("isPaid", false)
+        val activation = ChaufrApi.driverActivation(apiUrl, token)
+        activationPaid = activation.optBoolean("isPaid", false)
+        activationTestBypass = activation.optBoolean("testBypass", false)
       } catch (_: Exception) {
         available = false
       }
@@ -346,9 +349,15 @@ private fun DriverAvailabilityCard() {
     while (true) {
       val token = SecureTokenStore.load(context)
       if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
-        try { activationPaid = ChaufrApi.driverActivation(apiUrl, token).optBoolean("isPaid", false) }
-        catch (_: Exception) { }
-      } else activationPaid = false
+        try {
+          val activation = ChaufrApi.driverActivation(apiUrl, token)
+          activationPaid = activation.optBoolean("isPaid", false)
+          activationTestBypass = activation.optBoolean("testBypass", false)
+        } catch (_: Exception) { }
+      } else {
+        activationPaid = false
+        activationTestBypass = false
+      }
       kotlinx.coroutines.delay(12000)
     }
   }
@@ -474,7 +483,13 @@ private fun DriverAvailabilityCard() {
           }
         }
       } else {
-        Text("Today's R30 activation is paid.", color = Green, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(
+          if (activationTestBypass) "DEVELOPMENT TEST MODE · R30 activation check bypassed. Production will require the daily fee."
+          else "Today's R30 activation is paid.",
+          color = if (activationTestBypass) Blue else Green,
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Bold
+        )
       }
       Spacer(Modifier.height(12.dp))
       Button(
