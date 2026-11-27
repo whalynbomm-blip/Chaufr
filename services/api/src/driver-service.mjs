@@ -206,13 +206,12 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
           throw new AuthError("Your driver profile must be manually approved before going online", 403);
         }
         const expiredDocuments = await pool.query(
-          "SELECT count(*) AS missing_or_expired FROM (VALUES " +
-          "('prdp'),('saps_criminal_record'),('pending_investigation_declaration'),('vehicle_registration'),('vehicle_roadworthy'),('vehicle_operating_licence')) AS req(document_type) " +
-          "WHERE NOT EXISTS (SELECT 1 FROM driver_verification_documents d WHERE d.driver_user_id=$1 AND d.document_type=req.document_type AND d.status='approved' " +
-          "AND (d.document_type NOT IN ('prdp','vehicle_roadworthy','vehicle_operating_licence') OR d.expiry_date > CURRENT_DATE))",
+          "SELECT 1 FROM driver_verification_documents WHERE driver_user_id=$1 " +
+          "AND document_type IN ('prdp','vehicle_roadworthy','vehicle_operating_licence') " +
+          "AND status='approved' AND (expiry_date IS NULL OR expiry_date <= CURRENT_DATE) LIMIT 1",
           [user.id],
         );
-        if (Number(expiredDocuments.rows[0]?.missing_or_expired ?? 1) > 0) {
+        if (expiredDocuments.rowCount > 0) {
           await pool.query("UPDATE driver_presence SET is_online=false,updated_at=now() WHERE driver_user_id=$1", [user.id]);
           throw new AuthError("A required driver document is missing or expired. Update it and wait for owner approval.", 403);
         }
