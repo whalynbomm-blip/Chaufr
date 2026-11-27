@@ -468,10 +468,11 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const activation = await hasPaidActivation(pool, driver.id);
       if (!activation) throw activationRequired();
       const result = await pool.query(
-        "SELECT id, passenger_user_id, status, pickup_label, destination_label, distance_km, duration_minutes, " +
-        "quoted_total, driver_earnings, accepted_at, started_at, fare_snapshot->>'rewardRedemption' AS reward_redemption " +
-        "FROM trips WHERE driver_user_id = $1 AND status IN ('accepted', 'in_progress') " +
-        "ORDER BY accepted_at DESC LIMIT 1",
+        "SELECT t.id, t.passenger_user_id, t.status, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
+        "t.quoted_total, t.driver_earnings, t.accepted_at, t.started_at, t.fare_snapshot->>'rewardRedemption' AS reward_redemption, sr.scheduled_for " +
+        "FROM trips t LEFT JOIN scheduled_rides sr ON sr.trip_id=t.id " +
+        "WHERE t.driver_user_id = $1 AND t.status IN ('accepted', 'in_progress') " +
+        "ORDER BY t.accepted_at DESC LIMIT 1",
         [driver.id],
       );
       const trip = result.rows[0];
@@ -486,6 +487,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         passengerFare: Number(trip.quoted_total),
         expectedDriverEarnings: Number(trip.driver_earnings),
         rewardRedemption: trip.reward_redemption === "true",
+        scheduledFor: trip.scheduled_for ?? null,
+        isScheduled: Boolean(trip.scheduled_for),
         acceptedAt: trip.accepted_at,
         startedAt: trip.started_at,
       } : null };
@@ -515,9 +518,9 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       }
       const result = await pool.query(
         "SELECT t.id, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
-        "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, " +
+        "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, sr.scheduled_for, " +
         "t.fare_snapshot->>'vehicleCategory' AS vehicle_category " +
-        "FROM trips t JOIN trip_offers o ON o.trip_id = t.id " +
+        "FROM trips t JOIN trip_offers o ON o.trip_id = t.id LEFT JOIN scheduled_rides sr ON sr.trip_id=t.id " +
         "WHERE t.status = 'requested' AND t.driver_user_id IS NULL " +
         "AND o.driver_user_id = $1 AND o.status = 'pending' AND o.expires_at > now() " +
         "AND t.quote_expires_at > now() ORDER BY o.offered_at ASC LIMIT 50",
@@ -567,6 +570,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
             estimatedNetEarnings: estimatedNet,
             minimumNetPerTrip: Number(settings.minimum_net_per_trip ?? 0),
             vehicleCategory: row.vehicle_category,
+            scheduledFor: row.scheduled_for ?? null,
+            isScheduled: Boolean(row.scheduled_for),
             expiresAt: row.quote_expires_at,
             requestedAt: row.requested_at,
           };
