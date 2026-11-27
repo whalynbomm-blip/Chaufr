@@ -107,6 +107,31 @@ test("registration, login, session validation and logout work with PostgreSQL", 
         }),
       });
       assert.equal(createdOverHttp.status, 201);
+      const secondLogin = await fetch(`${base}/v1/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ identifier: "passenger@example.com", password: "a-long-test-password-123" }),
+      });
+      assert.equal(secondLogin.status, 200);
+      const secondAccount = await secondLogin.json();
+      const sessionList = await fetch(`${base}/v1/auth/sessions`, {
+        headers: { authorization: `Bearer ${replacementSession.accessToken}` },
+      });
+      assert.equal(sessionList.status, 200);
+      const listedSessions = await sessionList.json();
+      assert.equal(listedSessions.sessions.length, 2);
+      const secondSessionRecord = listedSessions.sessions.find((session) => session.is_current === false);
+      assert.ok(secondSessionRecord);
+      const sessionDelete = await fetch(`${base}/v1/auth/sessions/${secondSessionRecord.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${replacementSession.accessToken}` },
+      });
+      assert.equal(sessionDelete.status, 200);
+      const secondSessionMe = await fetch(`${base}/v1/auth/me`, {
+        headers: { authorization: `Bearer ${secondAccount.accessToken}` },
+      });
+      assert.equal(secondSessionMe.status, 401);
+
 
       const logoutResponse = await fetch(`${base}/v1/auth/logout`, {
         method: "POST",
