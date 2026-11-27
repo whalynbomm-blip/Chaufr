@@ -71,3 +71,25 @@ test("development-only activation bypass is explicitly labelled and avoids payme
   }
 });
 
+test("activation bypass is ignored in production even when the flag is present", async () => {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousBypass = process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+  process.env.NODE_ENV = "production";
+  process.env.CHAUFR_TEST_BYPASS_ACTIVATION = "true";
+  try {
+    const pool = {
+      connect: async () => {},
+      query: async () => ({ rows: [] }),
+    };
+    const service = createTripService(pool, { dailyActivationFee: 30 });
+    const status = await service.getActivationStatus({ id: "driver-1", role: "driver" });
+    assert.equal(status.isPaid, false);
+    assert.equal(status.testBypass, false);
+    assert.equal(status.status, "unpaid");
+  } finally {
+    if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+    if (previousBypass === undefined) delete process.env.CHAUFR_TEST_BYPASS_ACTIVATION;
+    else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
+  }
+});
