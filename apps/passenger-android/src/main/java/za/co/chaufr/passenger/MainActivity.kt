@@ -960,6 +960,7 @@ private fun PassengerHome() {
                                             Text("Trip reference: " + activePassengerTripId!!.take(8), color = ChaufrMuted, fontSize = 11.sp)
                                         }
                                     }
+                                    tripStatusSnapshot?.let { PassengerLiveTripMap(it) }
                                 }
                                 passengerTripHistory.forEach { trip ->
                                     Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
