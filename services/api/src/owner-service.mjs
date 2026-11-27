@@ -114,16 +114,11 @@ export function createOwnerService(pool, fareConfig) {
         await client.query("BEGIN");
         if (status === "verified") {
           const evidence = await client.query(
-            "SELECT " +
-            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type IN ('south_african_id','passport') ORDER BY created_at DESC LIMIT 1) AS identity_status, " +
-            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status, " +
-            "(SELECT count(*) FROM (VALUES ('prdp'),('saps_criminal_record'),('pending_investigation_declaration'),('vehicle_registration'),('vehicle_roadworthy'),('vehicle_operating_licence')) AS req(document_type) " +
-            " WHERE NOT EXISTS (SELECT 1 FROM (SELECT d.status,d.expiry_date FROM driver_verification_documents d WHERE d.driver_user_id=$1 AND d.document_type=req.document_type ORDER BY d.created_at DESC LIMIT 1) latest " +
-            " AND latest.status='approved' AND (req.document_type NOT IN ('prdp','vehicle_roadworthy','vehicle_operating_licence') OR latest.expiry_date > CURRENT_DATE))) AS missing_required",
+            "SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1",
             [driverId],
           );
-          if (evidence.rows[0]?.identity_status !== "approved" || evidence.rows[0]?.licence_status !== "approved" || Number(evidence.rows[0]?.missing_required) > 0) {
-            throw new AuthError("Approve the driver's identity, licence, PrDP, SAPS record, signed declaration and vehicle permits/documents before verifying this driver", 409);
+          if (evidence.rows[0]?.status !== "approved") {
+            throw new AuthError("Approve a valid South African driver's licence before verifying this driver", 409);
           }
         }
         const updated = await client.query(
