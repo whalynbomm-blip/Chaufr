@@ -15,6 +15,7 @@ import { createMobilityService } from "./mobility-service.mjs";
 import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";
 import { createRatingService } from "./rating-service.mjs";
 import { createSupportService } from "./support-service.mjs";
+import { createWindowRateLimiter } from "./rate-limit.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -102,29 +103,15 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const verificationService = database ? createDriverVerificationService(database) : null;
   const ratingService = database ? createRatingService(database) : null;
   const supportService = database ? createSupportService(database) : null;
-  const authAttempts = new Map();
-  const routeAttempts = new Map();
+  const authLimiter = createWindowRateLimiter({ limit: 10, windowMs: 15 * 60 * 1000, maxEntries: 10_000 });
+  const routeLimiter = createWindowRateLimiter({ limit: 30, windowMs: 60 * 1000, maxEntries: 10_000 });
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
-    const now = Date.now();
-    const current = authAttempts.get(key);
-    if (!current || current.resetAt <= now) {
-      authAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
-      return;
-    }
-    if (current.count >= 10) throw new AuthError("Too many attempts. Please try again later.", 429);
-    current.count += 1;
+    if (!authLimiter.consume(key).allowed) throw new AuthError("Too many attempts. Please try again later.", 429);
   };
   const checkRouteRateLimit = (request) => {
     const key = request.socket.remoteAddress ?? "unknown";
-    const now = Date.now();
-    const current = routeAttempts.get(key);
-    if (!current || current.resetAt <= now) {
-      routeAttempts.set(key, { count: 1, resetAt: now + 60 * 1000 });
-      return;
-    }
-    if (current.count >= 30) throw new AuthError("Too many route requests. Please wait a minute and try again.", 429);
-    current.count += 1;
+    if (!routeLimiter.consume(key).allowed) throw new AuthError("Too many route requests. Please wait a minute and try again.", 429);
   };
   const getBearerToken = (request) => {
     const header = request.headers.authorization ?? "";
