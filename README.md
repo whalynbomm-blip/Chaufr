@@ -4,10 +4,10 @@ Chaufr is an independent South African ride-hailing platform developed as a GitH
 
 ## Products
 
-- **Passenger Android app** — account access, pickup/destination selection, upfront fares, Saver/Standard/Priority matching preferences, immediate and scheduled bookings, trip status/history, rewards, card checkout, cancellations and refund requests.
-- **Driver Android app** — onboarding, vehicle and document submissions, activation payment, online/offline availability, trip offers and management, earnings, payout bank onboarding and reward-ride payout requests.
+- **Passenger Android app** — account access, pickup/destination selection, upfront fares, Saver/Standard/Priority matching preferences, immediate and scheduled bookings, trip status/history, rewards, cancellation controls, trusted-contact management and support.
+- **Driver Android app** — onboarding, vehicle and document submissions, online/offline availability, live trip offers and management, scheduled pickup indicators, earnings, trusted-contact management and support.
 - **Owner web console** — protected operations, driver and vehicle verification, safety moderation, fare configuration, refund review, payout processing and financial oversight.
-- **Shared API** — PostgreSQL-backed authentication, routing/fare calculation, dispatch, payments, payouts, refunds, identity-document review, notifications and Safety Shield.
+- **Shared API** — PostgreSQL-backed authentication, routing/fare calculation, dispatch, driver earnings, scheduled reminders, ratings, support tickets, identity-document review, notifications and Safety Shield. Payment adapters are present but intentionally disabled until the final gateway stage.
 
 ## Approved commercial rules
 
@@ -19,16 +19,13 @@ Chaufr is an independent South African ride-hailing platform developed as a GitH
 
 ## Safety and convenience
 
-The codebase includes trusted contacts, SOS event recording, 12-hour live trip-sharing links, GPS-based route-deviation/unusual-stop alerts, report/block workflows, one-off scheduled rides, recurring weekday bookings and Saver/Standard/Priority matching preferences. These features require production configuration and field testing; SOS is not an emergency-response service.
+The codebase includes trusted-contact management, SOS event recording, 12-hour live trip-sharing links, GPS-based route-deviation/unusual-stop alerts, report/block workflows, one-off scheduled rides, recurring weekday bookings, passenger pickup reminders, scheduled pickup indicators for drivers and Saver/Standard/Priority matching preferences. These features require production configuration and field testing; SOS is not an emergency-response service.
 
 ## Current verification
 
-The feature branch `feature/payments-payouts-verification` contains the Paystack checkout/webhook integration, driver bank payout processing, cancellation refunds and encrypted driver verification-document workflow.
+The feature branch `feature/payments-payouts-verification` contains the core passenger and driver workflows, Safety Shield, scheduled ride management, trusted contacts, ratings, support tickets, driver earnings and encrypted driver verification-document workflow. Payment adapter code remains in the branch but the Android payment UI is disabled by default with `chaufrPaymentsEnabled=false`; gateway setup and activation are reserved for the final stage.
 
-At commit `55835c8d334eaa7f2c481b4ba9108c8b50e16496`:
-- GitHub Actions API/unit/PostgreSQL integration tests: **passed**.
-- Passenger and driver Android debug builds: **passed**.
-- Debug APK artifact: `chaufr-android-debug-apks`.
+The earlier baseline API and Android debug build checks passed. Additional core-feature changes are being validated by GitHub Actions on the current branch; do not treat the latest build as verified until those checks finish.
 
 These are debug APKs for review, not production-signed release builds. The current feature work is in draft PR #1 and should not be merged until final review and deployment configuration are complete.
 
@@ -36,12 +33,12 @@ These are debug APKs for review, not production-signed release builds. The curre
 
 The code is not yet a live ride-hailing service. Before public launch:
 
-1. Deploy the API and managed PostgreSQL database; apply migrations `0018`–`0021`.
+1. Deploy the API and managed PostgreSQL database; apply all migrations through `0024`.
 2. Configure private production secrets, Google Maps/Routes and Firebase.
-3. Configure Paystack test credentials and verified webhooks; complete sandbox checkout, refund and transfer tests.
-4. Confirm Paystack has approved Chaufr's registered business and live transfer capability.
-5. Complete POPIA, legal, security, data-retention, backup and incident-response reviews.
-6. Provision owner access securely, test both apps on physical devices, verify maps/location/push and validate all fare and payout calculations.
+3. Complete POPIA, legal, security, data-retention, backup and incident-response reviews.
+4. Provision owner access securely, test both apps on physical devices, verify maps/location/push and validate all fare calculations.
+5. Configure Paystack only after core-product acceptance; complete sandbox checkout, refund, transfer and reconciliation tests.
+6. Confirm Paystack has approved Chaufr's registered business and live transfer capability.
 7. Create signed release builds only after production API configuration, signing-key setup and final acceptance testing.
 
 See `docs/deployment.md`, `docs/payments-identity.md` and `services/api/README.md` for the operational setup. Never commit API keys, signing keys, bank details or real identity documents.
