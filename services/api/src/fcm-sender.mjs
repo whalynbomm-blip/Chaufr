@@ -51,8 +51,8 @@ export function createFcmSender({ credentialsJson = process.env.FIREBASE_SERVICE
     async sendToTokens(tokens, message) {
       if (!this.isConfigured()) return { sent: 0, skipped: true, reason: "firebase_not_configured" };
       const bearer = await accessToken();
-      let sent = 0;
-      const invalidTokens = [];
+      let sent = 0, failed = 0;
+      const invalidTokens = [], failures = [];
       for (const token of [...new Set(tokens)].slice(0, 500)) {
         const response = await fetchImpl(`https://fcm.googleapis.com/v1/projects/${credentials.project_id}/messages:send`, {
           method: "POST",
@@ -72,12 +72,12 @@ export function createFcmSender({ credentialsJson = process.env.FIREBASE_SERVICE
         if (response.ok) sent += 1;
         else {
           const error = await response.json().catch(() => ({}));
-          if (["UNREGISTERED"].includes(error.error?.details?.find((item) => item.errorCode)?.errorCode)) {
-            invalidTokens.push(token);
-          }
+          const code=error.error?.details?.find((item)=>item.errorCode)?.errorCode;
+          if (code==="UNREGISTERED" || response.status===404) invalidTokens.push(token);
+          else { failed+=1; failures.push({status:response.status,code:error.error?.status??"UNKNOWN"}); }
         }
       }
-      return { sent, invalidTokens };
+      return { sent, failed, invalidTokens, failures };
     },
   };
 }
