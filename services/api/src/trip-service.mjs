@@ -299,7 +299,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       if (!trip) throw new AuthError("Trip not found", 404);
       const locationIsRecent = trip.last_seen_at && (Date.now() - new Date(trip.last_seen_at).getTime()) <= 90_000;
       const liveTrafficEstimate = locationIsRecent && trip.driver_latitude != null && trip.driver_longitude != null &&
-        ["accepted", "driver_arriving", "in_progress"].includes(trip.status)
+        trip.status === "in_progress"
         ? await getLiveTrafficEstimate(trip.id,
             { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude) },
             trip.destination_location)
