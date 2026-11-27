@@ -243,7 +243,7 @@ export function createMobilityService(pool, routesService, pushService = null, s
       const row=result.rows[0];
       if (!row.verification_code_hash || !row.verification_expires_at || new Date(row.verification_expires_at).getTime()<=Date.now()) throw new AuthError("Verification code expired. Request a new code.",410);
       if (Number(row.verification_attempts)>=5) throw new AuthError("Too many verification attempts. Request a new code.",429);
-      if (row.verification_code_hash!==hash(contactId+":"+code)) { await pool.query("UPDATE trusted_contacts SET verification_attempts=verification_attempts+1 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("The verification code is incorrect"); }
+      if (row.verification_code_hash!==trustedContactCodeHash(contactId,code)) { await pool.query("UPDATE trusted_contacts SET verification_attempts=verification_attempts+1 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("The verification code is incorrect"); }
       await pool.query("UPDATE trusted_contacts SET verified_at=now(),verification_code_hash=NULL,verification_expires_at=NULL,verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id]);
       return {verified:true,contactId};
     },
