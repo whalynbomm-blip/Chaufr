@@ -33,6 +33,12 @@ object ChaufrApi {
     suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
         requestJson(baseUrl, "DELETE", "/v1/driver/trusted-contacts/$id", token = token)
 
+    suspend fun requestTrustedContactVerification(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/verify", token = token)
+
+    suspend fun confirmTrustedContactVerification(baseUrl: String, token: String, id: String, code: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/confirm", JSONObject().put("code", code), token)
+
     suspend fun driverEarnings(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/earnings", token = token)
 
