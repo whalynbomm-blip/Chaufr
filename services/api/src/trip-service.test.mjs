@@ -124,3 +124,56 @@ test("passenger trip history includes the persisted payment status", async () =>
   assert.equal(history[0].paymentStatus, "unpaid");
   assert.equal(history[0].status, "completed");
 });
+
+
+test("passenger trip status returns a cached live traffic ETA from the latest driver GPS position", async () => {
+  let routeCalls = 0;
+  const pool = {
+    connect: async () => { throw new Error("connect should not be used"); },
+    query: async () => ({
+      rows: [{
+        id: "123e4567-e89b-12d3-a456-426614174000",
+        status: "in_progress",
+        pickup_label: "Pinelands",
+        destination_label: "Cape Town CBD",
+        quoted_total: "100.00",
+        passenger_payable: "100.00",
+        distance_km: "8.5",
+        duration_minutes: "22",
+        requested_at: new Date().toISOString(),
+        accepted_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        encoded_polyline: "encoded",
+        pickup_location: { latitude: -33.93, longitude: 18.51 },
+        destination_location: { latitude: -33.92, longitude: 18.42 },
+        driver_user_id: "driver-1",
+        driver_name: "Test Driver",
+        driver_rating: "4.9",
+        vehicle_make: "Ford",
+        vehicle_model: "Figo",
+        vehicle_category: "standard",
+        driver_latitude: -33.925,
+        driver_longitude: 18.48,
+        location_accuracy_m: "8",
+        last_seen_at: new Date().toISOString(),
+      }],
+    }),
+  };
+  const routesService = {
+    computeRoute: async (origin, destination) => {
+      routeCalls += 1;
+      assert.equal(origin.latitude, -33.925);
+      assert.equal(destination.latitude, -33.92);
+      return { durationMinutes: 11, distanceKm: 4.2 };
+    },
+  };
+  const service = createTripService(pool, { dailyActivationFee: 30 }, routesService);
+  const passenger = { id: "passenger-1", role: "passenger" };
+  const first = await service.getPassengerTripStatus(passenger, "123e4567-e89b-12d3-a456-426614174000");
+  const second = await service.getPassengerTripStatus(passenger, "123e4567-e89b-12d3-a456-426614174000");
+  assert.equal(first.liveTrafficEtaMinutes, 11);
+  assert.equal(first.liveTrafficRemainingKm, 4.2);
+  assert.equal(second.liveTrafficEtaMinutes, 11);
+  assert.equal(routeCalls, 1, "mobile refreshes should reuse the one-minute route cache");
+});
