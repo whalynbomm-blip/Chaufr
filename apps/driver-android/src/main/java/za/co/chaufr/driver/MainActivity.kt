@@ -185,9 +185,13 @@ private fun DriverHome() {
               }
             }
             else -> {
+              Text("PROFILE & ACCOUNT", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
               DriverAccountCard()
+              Text("VEHICLE, LICENCE & VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
               DriverComplianceCard()
+              Text("DRIVER PREFERENCES", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
               DriverAdvantageSettingsCard()
+              Text("RATINGS & SUPPORT", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
               DriverFeedbackSupportPanel()
               Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                 Column(Modifier.padding(16.dp)) {
