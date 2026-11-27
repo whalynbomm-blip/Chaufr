@@ -143,6 +143,15 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
         const client = await pool.connect();
         try {
           await client.query("BEGIN");
+          const claimedEvent = await client.query(
+            "INSERT INTO payment_provider_events(provider,event_id,event_type,payment_intent_id) " +
+            "VALUES('paystack',$1,$2,$3) ON CONFLICT(provider,event_id) DO NOTHING RETURNING id",
+            [eventId, event.event, intentId],
+          );
+          if (!claimedEvent.rowCount) {
+            await client.query("COMMIT");
+            return { received: true, event: event.event, duplicate: true };
+          }
           const locked = await client.query("SELECT * FROM payment_intents WHERE id=$1 FOR UPDATE", [intentId]);
           if (locked.rows[0].status === "pending") {
             await client.query("UPDATE payment_intents SET status='paid',provider='paystack',provider_reference=$2,paid_at=now(),updated_at=now() WHERE id=$1", [intentId, verified.reference]);
@@ -172,7 +181,6 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
               await client.query("INSERT INTO financial_ledger(payment_intent_id,account_type,direction,amount_minor,source_reference) VALUES($1,'driver_activation_revenue','credit',$2,$3) ON CONFLICT DO NOTHING", [intentId, verified.amount, "paystack:"+verified.reference]);
             }
           }
-          await client.query("INSERT INTO payment_provider_events(provider,event_id,event_type,payment_intent_id) VALUES('paystack',$1,$2,$3) ON CONFLICT(provider,event_id) DO NOTHING", [eventId,event.event,intentId]);
           await client.query("COMMIT");
         } catch (error) { await client.query("ROLLBACK"); throw error; }
         finally { client.release(); }
