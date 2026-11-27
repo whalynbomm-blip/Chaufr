@@ -75,9 +75,13 @@ fun PassengerLiveTripMap(snapshot: JSONObject) {
                 Text(if (status == "in_progress") "In progress" else status.replace("_", " ").replaceFirstChar { it.uppercase() }, color = Color(0xFF14243A), fontWeight = FontWeight.Bold)
             }
             LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Color(0xFF2878F0))
+            val liveTrafficEta = snapshot.optInt("liveTrafficEtaMinutes", -1)
+            val liveTrafficDistance = snapshot.optDouble("liveTrafficRemainingKm", -1.0)
             Text(
                 if (status == "in_progress") {
-                    if (gpsRemainingKm != null) "GPS route remaining: ${String.format("%.1f", gpsRemainingKm)} km · ETA ~${gpsEtaMinutes} min"
+                    if (liveTrafficEta >= 0) "Live traffic ETA: ~${liveTrafficEta} min" +
+                        if (liveTrafficDistance >= 0) " · ${String.format("%.1f", liveTrafficDistance)} km remaining" else ""
+                    else if (gpsRemainingKm != null) "GPS route remaining: ${String.format("%.1f", gpsRemainingKm)} km · ETA ~${gpsEtaMinutes} min"
                     else "Route estimate: ~${remaining.toInt()} min remaining"
                 } else "Route estimate: ${duration.toInt()} min",
                 color = Color(0xFF14243A), fontWeight = FontWeight.SemiBold
