@@ -797,7 +797,16 @@ private fun DriverCurrentTripCard() {
                   if (token != null) scope.launch {
                     try {
                       val share = ChaufrApi.createTripShare(apiUrl, token, current.optString("tripId"))
-                      safetyMessage = apiUrl.trimEnd('/') + "/v1/shared-trips/" + share.optString("shareToken")
+                      val shareToken = share.optString("shareToken")
+                      if (shareToken.isBlank()) throw IllegalStateException("Trip sharing link was not returned.")
+                      val shareUrl = apiUrl.trimEnd('/') + "/v1/shared-trips/" + shareToken
+                      val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "My Chaufr trip")
+                        putExtra(Intent.EXTRA_TEXT, "Follow my Chaufr trip here: " + shareUrl)
+                      }
+                      context.startActivity(Intent.createChooser(sendIntent, "Share live trip"))
+                      safetyMessage = "Secure trip link created. Choose a contact or app to share it."
                     } catch (error: Exception) { safetyMessage = error.message ?: "Could not create trip share." }
                   }
                 }, modifier = Modifier.weight(1f)) { Text("Share trip") }
