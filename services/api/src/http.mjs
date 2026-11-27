@@ -407,6 +407,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "GET" && url.pathname === "/v1/driver/activation") {
           return json(response, 200, await tripService.getActivationStatus(user));
         }
+        if (request.method === "GET" && url.pathname === "/v1/driver/earnings") {
+          return json(response, 200, await tripService.getDriverEarnings(user));
+        }
         if (request.method === "GET" && url.pathname === "/v1/driver/trips/current") {
           return json(response, 200, await tripService.getCurrentDriverTrip(user));
         }
