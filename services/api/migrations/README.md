@@ -28,3 +28,6 @@ The API applies pending SQL migrations in filename order at startup when `DATABA
 - Reward-ticket redemption is supported for immediate eligible rides. Future scheduled bookings use the standard fare until reward reservation/cancellation handling is added.
 - Safety and notification heuristics require production configuration and real-world testing. SOS is not an emergency-response service.
 - Never store real credentials, bank account numbers, or identity documents in Git.
+
+
+- `0026_manual_driver_approval.sql` — expands the owner-reviewed driver document checklist and adds document expiry dates.
