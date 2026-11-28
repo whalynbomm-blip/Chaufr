@@ -6,6 +6,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
   <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Chaufr Driver" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round">
+    <meta-data android:name="com.google.android.geo.API_KEY" android:value="${MAPS_API_KEY}" />
     <service android:name=".DriverLocationService" android:exported="false" android:foregroundServiceType="location" />
     <activity android:name=".MainActivity" android:exported="true">
       <intent-filter>

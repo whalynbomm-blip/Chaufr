@@ -24,7 +24,7 @@ export function createPushService(pool, fcmSender = null) {
     },
 
     async sendToUser(userId, message) {
-      if (!fcmSender) return { sent: 0, skipped: true, reason: "firebase_not_configured" };
+      if (!fcmSender || !fcmSender.isConfigured?.()) return { sent: 0, failed: 0, skipped: true, reason: "firebase_not_configured" };
       const result = await pool.query(
         "SELECT fcm_token FROM push_devices WHERE user_id = $1 AND is_active = true ORDER BY last_seen_at DESC LIMIT 20",
         [userId],

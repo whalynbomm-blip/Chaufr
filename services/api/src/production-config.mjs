@@ -1,0 +1,54 @@
+const required = [
+  "DATABASE_URL",
+  "VEHICLE_DATA_ENCRYPTION_KEY",
+  "DOCUMENT_ENCRYPTION_KEY",
+  "FARE_QUOTE_SIGNING_SECRET",
+  "GOOGLE_MAPS_SERVER_API_KEY",
+];
+
+function decodeKey(name, value) {
+  let decoded;
+  try { decoded = Buffer.from(value, "base64"); } catch { decoded = Buffer.alloc(0); }
+  if (decoded.length !== 32 || decoded.toString("base64").replace(/=+$/, "") !== value.replace(/=+$/, "")) {
+    throw new Error(name + " must be a base64-encoded 32-byte key");
+  }
+}
+
+export function validateProductionEnvironment(env = process.env) {
+  if (env.NODE_ENV !== "production") return { production: false, checked: [] };
+  const missing = required.filter((name) => !String(env[name] ?? "").trim());
+  if (missing.length) throw new Error("Production configuration missing: " + missing.join(", "));
+  if (!(env.DATABASE_URL.startsWith("postgres://") || env.DATABASE_URL.startsWith("postgresql://")) ) throw new Error("DATABASE_URL must be a PostgreSQL connection URL");
+  decodeKey("VEHICLE_DATA_ENCRYPTION_KEY", env.VEHICLE_DATA_ENCRYPTION_KEY);
+  decodeKey("DOCUMENT_ENCRYPTION_KEY", env.DOCUMENT_ENCRYPTION_KEY);
+  if (String(env.FARE_CURRENCY || "ZAR").toUpperCase() !== "ZAR") throw new Error("Production currency must be ZAR");
+
+  const firebaseConfigured = Boolean(String(env.FIREBASE_SERVICE_ACCOUNT_JSON ?? "").trim());
+  if (firebaseConfigured) {
+    let firebase;
+    try { firebase = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON); }
+    catch { throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON must contain valid service-account JSON"); }
+    if (!firebase.project_id || !firebase.client_email || !firebase.private_key || !firebase.private_key.includes("PRIVATE KEY")) {
+      throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is missing valid project_id, client_email or private_key fields");
+    }
+  }
+
+  const twilioNames = ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "SMS_VERIFICATION_SECRET"];
+  const twilioConfigured = twilioNames.some((name) => Boolean(String(env[name] ?? "").trim()));
+  if (twilioConfigured) {
+    const missingTwilio = twilioNames.filter((name) => !String(env[name] ?? "").trim());
+    if (missingTwilio.length) throw new Error("Twilio SMS configuration is incomplete: " + missingTwilio.join(", "));
+    if (!/^AC[0-9a-f]{32}$/i.test(env.TWILIO_ACCOUNT_SID)) throw new Error("TWILIO_ACCOUNT_SID is invalid");
+    if (!/^[+][1-9][0-9]{7,14}$/.test(env.TWILIO_FROM_NUMBER)) throw new Error("TWILIO_FROM_NUMBER must be an E.164 phone number");
+    if (Buffer.byteLength(env.SMS_VERIFICATION_SECRET, "utf8") < 32) throw new Error("SMS_VERIFICATION_SECRET must contain at least 32 bytes");
+  }
+
+  return {
+    production: true,
+    checked: required,
+    optional: {
+      firebasePush: firebaseConfigured,
+      twilioSms: twilioConfigured,
+    },
+  };
+}

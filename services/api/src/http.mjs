@@ -8,9 +8,14 @@ import { createTripService } from "./trip-service.mjs";
 import { createOwnerService } from "./owner-service.mjs";
 import { createGoogleRoutesService } from "./google-routes.mjs";
 import { createPushService } from "./push-service.mjs";
+import { createSmsSender } from "./sms-sender.mjs";
 import { createFcmSender } from "./fcm-sender.mjs";
 import { createSafetyService } from "./safety-service.mjs";
 import { createMobilityService } from "./mobility-service.mjs";
+import { createPaystackService, createDriverVerificationService } from "./financial-identity-service.mjs";
+import { createRatingService } from "./rating-service.mjs";
+import { createSupportService } from "./support-service.mjs";
+import { createWindowRateLimiter } from "./rate-limit.mjs";
 
 const json = (response, status, body) => {
   response.writeHead(status, {
@@ -19,6 +24,12 @@ const json = (response, status, body) => {
     "x-content-type-options": "nosniff",
   });
   response.end(JSON.stringify(body));
+};
+
+const readRaw = async (request, maxBytes = 10 * 1024 * 1024) => {
+  const chunks = []; let size = 0;
+  for await (const chunk of request) { size += chunk.length; if (size > maxBytes) { const error = new Error("Request body too large"); error.status = 413; throw error; } chunks.push(chunk); }
+  return Buffer.concat(chunks);
 };
 
 const readJson = async (request, maxBytes = 32_768) => {
@@ -84,32 +95,23 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
   const ownerService = database ? createOwnerService(database, fareConfig) : null;
   const fcmSender = createFcmSender();
   const pushService = database ? createPushService(database, fcmSender) : null;
+  const smsSender = createSmsSender();
   const safetyService = database ? createSafetyService(database) : null;
-  const mobilityService = database ? createMobilityService(database, routesService, pushService) : null;
+  const mobilityService = database ? createMobilityService(database, routesService, pushService, smsSender) : null;
   const tripService = database ? createTripService(database, fareConfig, routesService, pushService) : null;
-  const authAttempts = new Map();
-  const routeAttempts = new Map();
+  const paystackService = database ? createPaystackService(database) : null;
+  const verificationService = database ? createDriverVerificationService(database) : null;
+  const ratingService = database ? createRatingService(database) : null;
+  const supportService = database ? createSupportService(database) : null;
+  const authLimiter = createWindowRateLimiter({ limit: 10, windowMs: 15 * 60 * 1000, maxEntries: 10_000 });
+  const routeLimiter = createWindowRateLimiter({ limit: 30, windowMs: 60 * 1000, maxEntries: 10_000 });
   const checkAuthRateLimit = (request, route) => {
     const key = `${request.socket.remoteAddress ?? "unknown"}:${route}`;
-    const now = Date.now();
-    const current = authAttempts.get(key);
-    if (!current || current.resetAt <= now) {
-      authAttempts.set(key, { count: 1, resetAt: now + 15 * 60 * 1000 });
-      return;
-    }
-    if (current.count >= 10) throw new AuthError("Too many attempts. Please try again later.", 429);
-    current.count += 1;
+    if (!authLimiter.consume(key).allowed) throw new AuthError("Too many attempts. Please try again later.", 429);
   };
   const checkRouteRateLimit = (request) => {
     const key = request.socket.remoteAddress ?? "unknown";
-    const now = Date.now();
-    const current = routeAttempts.get(key);
-    if (!current || current.resetAt <= now) {
-      routeAttempts.set(key, { count: 1, resetAt: now + 60 * 1000 });
-      return;
-    }
-    if (current.count >= 30) throw new AuthError("Too many route requests. Please wait a minute and try again.", 429);
-    current.count += 1;
+    if (!routeLimiter.consume(key).allowed) throw new AuthError("Too many route requests. Please wait a minute and try again.", 429);
   };
   const getBearerToken = (request) => {
     const header = request.headers.authorization ?? "";
@@ -131,7 +133,7 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (database) await database.query("SELECT 1");
         return json(response, 200, {
           status: "ok", service: "chaufr-api",
-          dependencies: { database: database ? "connected" : "not_configured" },
+          dependencies: { database: database ? "connected" : "not_configured", pushNotifications: fcmSender.isConfigured() ? "configured" : "not_configured", emergencySms: smsSender.isConfigured() ? "configured" : "not_configured" },
           requestId,
         });
       }
@@ -142,18 +144,34 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           endpoints: [
             "GET /health", "GET /v1", "POST /v1/fare-quotes", "POST /v1/routes/preview",
             "POST /v1/auth/register", "POST /v1/auth/login",
-            "GET /v1/auth/me", "POST /v1/auth/logout", "POST/DELETE /v1/push-devices",
+            "GET /v1/auth/me", "GET/DELETE /v1/auth/sessions", "DELETE /v1/auth/sessions/:sessionId", "POST /v1/auth/logout", "POST/DELETE /v1/push-devices",
             "GET /v1/driver/profile", "POST /v1/driver/vehicles", "PUT /v1/driver/presence", "GET/PUT /v1/driver/advantage-settings",
             "GET /v1/driver/activation", "GET /v1/driver/trips/current", "GET /v1/driver/trips/available",
-            "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/start",
+            "POST /v1/driver/trips/:tripId/accept", "POST /v1/driver/trips/:tripId/decline", "POST /v1/driver/trips/:tripId/arrive", "POST /v1/driver/trips/:tripId/cancel", "POST /v1/driver/trips/:tripId/start",
             "POST /v1/driver/trips/:tripId/complete", "POST /v1/driver/trips/:tripId/reward-commission-request", "GET /v1/passenger/rewards", "GET /v1/passenger/trips/:tripId/status", "GET /v1/passenger/trips/history", "POST /v1/passenger/trips/:tripId/cancel", "POST /v1/trips",
             "POST /v1/safety/block", "POST /v1/safety/report", "POST /v1/safety/trips/:tripId/sos", "POST /v1/safety/trips/:tripId/share",
-            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts",
-            "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
-            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/financial-ledger",
+            "GET/POST /v1/passenger/scheduled-rides", "POST /v1/passenger/recurring-rides", "GET/DELETE /v1/passenger/trusted-contacts", "POST /v1/safety/trusted-contacts/:id/verify", "POST /v1/safety/trusted-contacts/:id/confirm",
+            "POST /v1/payments/checkout", "POST /v1/passenger/trips/:tripId/refund-request", "POST /v1/webhooks/paystack", "GET /v1/owner/refunds", "GET /v1/owner/driver-earnings/eligible", "POST /v1/owner/refunds/:id/process", "GET /v1/owner/verification-documents", "PATCH /v1/owner/verification-documents/:id", "POST /v1/owner/reward-commission-requests/:id/pay", "POST /v1/owner/driver-earnings/:tripId/pay", "POST /v1/driver/verification-documents", "PUT /v1/driver/payout-account", "GET /v1/owner/overview", "GET /v1/owner/pricing", "PUT /v1/owner/pricing", "GET /v1/owner/drivers",
+            "GET /v1/owner/reward-commission-requests", "PATCH /v1/owner/reward-commission-requests/:requestId", "GET /v1/owner/safety-reports", "PATCH /v1/owner/safety-reports/:reportId", "GET /v1/owner/driver-payouts/processing", "GET /v1/owner/financial-ledger", "POST /v1/trips/:tripId/rating", "GET /v1/me/ratings", "POST/GET /v1/support/tickets", "GET /v1/support/owner/tickets", "PATCH /v1/support/owner/tickets/:ticketId",
           ],
           database: database ? "connected" : "not_configured",
         });
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/webhooks/paystack") {
+        if (!paystackService) return json(response, 503, { error: "Payment services unavailable", requestId });
+        const raw = await readRaw(request, 1_000_000);
+        const result = await paystackService.handleWebhook(raw, request.headers["paystack-signature"] || request.headers["x-paystack-signature"]);
+        return json(response, 200, result);
+      }
+
+      if (request.method === "POST" && url.pathname === "/v1/payments/checkout") {
+        if (!authService || !paystackService) return json(response, 503, { error: "Payment services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        return json(response, 201, await paystackService.createCheckout(user, await readJson(request)));
       }
 
       if (url.pathname.startsWith("/v1/safety/")) {
@@ -164,6 +182,10 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         const sosMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/sos$/i.exec(url.pathname);
         if (request.method === "POST" && sosMatch) return json(response, 201, await mobilityService.triggerSos(user, sosMatch[1], await readJson(request)));
+        const contactVerifyMatch = /^\/v1\/safety\/trusted-contacts\/([0-9a-f-]{36})\/verify$/i.exec(url.pathname);
+        if (request.method === "POST" && contactVerifyMatch) return json(response, 200, await mobilityService.requestTrustedContactVerification(user,contactVerifyMatch[1]));
+        const contactConfirmMatch = /^\/v1\/safety\/trusted-contacts\/([0-9a-f-]{36})\/confirm$/i.exec(url.pathname);
+        if (request.method === "POST" && contactConfirmMatch) return json(response, 200, await mobilityService.confirmTrustedContactVerification(user,contactConfirmMatch[1],await readJson(request)));
         const shareMatch = /^\/v1\/safety\/trips\/([0-9a-f-]{36})\/share$/i.exec(url.pathname);
         if (request.method === "POST" && shareMatch) return json(response, 201, await mobilityService.createTripShare(user, shareMatch[1]));
         if (request.method !== "POST" || !["/v1/safety/block", "/v1/safety/report"].includes(url.pathname)) {
@@ -183,6 +205,57 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "owner") return json(response, 403, { error: "Owner access required", requestId });
+        if (request.method === "GET" && url.pathname === "/v1/owner/verification-documents") {
+          return json(response, 200, await verificationService.listForOwner(user));
+        }
+        const docContentMatch = /^\/v1\/owner\/verification-documents\/([0-9a-f-]{36})\/content$/i.exec(url.pathname);
+        if (request.method === "GET" && docContentMatch) {
+          return json(response, 200, await verificationService.readForOwner(user, docContentMatch[1]));
+        }
+        const docReviewMatch = /^\/v1\/owner\/verification-documents\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && docReviewMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await verificationService.review(user, docReviewMatch[1], body.status, body.note));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/driver-earnings/eligible") {
+          const rows = await database.query(
+            "SELECT t.id AS trip_id,t.driver_user_id,u.display_name AS driver_name,u.phone_e164,u.email,t.driver_earnings AS amount,t.completed_at, " +
+            "COALESCE(a.status,'missing') AS payout_account_status " +
+            "FROM trips t JOIN users u ON u.id=t.driver_user_id LEFT JOIN driver_payout_accounts a ON a.driver_user_id=t.driver_user_id " +
+            "WHERE t.status='completed' AND t.payment_status='paid' AND COALESCE(t.fare_snapshot->>'rewardRedemption','false')<>'true' " +
+            "AND NOT EXISTS (SELECT 1 FROM driver_payouts p WHERE p.source_type='driver_earnings' AND p.source_id=t.id AND p.status IN ('queued','processing','paid')) " +
+            "ORDER BY t.completed_at DESC LIMIT 300",
+          );
+          return json(response, 200, { trips: rows.rows });
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/refunds") {
+          const rows = await database.query("SELECT r.id,r.trip_id,r.passenger_user_id,u.display_name AS passenger_name,r.amount_minor,r.currency,r.reason,r.status,r.created_at,r.updated_at FROM payment_refunds r JOIN users u ON u.id=r.passenger_user_id ORDER BY r.created_at DESC LIMIT 300");
+          return json(response, 200, { refunds: rows.rows.map(row => ({...row, amount: Number(row.amount_minor)/100})) });
+        }
+        const refundReviewMatch = /^\/v1\/owner\/refunds\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && refundReviewMatch) {
+          const body = await readJson(request);
+          if (body.status !== "rejected") return json(response, 400, { error: "Only rejection is available here; initiate approved refunds through the process endpoint", requestId });
+          const updated = await database.query(
+            "UPDATE payment_refunds SET status='rejected',reviewed_by=$2,updated_at=now() WHERE id=$1 AND status='requested' RETURNING id,status",
+            [refundReviewMatch[1], user.id],
+          );
+          if (!updated.rowCount) return json(response, 404, { error: "Refund request not found or already reviewed", requestId });
+          await database.query("INSERT INTO audit_events(actor_user_id,action,resource_type,resource_id,details) VALUES($1,'refund.rejected','payment_refund',$2,'{}'::jsonb)", [user.id, refundReviewMatch[1]]);
+          return json(response, 200, { refund: updated.rows[0] });
+        }
+        const refundProcessMatch = /^\/v1\/owner\/refunds\/([0-9a-f-]{36})\/process$/i.exec(url.pathname);
+        if (request.method === "POST" && refundProcessMatch) {
+          return json(response, 200, await paystackService.requestRefund(user, refundProcessMatch[1]));
+        }
+        const driverEarningsPayoutMatch = /^\/v1\/owner\/driver-earnings\/([0-9a-f-]{36})\/pay$/i.exec(url.pathname);
+        if (request.method === "POST" && driverEarningsPayoutMatch) {
+          return json(response, 200, await paystackService.payDriverEarnings(user, driverEarningsPayoutMatch[1]));
+        }
+        const rewardPayoutMatch = /^\/v1\/owner\/reward-commission-requests\/([0-9a-f-]{36})\/pay$/i.exec(url.pathname);
+        if (request.method === "POST" && rewardPayoutMatch) {
+          return json(response, 200, await paystackService.payRewardCommission(user, rewardPayoutMatch[1]));
+        }
         if (request.method === "GET" && url.pathname === "/v1/owner/safety-reports") {
           return json(response, 200, await ownerService.listSafetyReports(user));
         }
@@ -190,6 +263,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "PATCH" && safetyReportReviewMatch) {
           const body = await readJson(request);
           return json(response, 200, await ownerService.reviewSafetyReport(user, safetyReportReviewMatch[1], body.status));
+        }
+        if (request.method === "GET" && url.pathname === "/v1/owner/driver-payouts/processing") {
+          return json(response, 200, await ownerService.listProcessingPayouts(user));
         }
         if (request.method === "GET" && url.pathname === "/v1/owner/financial-ledger") {
           return json(response, 200, await ownerService.listFinancialLedger(user));
@@ -301,6 +377,15 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         }
         const driverContactMatch = /^\/v1\/driver\/trusted-contacts\/([0-9a-f-]{36})$/i.exec(url.pathname);
         if (mobilityService && request.method === "DELETE" && driverContactMatch) return json(response, 200, await mobilityService.deleteTrustedContact(user, driverContactMatch[1]));
+        if (verificationService && request.method === "POST" && url.pathname === "/v1/driver/verification-documents") {
+          return json(response, 201, await verificationService.upload(user, await readJson(request, 9 * 1024 * 1024)));
+        }
+        if (verificationService && request.method === "GET" && url.pathname === "/v1/driver/verification-documents") {
+          return json(response, 200, await verificationService.listForDriver(user));
+        }
+        if (paystackService && request.method === "PUT" && url.pathname === "/v1/driver/payout-account") {
+          return json(response, 200, await paystackService.setPayoutAccount(user, await readJson(request)));
+        }
         if (request.method === "GET" && url.pathname === "/v1/driver/profile") {
           return json(response, 200, await driverService.getProfile(user));
         }
@@ -318,6 +403,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (request.method === "GET" && url.pathname === "/v1/driver/activation") {
           return json(response, 200, await tripService.getActivationStatus(user));
         }
+        if (request.method === "GET" && url.pathname === "/v1/driver/earnings") {
+          return json(response, 200, await tripService.getDriverEarnings(user));
+        }
         if (request.method === "GET" && url.pathname === "/v1/driver/trips/current") {
           return json(response, 200, await tripService.getCurrentDriverTrip(user));
         }
@@ -331,6 +419,15 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const declineMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/decline$/i.exec(url.pathname);
         if (request.method === "POST" && declineMatch) {
           return json(response, 200, await tripService.declineTripOffer(user, declineMatch[1]));
+        }
+        const arriveMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/arrive$/i.exec(url.pathname);
+        if (request.method === "POST" && arriveMatch) {
+          return json(response, 200, await tripService.markDriverArrived(user, arriveMatch[1]));
+        }
+        const driverCancelMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/cancel$/i.exec(url.pathname);
+        if (request.method === "POST" && driverCancelMatch) {
+          const body = await readJson(request);
+          return json(response, 200, await tripService.cancelAcceptedTrip(user, driverCancelMatch[1], body.reason));
         }
         const startMatch = /^\/v1\/driver\/trips\/([0-9a-f-]{36})\/start$/i.exec(url.pathname);
         if (request.method === "POST" && startMatch) {
@@ -367,12 +464,46 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
           return json(response, 200, { user });
         }
+        if (request.method === "GET" && url.pathname === "/v1/auth/sessions") {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          return json(response, 200, await authService.listSessions(user.id, token));
+        }
+        if (request.method === "DELETE" && url.pathname === "/v1/auth/sessions") {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          return json(response, 200, await authService.revokeOtherSessions(user.id, token));
+        }
+        const revokeSessionMatch = new RegExp("^/v1/auth/sessions/([0-9a-f-]{36})$", "i").exec(url.pathname);
+        if (request.method === "DELETE" && revokeSessionMatch) {
+          const token = getBearerToken(request);
+          if (!token) return json(response, 401, { error: "Authentication required", requestId });
+          const user = await authService.authenticate(token);
+          if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+          const revoked = await authService.revokeSession(user.id, revokeSessionMatch[1], token);
+          return json(response, revoked ? 200 : 404, revoked ? { ok: true } : { error: "Session not found, already revoked, or current session", requestId });
+        }
         if (request.method === "POST" && url.pathname === "/v1/auth/logout") {
           const token = getBearerToken(request);
           if (!token) return json(response, 401, { error: "Authentication required", requestId });
           await authService.logout(token);
           return json(response, 200, { ok: true });
         }
+      }
+      const passengerRefundRequestMatch = /^\/v1\/passenger\/trips\/([0-9a-f-]{36})\/refund-request$/i.exec(url.pathname);
+      if (request.method === "POST" && passengerRefundRequestMatch) {
+        if (!authService || !paystackService) return json(response, 503, { error: "Refund services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
+        const body = await readJson(request);
+        return json(response, 201, await paystackService.createRefundRequest(user, passengerRefundRequestMatch[1], body.reason || "Passenger refund request"));
       }
       const passengerTripCancelMatch = /^\/v1\/passenger\/trips\/([0-9a-f-]{36})\/cancel$/i.exec(url.pathname);
       if (request.method === "POST" && passengerTripCancelMatch) {
@@ -384,7 +515,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         const user = await authService.authenticate(token);
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
-        return json(response, 200, await tripService.cancelPassengerTrip(user, passengerTripCancelMatch[1]));
+        const cancelled = await tripService.cancelPassengerTrip(user, passengerTripCancelMatch[1]);
+        const refund = paystackService ? await paystackService.createRefundRequest(user, passengerTripCancelMatch[1]) : { refundRequested: false };
+        return json(response, 200, { ...cancelled, ...refund });
       }
 
       if (request.method === "GET" && url.pathname === "/v1/passenger/trips/history") {
@@ -420,6 +553,38 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
         if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
         if (user.role !== "passenger") return json(response, 403, { error: "Passenger account required", requestId });
         return json(response, 200, await tripService.getPassengerRewards(user));
+      }
+
+      if (url.pathname.startsWith("/v1/support/")) {
+        if (!authService || !supportService) return json(response, 503, { error: "Support services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        if (request.method === "POST" && url.pathname === "/v1/support/tickets") return json(response, 201, await supportService.createTicket(user, await readJson(request)));
+        if (request.method === "GET" && url.pathname === "/v1/support/tickets") return json(response, 200, await supportService.listMyTickets(user));
+        if (request.method === "GET" && url.pathname === "/v1/support/owner/tickets") return json(response, 200, await supportService.listOwnerTickets(user, url.searchParams.get("status")));
+        const ticketMatch = /^\/v1\/support\/owner\/tickets\/([0-9a-f-]{36})$/i.exec(url.pathname);
+        if (request.method === "PATCH" && ticketMatch) return json(response, 200, await supportService.respondToTicket(user, ticketMatch[1], await readJson(request)));
+        return json(response, 404, { error: "Support endpoint not found", requestId });
+      }
+
+      const ratingMatch = /^\/v1\/trips\/([0-9a-f-]{36})\/rating$/i.exec(url.pathname);
+      if (request.method === "POST" && ratingMatch) {
+        if (!authService || !ratingService) return json(response, 503, { error: "Rating services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        return json(response, 201, await ratingService.submitRating(user, ratingMatch[1], await readJson(request)));
+      }
+      if (request.method === "GET" && url.pathname === "/v1/me/ratings") {
+        if (!authService || !ratingService) return json(response, 503, { error: "Rating services unavailable", requestId });
+        const token = getBearerToken(request);
+        if (!token) return json(response, 401, { error: "Authentication required", requestId });
+        const user = await authService.authenticate(token);
+        if (!user) return json(response, 401, { error: "Session is invalid or expired", requestId });
+        return json(response, 200, await ratingService.getRatingsForUser(user));
       }
 
       if (request.method === "POST" && url.pathname === "/v1/trips") {

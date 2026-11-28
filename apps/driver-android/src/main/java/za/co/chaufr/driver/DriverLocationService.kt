@@ -61,11 +61,28 @@ class DriverLocationService : Service(), LocationListener {
                 android.content.pm.PackageManager.PERMISSION_GRANTED ||
                 checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
-                    android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 15_000L, 20f, this, Looper.getMainLooper())
+                val hasFine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (hasFine) {
+                    try {
+                        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10_000L, 10f, this, Looper.getMainLooper())
+                    } catch (_: IllegalArgumentException) {
+                        // GPS may be unavailable indoors; network provider remains active.
+                    }
                 }
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 30_000L, 40f, this, Looper.getMainLooper())
+                try {
+                    locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 20_000L, 25f, this, Looper.getMainLooper())
+                } catch (_: IllegalArgumentException) {
+                    // Some devices do not expose a network location provider.
+                }
+                // Publish a cached fix immediately so a newly-online driver is not invisible
+                // while waiting for the first fresh GPS callback.
+                val cachedFix = try {
+                    if (hasFine) locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                        ?: locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    else locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                } catch (_: Exception) { null }
+                cachedFix?.let { onLocationChanged(it) }
             } else {
                 stopSelf()
             }
@@ -109,7 +126,7 @@ class DriverLocationService : Service(), LocationListener {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentTitle("Chaufr location sharing is active")
-            .setContentText("Your location is shared with Chaufr while you are online.")
+            .setContentText("Location sharing is active. Allow background location and unrestricted battery use for reliable updates.")
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)

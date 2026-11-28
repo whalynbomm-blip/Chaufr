@@ -112,6 +112,16 @@ export function createOwnerService(pool, fareConfig) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
+        if (status === "verified") {
+          const evidence = await client.query(
+            "SELECT (SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='drivers_licence' ORDER BY created_at DESC LIMIT 1) AS licence_status, " +
+            "(SELECT status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='driver_selfie' ORDER BY created_at DESC LIMIT 1) AS selfie_status",
+            [driverId],
+          );
+          if (evidence.rows[0]?.licence_status !== "approved" || evidence.rows[0]?.selfie_status !== "approved") {
+            throw new AuthError("Approve both the driver's licence and matching driver selfie before verifying this driver", 409);
+          }
+        }
         const updated = await client.query(
           "UPDATE driver_profiles SET verification_status = $1 WHERE user_id = $2 " +
           "RETURNING user_id, verification_status",
@@ -183,8 +193,8 @@ export function createOwnerService(pool, fareConfig) {
     },
     async reviewRewardCommissionRequest(user, requestId, status) {
       requireOwner(user);
-      if (!["approved", "rejected", "paid"].includes(status)) {
-        throw new AuthError("Payout status must be approved, rejected or paid");
+      if (!["approved", "rejected"].includes(status)) {
+        throw new AuthError("Payout status must be approved or rejected; only a verified bank-transfer webhook can mark it paid");
       }
       const client = await pool.connect();
       try {
@@ -195,8 +205,7 @@ export function createOwnerService(pool, fareConfig) {
         );
         const row = current.rows[0];
         if (!row) throw new AuthError("Reward commission request not found", 404);
-        const allowed = (row.status === "requested" && ["approved", "rejected"].includes(status)) ||
-          (row.status === "approved" && status === "paid");
+        const allowed = row.status === "requested" && ["approved", "rejected"].includes(status);
         if (!allowed) throw new AuthError("Invalid payout transition: " + row.status + " to " + status, 409);
         const updated = await client.query(
           "UPDATE reward_driver_commission_requests SET status = $1, updated_at = now() WHERE id = $2 " +
@@ -264,6 +273,19 @@ export function createOwnerService(pool, fareConfig) {
       } finally {
         client.release();
       }
+    },
+    async listProcessingPayouts(user) {
+      requireOwner(user);
+      const result = await pool.query(
+        "SELECT p.id, p.driver_user_id, u.display_name AS driver_name, u.phone_e164, " +
+        "p.source_type, p.source_id, p.amount_minor, p.currency, p.status, " +
+        "p.provider_reference, p.provider_transfer_code, p.created_at, p.updated_at " +
+        "FROM driver_payouts p JOIN users u ON u.id = p.driver_user_id " +
+        "WHERE p.status = 'processing' ORDER BY p.updated_at ASC LIMIT 250"
+      );
+      return {
+        payouts: result.rows.map((row) => ({ ...row, amount: Number(row.amount_minor) / 100 })),
+      };
     },
     async listFinancialLedger(user) {
       requireOwner(user);

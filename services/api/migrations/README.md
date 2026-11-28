@@ -1,23 +1,53 @@
-# Driver availability and dispatch data
+# Chaufr database migrations
 
-## Passenger rewards (migration 0008)
+The API applies pending SQL migrations in filename order at startup when `DATABASE_URL` is configured. Migrations are tracked in `schema_migrations` and protected by a PostgreSQL advisory lock. Do not edit an already-applied migration; add a new numbered migration instead.
 
-Migration `0008_passenger_rewards.sql` adds passenger reward balances, an auditable ticket ledger, and free-ride reservations. Every completed trip awards one ticket. Nine tickets can be reserved for a 5–20 minute trip. The trip's normal quoted fare and driver earnings remain unchanged; `passenger_payable` is zero for a redeemed reward. Expired unaccepted reward trips release reserved tickets when the passenger next loads rewards or submits another trip.
+## Feature map
+
+- `0001` — core users, driver profiles, vehicles, trips and trip events.
+- `0002` — driver online presence and dispatch offers.
+- `0003` — revocable authenticated sessions.
+- `0004`–`0007` — daily driver activation records, fare locking, commission recognition and approved fare-band changes.
+- `0008`–`0009` — passenger reward-ticket balances, auditable ticket ledger, reward redemption reservations and driver reward-commission requests.
+- `0010` — sequential smart dispatch.
+- `0011` — Firebase push-device registration.
+- `0012` — provider-neutral payment ledger.
+- `0013` — driver profit and preference settings.
+- `0014` — Safety Shield reports, blocks and moderation.
+- `0015`–`0017` — one-off and recurring scheduling, live trip sharing, safety tracking and hardening.
+- `0018`–`0021` — encrypted identity/document workflows, payout processing and retry-safe payout records. Payment gateway activation is intentionally deferred until the core product is complete.
+- `0022` — passenger/driver trip ratings.
+- `0023` — customer-support tickets and owner replies.
+- `0024` — one-time scheduled-pickup reminder tracking.
+- `0025` — trusted-contact phone verification.
+- `0026` — manual driver approval and document expiry dates.
+- `0027` — driver selfie evidence type for owner-side face comparison.
+- `0028` — database-enforced limit of one active trip per driver.
+- `0029` — idempotently confirms the vehicle-document expiry-date column used by compliance checks.
+
+### Migration 0028 deployment check
+
+Migration 0028 intentionally stops without changing trip records if any driver already has more than one trip in `accepted`, `driver_arriving` or `in_progress` status. Before applying it to an existing database, run:
+
+```sql
+SELECT driver_user_id, COUNT(*) AS active_trip_count, ARRAY_AGG(id ORDER BY requested_at) AS trip_ids
+FROM trips
+WHERE driver_user_id IS NOT NULL
+  AND status IN ('accepted', 'driver_arriving', 'in_progress')
+GROUP BY driver_user_id
+HAVING COUNT(*) > 1;
+```
+
+Resolve any returned trips through an authorised operational review; do not automatically cancel or reassign rides to make the migration pass. The unique index then prevents a driver from acquiring another active trip concurrently.
+
+## Important operating rules
+
+- Driver presence and trip offers are authenticated API operations; a driver must be verified and meet activation requirements before going online or accessing offers.
+- `CHAUFR_TEST_BYPASS_ACTIVATION=true` is accepted only when `NODE_ENV=development`. It exists solely for local/pre-payment end-to-end testing. Never set it in production.
+- Scheduled rides are materialized and dispatched by the API worker. Passengers can cancel future one-off rides and recurring rules; recurring cancellation also cancels not-yet-dispatched occurrences.
+- Reward-ticket redemption is supported for immediate eligible rides. Future scheduled bookings use the standard fare until reward reservation/cancellation handling is added.
+- Safety and notification heuristics require production configuration and real-world testing. SOS is not an emergency-response service.
+- Never store real credentials, bank account numbers, or identity documents in Git.
 
 
-Migration `0002_driver_dispatch.sql` adds the persistence model for driver online presence and individual trip offers.
-
-## Driver presence
-- One row per verified driver profile.
-- Online/offline state and optional GPS coordinates.
-- Last-seen timestamp supports stale-presence cleanup.
-- Location bounds and accuracy validation are enforced by PostgreSQL.
-
-## Trip offers
-- Each offer belongs to one trip and one driver.
-- Pending offers expire at a defined timestamp.
-- Accepted, declined, expired and withdrawn are terminal response states.
-- Indexes support dispatch lookup and driver pending-offer lists.
-
-## Important implementation status
-These tables are a database foundation only. The current API does not yet connect to PostgreSQL, authenticate drivers, publish live location, or dispatch/accept trip offers. Do not treat the driver's current demo availability switch as a live online status. The next backend milestone is authenticated API access and transactional repository methods that enforce one accepted driver per trip.
+- `0026_manual_driver_approval.sql` — expands the owner-reviewed driver document checklist and adds document expiry dates.

@@ -8,6 +8,20 @@ import java.net.URL
 
 /** Calls the shared Chaufr API. Fare coefficients are never sent by the app. */
 object ChaufrApi {
+    suspend fun submitTripRating(baseUrl: String, token: String, tripId: String, score: Int, comment: String = ""): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/trips/$tripId/rating",
+            JSONObject().put("score", score).put("comment", comment), token)
+
+    suspend fun myRatings(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/me/ratings", token = token)
+
+    suspend fun createSupportTicket(baseUrl: String, token: String, subject: String, message: String, category: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/support/tickets",
+            JSONObject().put("subject", subject).put("message", message).put("category", category), token)
+
+    suspend fun mySupportTickets(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/support/tickets", token = token)
+
     suspend fun registerPushDevice(baseUrl: String, token: String, fcmToken: String, deviceLabel: String): JSONObject =
         requestJson(
             baseUrl, "POST", "/v1/push-devices",
@@ -43,6 +57,12 @@ object ChaufrApi {
     suspend fun logoutAccount(baseUrl: String, token: String) {
         requestJson(baseUrl, "POST", "/v1/auth/logout", token = token)
     }
+
+    suspend fun createPaymentCheckout(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(
+            baseUrl, "POST", "/v1/payments/checkout",
+            JSONObject().put("purpose", "passenger_trip").put("tripId", tripId), token
+        )
 
     private suspend fun requestJson(
         baseUrl: String, method: String, path: String,
@@ -151,6 +171,12 @@ object ChaufrApi {
     suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
         requestJson(baseUrl, "DELETE", "/v1/passenger/trusted-contacts/$id", token = token)
 
+    suspend fun requestTrustedContactVerification(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/verify", token = token)
+
+    suspend fun confirmTrustedContactVerification(baseUrl: String, token: String, id: String, code: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/confirm", JSONObject().put("code", code), token)
+
     suspend fun triggerSafetySos(baseUrl: String, token: String, tripId: String, note: String = ""): JSONObject =
         requestJson(baseUrl, "POST", "/v1/safety/trips/$tripId/sos", JSONObject().put("note", note), token)
 
@@ -165,6 +191,10 @@ object ChaufrApi {
 
     suspend fun passengerTripStatus(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/passenger/trips/$tripId/status", token = token)
+
+    suspend fun requestPassengerRefund(baseUrl: String, token: String, tripId: String, reason: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/passenger/trips/$tripId/refund-request",
+            JSONObject().put("reason", reason), token)
 
     suspend fun cancelPassengerTrip(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "POST", "/v1/passenger/trips/$tripId/cancel", token = token)

@@ -6,12 +6,17 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.net.Uri
+import android.provider.Settings
+import android.util.Base64
+import android.content.Intent
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +36,12 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -73,73 +84,259 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun DriverHome() {
-  Surface(modifier = Modifier.fillMaxSize(), color = Page) {
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-      Column(
-        modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 27.dp)
-      ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+  var selectedSection by remember { mutableStateOf("Home") }
+  val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+  val scope = rememberCoroutineScope()
+  val context = LocalContext.current
+  ModalNavigationDrawer(
+    drawerState = drawerState,
+    drawerContent = {
+      ModalDrawerSheet {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+          Text("CHAUFR", color = Navy, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+          Text("DRIVER PARTNER MENU", color = Muted, fontSize = 10.sp, letterSpacing = 1.2.sp)
+        }
+        HorizontalDivider()
+        listOf("Home", "My Trips", "Earnings", "Safety", "More").forEach { section ->
+          NavigationDrawerItem(
+            label = { Text(section, fontWeight = if (selectedSection == section) FontWeight.Bold else FontWeight.Medium) },
+            selected = selectedSection == section,
+            onClick = { selectedSection = section; scope.launch { drawerState.close() } },
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp)
+          )
+        }
+        Spacer(Modifier.height(12.dp))
+        Text("Drive with confidence.", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp))
+      }
+    }
+  ) {
+    Surface(modifier = Modifier.fillMaxSize(), color = Page) {
+      Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+          modifier = Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text("☰", modifier = Modifier.clickable { scope.launch { drawerState.open() } }.padding(end = 16.dp), color = Navy, fontSize = 25.sp, fontWeight = FontWeight.Bold)
           Column {
-            Text("CHAUFR", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
-            Text("DRIVER PARTNER", color = Color(0xFFB8C7DA), fontSize = 10.sp, letterSpacing = 1.5.sp)
+            Text("CHAUFR", color = Navy, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.5.sp)
+            Text(selectedSection.uppercase(), color = Muted, fontSize = 9.sp, letterSpacing = 1.2.sp)
           }
           Spacer(Modifier.weight(1f))
-          Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Text("MENU", modifier = Modifier.clickable { scope.launch { drawerState.open() } }, color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(24.dp))
-        Text("Ready to roll?", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Your next great trip starts here.", color = Color(0xFFB8C7DA), fontSize = 13.sp)
-      }
-
-      Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        DriverAccountCard()
-        DriverAdvantageSettingsCard()
-        DriverAvailabilityCard()
-        AvailableTripsCard()
-        DriverCurrentTripCard()
-
-        Text("TODAY'S SUMMARY", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-          SummaryCard("EARNINGS", "R 0.00", Modifier.weight(1f))
-          SummaryCard("TRIPS", "0", Modifier.weight(1f))
-        }
-
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          shape = RoundedCornerShape(26.dp),
-          colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-          Column(modifier = Modifier.padding(17.dp)) {
-            Text("YOUR VEHICLE", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            Spacer(Modifier.height(8.dp))
-            Text("Vehicle onboarding", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text("Submit your vehicle and driver licence details in the Driver Account section above. Chaufr will require approval before you can go online.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
-            Spacer(Modifier.height(12.dp))
-            Text("DRIVER VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text("Check your verification status in the Driver Account section.", color = Navy, fontSize = 12.sp)
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+        Column(modifier = Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF101C2C), Color(0xFF1D3B61), Color(0xFF2878F0)))).padding(horizontal = 22.dp, vertical = 25.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+              Text("CHAUFR", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+              Text("DRIVER PARTNER", color = Color(0xFFB8C7DA), fontSize = 10.sp, letterSpacing = 1.5.sp)
+            }
+            Spacer(Modifier.weight(1f))
+            Text("TEST BUILD", color = Color(0xFF9FC4FF), fontSize = 10.sp, fontWeight = FontWeight.Bold)
           }
+          Spacer(Modifier.height(18.dp))
+          Text(when(selectedSection) { "Home" -> "Ready to roll?"; "My Trips" -> "Your trips"; "Earnings" -> "Your earnings"; "Safety" -> "Safety centre"; else -> "Driver tools" }, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+          Text(when(selectedSection) { "Home" -> "Your next great trip starts here."; "My Trips" -> "Manage current and scheduled journeys."; "Earnings" -> "Track completed trips and earnings."; "Safety" -> "Safety tools for every journey."; else -> "Your profile, vehicle and preferences." }, color = Color(0xFFB8C7DA), fontSize = 13.sp)
         }
-
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          shape = RoundedCornerShape(18.dp),
-          colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF1FC))
-        ) {
-          Column(modifier = Modifier.padding(17.dp)) {
-            Text("TRIP REQUESTS", color = Navy, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text("No live trip offers yet. Passenger requests, driver matching, navigation and trip status updates will be enabled when the shared backend is connected.", color = Color(0xFF53647A), fontSize = 12.sp, lineHeight = 18.sp)
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+          when(selectedSection) {
+            "Home" -> {
+              DriverAvailabilityCard()
+              AvailableTripsCard()
+              DriverCurrentTripCard()
+            }
+            "My Trips" -> {
+              DriverCurrentTripCard()
+              AvailableTripsCard()
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp)) {
+                  Text("SCHEDULED PICKUPS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text("Scheduled trip offers appear here when dispatched, with pickup times.", color = Muted, fontSize = 12.sp)
+                }
+              }
+            }
+            "Earnings" -> DriverEarningsSummary()
+            "Safety" -> {
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Text("ACTIVE TRIP SAFETY", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text("SOS, trip sharing, passenger reporting and blocking controls are available from your active trip.", color = Muted, fontSize = 12.sp)
+                  Button(onClick = { selectedSection = "My Trips" }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open My Trips and safety controls")
+                  }
+                }
+              }
+              DriverTrustedContactsPanel()
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Text("EMERGENCY DIALER", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  listOf("112" to "Mobile emergency", "10111" to "Police", "10177" to "Ambulance").forEach { item ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      Column(Modifier.weight(1f)) {
+                        Text(item.first, color = Navy, fontWeight = FontWeight.Bold)
+                        Text(item.second, color = Muted, fontSize = 11.sp)
+                      }
+                      OutlinedButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + item.first)))
+                      }) { Text("Call") }
+                    }
+                  }
+                  Text("Chaufr does not dispatch emergency services. Use your phone dialer to contact emergency services.", color = Muted, fontSize = 10.sp)
+                }
+              }
+            }
+            else -> {
+              Text("PROFILE & ACCOUNT", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+              DriverAccountCard()
+              Text("VEHICLE, LICENCE & VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+              DriverComplianceCard()
+              Text("DRIVER PREFERENCES", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+              DriverAdvantageSettingsCard()
+              Text("RATINGS & SUPPORT", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+              DriverFeedbackSupportPanel()
+              Text("NOTIFICATION SETTINGS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                  Text("Trip offers, trip updates and safety alerts", color = Navy, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                  Text("Manage Chaufr notification permission and alert channels in Android settings.", color = Muted, fontSize = 10.sp)
+                  OutlinedButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName)))
+                  }, modifier = Modifier.fillMaxWidth()) { Text("Open notification settings") }
+                }
+              }
+              Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp)) {
+                  Text("PAYMENTS & PAYOUTS", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                  Text(if (BuildConfig.PAYMENTS_ENABLED) "Payout setup is available." else "Bank and payout controls remain disabled until the final payment-provider stage.", color = Muted, fontSize = 11.sp)
+                }
+              }
+            }
           }
+          Text("Chaufr information refreshes from the service when connected.", color = Muted, fontSize = 10.sp)
         }
-
-        Text(
-          "Chaufr Driver · Development preview. Earnings and availability shown here are not live account data.",
-          modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-          color = Muted,
-          fontSize = 10.sp,
-          lineHeight = 15.sp
-        )
       }
+      }
+    }
+  }
+}
+
+@Composable
+private fun DriverComplianceCard() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var accountNumber by remember { mutableStateOf("") }
+  var accountHolderName by remember { mutableStateOf("") }
+  var bankCode by remember { mutableStateOf("") }
+  var bankName by remember { mutableStateOf("") }
+  var accountMessage by remember { mutableStateOf("Add a bank account to receive completed-trip and reward-ride payouts.") }
+  var documentMessage by remember { mutableStateOf("") }
+  var documentSummary by remember { mutableStateOf("Upload every required document. Your account stays offline until the owner approves them.") }
+  var documentExpiryDate by remember { mutableStateOf("") }
+  var pendingDocumentType by remember { mutableStateOf("south_african_id") }
+  var busy by remember { mutableStateOf(false) }
+
+  suspend fun refreshDocuments(token: String) {
+    val response = ChaufrApi.verificationDocuments(apiUrl, token)
+    val docs = response.optJSONArray("documents")
+    if (docs != null && docs.length() > 0) {
+      documentSummary = (0 until docs.length()).joinToString(" · ") { index ->
+        val doc = docs.getJSONObject(index)
+        doc.optString("documentType").replace("_", " ") + ": " + doc.optString("status")
+      }
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    val token = SecureTokenStore.load(context)
+    if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
+      try { refreshDocuments(token) } catch (_: Exception) { }
+    }
+  }
+
+  fun uploadDocument(uri: Uri?, documentType: String) {
+    if (uri == null) return
+    val token = SecureTokenStore.load(context)
+    if (token.isNullOrBlank() || apiUrl.isBlank()) {
+      documentMessage = "Sign in and connect the Chaufr server before uploading."
+      return
+    }
+    scope.launch {
+      busy = true
+      documentMessage = ""
+      try {
+        val mime = context.contentResolver.getType(uri) ?: throw IllegalStateException("Unsupported file type.")
+        if (mime !in listOf("image/jpeg", "image/png", "application/pdf")) throw IllegalStateException("Choose a JPG, PNG or PDF document.")
+        if (documentType == "driver_selfie" && mime !in listOf("image/jpeg", "image/png")) throw IllegalStateException("Your selfie must be a JPG or PNG image.")
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+          ?: throw IllegalStateException("Unable to read the selected document.")
+        if (bytes.isEmpty() || bytes.size > 6 * 1024 * 1024) throw IllegalStateException("Document must be smaller than 6 MB.")
+        val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        val result = ChaufrApi.uploadVerificationDocument(apiUrl, token, documentType, uri.lastPathSegment ?: "verification-document", mime, encoded, documentExpiryDate)
+        documentMessage = "Document uploaded. Status: " + result.getJSONObject("document").optString("status")
+        documentExpiryDate = ""
+        refreshDocuments(token)
+      } catch (error: Exception) {
+        documentMessage = error.message ?: "Document upload failed."
+      } finally { busy = false }
+    }
+  }
+
+  val verificationPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    uploadDocument(uri, pendingDocumentType)
+  }
+  val bankProofPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+    uploadDocument(uri, "bank_confirmation")
+  }
+
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+      Text("DRIVER VERIFICATION", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+      if (BuildConfig.PAYMENTS_ENABLED) {
+        Text("Bank account for payouts", color = Navy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        OutlinedTextField(value = accountHolderName, onValueChange = { accountHolderName = it.take(100) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Account holder full name") }, singleLine = true)
+        OutlinedTextField(value = accountNumber, onValueChange = { accountNumber = it.filter(Char::isDigit).take(20) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Bank account number") }, singleLine = true)
+        OutlinedTextField(value = bankCode, onValueChange = { bankCode = it.filter(Char::isDigit).take(12) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Bank code") }, singleLine = true)
+        OutlinedTextField(value = bankName, onValueChange = { bankName = it.take(100) },
+          modifier = Modifier.fillMaxWidth(), label = { Text("Bank name") }, singleLine = true)
+        Button(onClick = {
+          val token = SecureTokenStore.load(context)
+          if (token.isNullOrBlank()) accountMessage = "Sign in to save your payout account."
+          else scope.launch {
+            busy = true
+            try {
+              val result = ChaufrApi.setPayoutAccount(apiUrl, token, accountNumber, accountHolderName, bankCode, bankName)
+              accountMessage = "Payout recipient created for ${result.optString("accountName")}. Upload bank confirmation for owner approval."
+              accountNumber = ""
+            } catch (error: Exception) { accountMessage = error.message ?: "Could not save payout bank details." }
+            finally { busy = false }
+          }
+        }, enabled = !busy && accountNumber.length >= 6 && accountHolderName.trim().length >= 3 && bankCode.isNotBlank() && bankName.isNotBlank(),
+          modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait..." else "Save payout bank details") }
+        Text(accountMessage, color = Muted, fontSize = 10.sp)
+      } else {
+        Text("Bank account setup and bank confirmation upload are reserved for the final payment gateway stage. This build does not collect bank details.", color = Muted, fontSize = 11.sp)
+      }
+      Spacer(Modifier.height(4.dp))
+      Text("Manual driver document approval", color = Navy, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+      Text("Upload a valid South African driver’s licence and a clear, recent selfie. Chaufr will compare your selfie with the licence photograph during manual approval.", color = Muted, fontSize = 11.sp)
+      val documentChoices = listOf(
+        "drivers_licence" to "Valid South African driver's licence",
+        "driver_selfie" to "Personal selfie (JPG or PNG)"
+      )
+      documentChoices.forEach { (type, label) ->
+        OutlinedButton(onClick = { pendingDocumentType = type; verificationPicker.launch("*/*") },
+          enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload $label") }
+      }
+      if (BuildConfig.PAYMENTS_ENABLED) {
+        OutlinedButton(onClick = { bankProofPicker.launch("*/*") }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("Upload bank confirmation") }
+      }
+      Text(documentSummary, color = Muted, fontSize = 10.sp)
+      if (documentMessage.isNotBlank()) Text(documentMessage, color = if (documentMessage.startsWith("Document uploaded")) Green else Color(0xFFB42318), fontSize = 10.sp)
     }
   }
 }
@@ -224,6 +421,10 @@ private fun DriverAvailabilityCard() {
   var available by remember { mutableStateOf(false) }
   var busy by remember { mutableStateOf(false) }
   var message by remember { mutableStateOf("") }
+  var activationPaid by remember { mutableStateOf(false) }
+  var activationTestBypass by remember { mutableStateOf(false) }
+  var activationBusy by remember { mutableStateOf(false) }
+  var activationMessage by remember { mutableStateOf("") }
 
   LaunchedEffect(apiUrl) {
     val token = SecureTokenStore.load(context)
@@ -231,9 +432,29 @@ private fun DriverAvailabilityCard() {
       try {
         val profile = ChaufrApi.driverProfile(apiUrl, token)
         available = profile.optBoolean("isOnline", false)
+        val activation = ChaufrApi.driverActivation(apiUrl, token)
+        activationPaid = activation.optBoolean("isPaid", false)
+        activationTestBypass = activation.optBoolean("testBypass", false)
       } catch (_: Exception) {
         available = false
       }
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    while (true) {
+      val token = SecureTokenStore.load(context)
+      if (!token.isNullOrBlank() && apiUrl.isNotBlank()) {
+        try {
+          val activation = ChaufrApi.driverActivation(apiUrl, token)
+          activationPaid = activation.optBoolean("isPaid", false)
+          activationTestBypass = activation.optBoolean("testBypass", false)
+        } catch (_: Exception) { }
+      } else {
+        activationPaid = false
+        activationTestBypass = false
+      }
+      kotlinx.coroutines.delay(12000)
     }
   }
 
@@ -325,12 +546,73 @@ private fun DriverAvailabilityCard() {
           Text(if (available) "You're online" else "You're offline", color = Navy, fontSize = 21.sp, fontWeight = FontWeight.Bold)
           Text("Availability is controlled by your verified driver account.", color = Muted, fontSize = 11.sp)
         }
-        Switch(checked = available, onCheckedChange = { requestPresence(it) }, enabled = !busy)
+        Switch(checked = available, onCheckedChange = { requestPresence(it) }, enabled = !busy && activationPaid)
+      }
+      if (!activationPaid) {
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFEAF1FC))) {
+          Column(modifier = Modifier.padding(13.dp)) {
+            Text("DAILY ACTIVATION · R30", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text("Pay today's non-refundable activation fee before going online or viewing trip requests.", color = Navy, fontSize = 11.sp)
+            Spacer(Modifier.height(8.dp))
+            if (BuildConfig.PAYMENTS_ENABLED) {
+              Button(
+                onClick = {
+                  val token = SecureTokenStore.load(context)
+                  if (token != null && !activationBusy) scope.launch {
+                    activationBusy = true
+                    activationMessage = ""
+                    try {
+                      val checkout = ChaufrApi.createActivationCheckout(apiUrl, token)
+                      val checkoutUrl = checkout.optString("checkoutUrl")
+                      if (!checkoutUrl.startsWith("https://")) throw IllegalStateException("Secure payment link unavailable.")
+                      context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(checkoutUrl)))
+                      activationMessage = "Secure card checkout opened. Activation updates after payment verification."
+                    } catch (error: Exception) {
+                      activationMessage = error.message ?: "Unable to start activation payment."
+                    } finally { activationBusy = false }
+                  }
+                },
+                enabled = !activationBusy && apiUrl.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Blue)
+              ) { Text(if (activationBusy) "Opening checkout..." else "Pay R30 securely") }
+              if (activationMessage.isNotBlank()) Text(activationMessage, color = Muted, fontSize = 10.sp)
+            } else {
+              Text("Card payments are intentionally disabled in this test build. Use the development-only activation bypass for local trip testing; production will require the R30 fee.", color = Muted, fontSize = 10.sp)
+            }
+          }
+        }
+      } else {
+        Text(
+          if (activationTestBypass) "DEVELOPMENT TEST MODE · R30 activation check bypassed. Production will require the daily fee."
+          else "Today's R30 activation is paid.",
+          color = if (activationTestBypass) Blue else Green,
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Bold
+        )
       }
       Spacer(Modifier.height(12.dp))
+      val locationPermissionGranted =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+      Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F6FA))) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text("BACKGROUND GPS RELIABILITY", color = Blue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Text(if (locationPermissionGranted) "Location permission is granted. For reliable tracking while online, allow background activity and set Chaufr battery usage to Unrestricted in Samsung settings."
+            else "Location permission is not currently granted. Chaufr cannot publish driver GPS until permission is enabled.",
+            color = Muted, fontSize = 11.sp, lineHeight = 16.sp)
+          OutlinedButton(
+            onClick = {
+              context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName)))
+            },
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("Review app location & battery settings") }
+        }
+      }
       Button(
         onClick = { requestPresence(!available) },
-        enabled = !busy,
+        enabled = !busy && activationPaid,
         modifier = Modifier.fillMaxWidth().height(48.dp),
         shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (available) Navy else Blue)
@@ -345,6 +627,106 @@ private fun DriverAvailabilityCard() {
         Spacer(Modifier.height(6.dp))
         Text("Connect the Chaufr API to enable live availability.", color = Muted, fontSize = 10.sp)
       }
+    }
+  }
+}
+
+@Composable
+private fun DriverEarningsSummary() {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apiUrl = BuildConfig.CHAUFR_API_BASE_URL
+  var summary by remember { mutableStateOf<JSONObject?>(null) }
+  var loading by remember { mutableStateOf(false) }
+  var message by remember { mutableStateOf("") }
+
+  suspend fun refresh() {
+    if (apiUrl.isBlank()) {
+      message = "Connect the Chaufr API to view your live earnings."
+      return
+    }
+    val token = SecureTokenStore.load(context)
+    if (token.isNullOrBlank()) {
+      message = "Sign in to view your earnings."
+      return
+    }
+    loading = true
+    try {
+      summary = ChaufrApi.driverEarnings(apiUrl, token)
+      message = ""
+    } catch (error: Exception) {
+      message = error.message ?: "Unable to load earnings."
+    } finally {
+      loading = false
+    }
+  }
+
+  LaunchedEffect(apiUrl) {
+    while (true) {
+      refresh()
+      delay(60_000)
+    }
+  }
+
+  val data = summary
+  Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp),
+    colors = CardDefaults.cardColors(containerColor = Color.White)) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("YOUR EARNINGS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+          Text("Completed trips only", color = Muted, fontSize = 11.sp)
+        }
+        OutlinedButton(onClick = { scope.launch { refresh() } }, enabled = !loading) {
+          Text(if (loading) "Refreshing…" else "Refresh")
+        }
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SummaryCard("TODAY", "R " + String.format(Locale.US, "%.2f", data?.optDouble("todayEarnings", 0.0) ?: 0.0), Modifier.weight(1f))
+        SummaryCard("TRIPS", (data?.optInt("todayTrips", 0) ?: 0).toString(), Modifier.weight(1f))
+      }
+      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SummaryCard("LIFETIME", "R " + String.format(Locale.US, "%.2f", data?.optDouble("lifetimeEarnings", 0.0) ?: 0.0), Modifier.weight(1f))
+        SummaryCard("COMPLETED", (data?.optInt("lifetimeTrips", 0) ?: 0).toString(), Modifier.weight(1f))
+      }
+      Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF3F6FA))) {
+        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text("COMMISSION BREAKDOWN", color = Navy, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Today's platform commission", color = Muted, fontSize = 11.sp)
+            Text("R " + String.format(Locale.US, "%.2f", data?.optDouble("todayPlatformCommission", 0.0) ?: 0.0), color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          }
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Lifetime platform commission", color = Muted, fontSize = 11.sp)
+            Text("R " + String.format(Locale.US, "%.2f", data?.optDouble("lifetimePlatformCommission", 0.0) ?: 0.0), color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          }
+          Text("Your earnings above are the driver's recorded share after platform commission. Commission is shown separately for transparency.", color = Muted, fontSize = 10.sp)
+        }
+      }
+      if (message.isNotBlank()) Text(message, color = Muted, fontSize = 11.sp)
+      val recent = data?.optJSONArray("recentTrips")
+      if (recent != null && recent.length() > 0) {
+        HorizontalDivider()
+        Text("RECENT COMPLETED TRIPS", color = Muted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        for (index in 0 until minOf(recent.length(), 5)) {
+          val trip = recent.optJSONObject(index) ?: continue
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(trip.optString("pickupLabel") + " → " + trip.optString("destinationLabel"), color = Navy, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+              Text(if (trip.optBoolean("rewardRide")) "Reward ride" else "Standard trip", color = Muted, fontSize = 10.sp)
+            }
+            Text("R " + String.format(Locale.US, "%.2f", trip.optDouble("driverEarnings", 0.0)), color = Green, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          }
+        }
+      } else if (data != null) {
+        Text("Your completed trips will appear here.", color = Muted, fontSize = 11.sp)
+      }
+      Text(
+        if (BuildConfig.PAYMENTS_ENABLED) "Trip earnings are recorded after completion. Bank settlement is shown separately after verified payout."
+        else "Test build: these are indicative trip earnings only. Card settlement and bank payouts are disabled until the final gateway stage.",
+        color = Muted, fontSize = 10.sp, lineHeight = 14.sp
+      )
     }
   }
 }
@@ -408,14 +790,20 @@ private fun DriverCurrentTripCard() {
         Text("No accepted trip in progress.", color = Navy, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
       } else {
         val status = current.optString("status")
-        Text(if (status == "accepted") "Trip accepted · Head to pickup" else "Trip in progress",
-          color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        Text(when (status) {
+          "accepted" -> "Trip accepted · Head to pickup"
+          "driver_arriving" -> "Arrived at pickup · Passenger boarding"
+          else -> "Trip in progress"
+        }, color = Navy, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         Text(current.optString("pickupLabel"), color = Navy, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         Text("↓ " + current.optString("destinationLabel"), color = Muted, fontSize = 12.sp)
+        if (current.optBoolean("isScheduled")) Text("SCHEDULED PICKUP · " + current.optString("scheduledFor").replace("T", " ").take(16), color = Blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text(String.format(Locale.US, "%.1f km · %d min", current.optDouble("distanceKm", 0.0),
           current.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
         Text("Expected earnings: R " + String.format(Locale.US, "%.2f",
           current.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Spacer(Modifier.height(8.dp))
+        DriverLiveTripMap(current)
         current.optString("passengerUserId").takeIf { it.isNotBlank() }?.let { passengerUserId ->
           Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED))) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -450,12 +838,29 @@ private fun DriverCurrentTripCard() {
                   if (token != null) scope.launch {
                     try {
                       val share = ChaufrApi.createTripShare(apiUrl, token, current.optString("tripId"))
-                      safetyMessage = apiUrl.trimEnd('/') + "/v1/shared-trips/" + share.optString("shareToken")
+                      val shareToken = share.optString("shareToken")
+                      if (shareToken.isBlank()) throw IllegalStateException("Trip sharing link was not returned.")
+                      val shareUrl = apiUrl.trimEnd('/') + "/v1/shared-trips/" + shareToken
+                      val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "My Chaufr trip")
+                        putExtra(Intent.EXTRA_TEXT, "Follow my Chaufr trip here: " + shareUrl)
+                      }
+                      context.startActivity(Intent.createChooser(sendIntent, "Share live trip"))
+                      safetyMessage = "Secure trip link created. Choose a contact or app to share it."
                     } catch (error: Exception) { safetyMessage = error.message ?: "Could not create trip share." }
                   }
                 }, modifier = Modifier.weight(1f)) { Text("Share trip") }
               }
               OutlinedTextField(value = safetyNotes, onValueChange = { safetyNotes = it.take(500) }, modifier = Modifier.fillMaxWidth(), label = { Text("Report details (optional)") }, shape = RoundedCornerShape(12.dp), minLines = 2)
+              Text("If you are in immediate danger, contact emergency services directly. Chaufr SOS does not call emergency services.", color = Muted, fontSize = 10.sp)
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Mobile emergency" to "112", "Police" to "10111", "Ambulance" to "10177").forEach { (label, number) ->
+                  OutlinedButton(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + number)))
+                  }, modifier = Modifier.weight(1f)) { Text("$label\n$number", fontSize = 9.sp) }
+                }
+              }
               Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = {
                   val token = SecureTokenStore.load(context)
@@ -493,16 +898,24 @@ private fun DriverCurrentTripCard() {
             try {
               val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
               val id = current.optString("tripId")
-              if (status == "accepted") {
-                ChaufrApi.startTrip(apiUrl, token, id)
-                message = "Trip started. Drive safely."
-              } else {
-                ChaufrApi.completeTrip(apiUrl, token, id)
-                if (current.optBoolean("rewardRedemption")) {
-                  completedRewardTripId = id
-                  commissionRequested = false
+              when (status) {
+                "accepted" -> {
+                  ChaufrApi.markArrivedAtPickup(apiUrl, token, id)
+                  message = "Arrival at pickup confirmed. Start the trip when the passenger is safely onboard."
                 }
-                message = "Trip completed. Your trip has been recorded."
+                "driver_arriving" -> {
+                  ChaufrApi.startTrip(apiUrl, token, id)
+                  message = "Trip started. Drive safely."
+                }
+                "in_progress" -> {
+                  ChaufrApi.completeTrip(apiUrl, token, id)
+                  if (current.optBoolean("rewardRedemption")) {
+                    completedRewardTripId = id
+                    commissionRequested = false
+                  }
+                  message = "Trip completed. Your trip has been recorded."
+                }
+                else -> throw IllegalStateException("This trip cannot be advanced from its current status.")
               }
               refreshCurrent()
             } catch (error: Exception) {
@@ -510,25 +923,53 @@ private fun DriverCurrentTripCard() {
             } finally { busy = false }
           }
         }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-          Text(if (busy) "Updating trip…" else if (status == "accepted") "Start trip" else "Complete trip")
+          Text(if (busy) "Updating trip…" else when (status) {
+            "accepted" -> "Confirm arrival at pickup"
+            "driver_arriving" -> "Start trip"
+            "in_progress" -> "Complete trip"
+            else -> "Update trip"
+          })
+        }
+        if (status == "accepted" || status == "driver_arriving") {
+          OutlinedButton(
+            onClick = {
+              scope.launch {
+                busy = true
+                try {
+                  val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
+                  ChaufrApi.cancelAcceptedTrip(apiUrl, token, current.optString("tripId"))
+                  message = "Trip cancelled before start. The passenger was notified."
+                  refreshCurrent()
+                } catch (error: Exception) {
+                  message = error.message ?: "Unable to cancel this trip."
+                } finally { busy = false }
+              }
+            },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("Cancel before pickup") }
         }
       }
       if (completedRewardTripId != null) {
-        Text("Reward ride completed. You can request the platform-funded 50% driver payout.", color = Navy, fontSize = 12.sp)
-        Button(onClick = {
-          scope.launch {
-            busy = true
-            try {
-              val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
-              val result = ChaufrApi.requestRewardCommission(apiUrl, token, completedRewardTripId!!)
-              commissionRequested = true
-              message = "Payout request recorded: R " + String.format(Locale.US, "%.2f", result.optDouble("amount"))
-            } catch (error: Exception) {
-              message = error.message ?: "Unable to submit payout request."
-            } finally { busy = false }
+        if (BuildConfig.PAYMENTS_ENABLED) {
+          Text("Reward ride completed. You can request the platform-funded 50% driver payout.", color = Navy, fontSize = 12.sp)
+          Button(onClick = {
+            scope.launch {
+              busy = true
+              try {
+                val token = SecureTokenStore.load(context) ?: throw IllegalStateException("Sign in to your driver account.")
+                val result = ChaufrApi.requestRewardCommission(apiUrl, token, completedRewardTripId!!)
+                commissionRequested = true
+                message = "Payout request recorded: R " + String.format(Locale.US, "%.2f", result.optDouble("amount"))
+              } catch (error: Exception) {
+                message = error.message ?: "Unable to submit payout request."
+              } finally { busy = false }
+            }
+          }, enabled = !busy && !commissionRequested, modifier = Modifier.fillMaxWidth()) {
+            Text(if (commissionRequested) "Commission requested" else "Request commission")
           }
-        }, enabled = !busy && !commissionRequested, modifier = Modifier.fillMaxWidth()) {
-          Text(if (commissionRequested) "Commission requested" else "Request commission")
+        } else {
+          Text("Reward-ride payout requests will be enabled during the final payment gateway stage.", color = Muted, fontSize = 11.sp)
         }
       }
       if (message.isNotBlank()) Text(message, color = if (message.contains("started") || message.contains("completed")) Green else Color(0xFFB42318), fontSize = 11.sp, lineHeight = 16.sp)
@@ -588,6 +1029,7 @@ private fun AvailableTripsCard() {
           Column(modifier = Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(trip.optString("pickupLabel", "Pickup"), color = Navy, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Text("↓ " + trip.optString("destinationLabel", "Destination"), color = Muted, fontSize = 12.sp)
+            if (trip.optBoolean("isScheduled")) Text("SCHEDULED PICKUP · " + trip.optString("scheduledFor").replace("T", " ").take(16), color = Blue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Text(String.format(Locale.US, "%.1f km · %d min", trip.optDouble("distanceKm", 0.0), trip.optDouble("durationMinutes", 0.0).toInt()), color = Muted, fontSize = 11.sp)
             Text("Driver earnings after commission: R " + String.format(Locale.US, "%.2f", trip.optDouble("expectedDriverEarnings", 0.0)), color = Green, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Text("Estimated vehicle costs: R " + String.format(Locale.US, "%.2f", trip.optDouble("estimatedOperatingCost", 0.0)), color = Muted, fontSize = 12.sp)

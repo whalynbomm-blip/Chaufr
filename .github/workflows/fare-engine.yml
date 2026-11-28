@@ -2,7 +2,7 @@ name: Fare engine tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/payments-payouts-verification]
     paths:
       - "services/api/**"
       - ".github/workflows/fare-engine.yml"

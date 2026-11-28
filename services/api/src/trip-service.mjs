@@ -3,6 +3,8 @@ import { offerTripToNextDriver, declineTripOffer } from "./dispatch-service.mjs"
 import { estimateDriverTripProfit } from "./chaufr-advantage.mjs";
 
 const SA_DATE_SQL = "(now() AT TIME ZONE 'Africa/Johannesburg')::date";
+const testActivationBypassEnabled = () =>
+  process.env.NODE_ENV === "development" && process.env.CHAUFR_TEST_BYPASS_ACTIVATION === "true";
 const activationRequired = () => new AuthError(
   "Pay the daily Chaufr activation fee before going online or accessing trip requests",
   403,
@@ -17,6 +19,7 @@ function cleanLabel(value, field) {
   return value.trim();
 }
 async function hasPaidActivation(queryable, driverUserId) {
+  if (testActivationBypassEnabled()) return { status: "test_bypass", operating_date: null };
   const result = await queryable.query(
     "SELECT id, operating_date, amount, currency, paid_at, non_refundable_at " +
     "FROM driver_daily_activations WHERE driver_user_id = $1 AND operating_date = " +
@@ -30,6 +33,29 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
   if (!pool || typeof pool.connect !== "function") throw new TypeError("A PostgreSQL pool is required");
   if (!fareConfig) throw new TypeError("Server fare configuration is required");
 
+  // Recalculate traffic-aware remaining routes at most once per trip per minute.
+  // This prevents frequent mobile refreshes from creating excessive Routes API calls.
+  const liveEtaCache = new Map();
+  const getLiveTrafficEstimate = async (tripId, origin, destination) => {
+    if (!routesService?.computeRoute || !origin || !destination) return null;
+    const now = Date.now();
+    const cached = liveEtaCache.get(tripId);
+    if (cached && now - cached.cachedAt < 60_000) return cached.estimate;
+    try {
+      const route = await routesService.computeRoute(origin, destination);
+      const estimate = {
+        liveTrafficEtaMinutes: Number(route.durationMinutes),
+        liveTrafficRemainingKm: Number(route.distanceKm),
+        liveTrafficCalculatedAt: new Date(now).toISOString(),
+      };
+      liveEtaCache.set(tripId, { cachedAt: now, estimate });
+      if (liveEtaCache.size > 200) liveEtaCache.delete(liveEtaCache.keys().next().value);
+      return estimate;
+    } catch {
+      return null;
+    }
+  };
+
   const notify = async (userId, title, body, data) => {
     if (!pushService || !userId) return;
     try { await pushService.sendToUser(userId, { title, body, data }); } catch { /* push delivery must not block trip state changes */ }
@@ -38,6 +64,18 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
   return {
     async getActivationStatus(driver) {
       requireRole(driver, "driver");
+      if (testActivationBypassEnabled()) {
+        return {
+          operatingDate: null,
+          amount: fareConfig.dailyActivationFee ?? 30,
+          currency: "ZAR",
+          status: "test_bypass",
+          isPaid: true,
+          testBypass: true,
+          paidAt: null,
+          nonRefundableAt: null,
+        };
+      }
       const result = await pool.query(
         "SELECT operating_date, amount, currency, status, paid_at, non_refundable_at " +
         "FROM driver_daily_activations WHERE driver_user_id = $1 AND operating_date = " +
@@ -51,6 +89,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         currency: "ZAR",
         status: activation?.status ?? "unpaid",
         isPaid: activation?.status === "paid",
+        testBypass: false,
         paidAt: activation?.paid_at ?? null,
         nonRefundableAt: activation?.non_refundable_at ?? null,
       };
@@ -179,6 +218,11 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           "UPDATE trips SET status = 'cancelled', cancelled_at = now() WHERE id = $1 AND status = 'requested'",
           [tripId],
         );
+        await client.query(
+          "UPDATE trip_offers SET status = 'withdrawn', responded_at = now() " +
+          "WHERE trip_id = $1 AND status = 'pending'",
+          [tripId],
+        );
         const redemption = await client.query(
           "UPDATE passenger_reward_redemptions SET status = 'released', updated_at = now() " +
           "WHERE trip_id = $1 AND passenger_user_id = $2 AND status = 'reserved' RETURNING tickets_reserved",
@@ -218,7 +262,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
     async getPassengerTripHistory(passenger) {
       requireRole(passenger, "passenger");
       const result = await pool.query(
-        "SELECT id, status, pickup_label, destination_label, quoted_total, passenger_payable, " +
+        "SELECT id, status, payment_status, pickup_label, destination_label, quoted_total, passenger_payable, " +
         "distance_km, duration_minutes, requested_at, accepted_at, started_at, completed_at " +
         "FROM trips WHERE passenger_user_id = $1 ORDER BY requested_at DESC LIMIT 100",
         [passenger.id],
@@ -226,6 +270,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       return result.rows.map((trip) => ({
         tripId: trip.id,
         status: trip.status,
+        paymentStatus: trip.payment_status,
         pickupLabel: trip.pickup_label,
         destinationLabel: trip.destination_label,
         quotedFare: Number(trip.quoted_total),
@@ -243,8 +288,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       requireRole(passenger, "passenger");
       if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
       const result = await pool.query(
-        "SELECT t.id, t.status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
-        "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, " +
+        "SELECT t.id, t.status, t.payment_status, t.pickup_label, t.destination_label, t.quoted_total, t.passenger_payable, " +
+        "t.distance_km, t.duration_minutes, t.requested_at, t.accepted_at, t.started_at, t.completed_at, t.fare_snapshot->>'encodedPolyline' AS encoded_polyline, t.fare_snapshot->'pickupLocation' AS pickup_location, t.fare_snapshot->'destinationLocation' AS destination_location, " +
         "u.id AS driver_user_id, u.display_name AS driver_name, dp.rating AS driver_rating, v.make AS vehicle_make, v.model AS vehicle_model, " +
         "v.category AS vehicle_category, p.latitude AS driver_latitude, p.longitude AS driver_longitude, " +
         "p.location_accuracy_m, p.last_seen_at " +
@@ -258,6 +303,12 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       const trip = result.rows[0];
       if (!trip) throw new AuthError("Trip not found", 404);
       const locationIsRecent = trip.last_seen_at && (Date.now() - new Date(trip.last_seen_at).getTime()) <= 90_000;
+      const liveTrafficEstimate = locationIsRecent && trip.driver_latitude != null && trip.driver_longitude != null &&
+        trip.status === "in_progress"
+        ? await getLiveTrafficEstimate(trip.id,
+            { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude) },
+            trip.destination_location)
+        : null;
       return {
         tripId: trip.id,
         status: trip.status,
@@ -266,6 +317,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         passengerPayable: Number(trip.passenger_payable ?? trip.quoted_total),
         distanceKm: Number(trip.distance_km),
         durationMinutes: Number(trip.duration_minutes),
+        ...(liveTrafficEstimate ?? {}),
+        route: { encodedPolyline: trip.encoded_polyline ?? null, pickup: trip.pickup_location ?? null, destination: trip.destination_location ?? null },
         requestedAt: trip.requested_at,
         acceptedAt: trip.accepted_at,
         startedAt: trip.started_at,
@@ -328,6 +381,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         breakdown: { ...fare.breakdown },
         rewardRedemption: redeemReward,
         pickupLocation: { latitude: Number(input.origin.latitude), longitude: Number(input.origin.longitude) },
+        destinationLocation: { latitude: Number(input.destination.latitude), longitude: Number(input.destination.longitude) },
       };
       const client = await pool.connect();
       try {
@@ -412,18 +466,67 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       }
     },
 
+    async getDriverEarnings(driver) {
+      requireRole(driver, "driver");
+      const summary = await pool.query(
+        "SELECT COUNT(*)::int AS lifetime_trips, COALESCE(SUM(driver_earnings),0)::numeric AS lifetime_earnings, " +
+        "COUNT(*) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg'))::int AS today_trips, " +
+        "COALESCE(SUM(driver_earnings) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg')),0)::numeric AS today_earnings, " +
+        "COALESCE(SUM(platform_commission),0)::numeric AS lifetime_commission, " +
+        "COALESCE(SUM(platform_commission) FILTER (WHERE completed_at >= ((now() AT TIME ZONE 'Africa/Johannesburg')::date::timestamp AT TIME ZONE 'Africa/Johannesburg')),0)::numeric AS today_commission " +
+        "FROM trips WHERE driver_user_id=$1 AND status='completed'",
+        [driver.id],
+      );
+      const recent = await pool.query(
+        "SELECT id, pickup_label, destination_label, driver_earnings, quoted_total, completed_at, " +
+        "COALESCE(fare_snapshot->>'rewardRedemption','false') AS reward_redemption, payment_status " +
+        "FROM trips WHERE driver_user_id=$1 AND status='completed' ORDER BY completed_at DESC LIMIT 20",
+        [driver.id],
+      );
+      const row = summary.rows[0] ?? {};
+      return {
+        todayEarnings: Number(row.today_earnings ?? 0),
+        todayTrips: Number(row.today_trips ?? 0),
+        lifetimeEarnings: Number(row.lifetime_earnings ?? 0),
+        lifetimeTrips: Number(row.lifetime_trips ?? 0),
+        todayPlatformCommission: Number(row.today_commission ?? 0),
+        lifetimePlatformCommission: Number(row.lifetime_commission ?? 0),
+        recentTrips: recent.rows.map((trip) => ({
+          tripId: trip.id,
+          pickupLabel: trip.pickup_label,
+          destinationLabel: trip.destination_label,
+          driverEarnings: Number(trip.driver_earnings),
+          passengerFare: Number(trip.quoted_total),
+          completedAt: trip.completed_at,
+          rewardRide: trip.reward_redemption === "true",
+          paymentStatus: trip.payment_status,
+        })),
+      };
+    },
+
     async getCurrentDriverTrip(driver) {
       requireRole(driver, "driver");
       const activation = await hasPaidActivation(pool, driver.id);
       if (!activation) throw activationRequired();
       const result = await pool.query(
-        "SELECT id, passenger_user_id, status, pickup_label, destination_label, distance_km, duration_minutes, " +
-        "quoted_total, driver_earnings, accepted_at, started_at, fare_snapshot->>'rewardRedemption' AS reward_redemption " +
-        "FROM trips WHERE driver_user_id = $1 AND status IN ('accepted', 'in_progress') " +
-        "ORDER BY accepted_at DESC LIMIT 1",
+        "SELECT t.id, t.passenger_user_id, t.status, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
+        "t.quoted_total, t.driver_earnings, t.accepted_at, t.started_at, t.fare_snapshot->>'rewardRedemption' AS reward_redemption, " +
+        "t.fare_snapshot->>'encodedPolyline' AS encoded_polyline, t.fare_snapshot->'pickupLocation' AS pickup_location, " +
+        "t.fare_snapshot->'destinationLocation' AS destination_location, p.latitude AS driver_latitude, p.longitude AS driver_longitude, p.last_seen_at, sr.scheduled_for " +
+        "FROM trips t LEFT JOIN scheduled_rides sr ON sr.trip_id=t.id " +
+        "LEFT JOIN driver_presence p ON p.driver_user_id=t.driver_user_id " +
+        "WHERE t.driver_user_id = $1 AND t.status IN ('accepted', 'driver_arriving', 'in_progress') " +
+        "ORDER BY t.accepted_at DESC LIMIT 1",
         [driver.id],
       );
       const trip = result.rows[0];
+      const driverLocationIsRecent = trip?.driver_latitude != null && trip?.last_seen_at &&
+        (Date.now() - new Date(trip.last_seen_at).getTime()) <= 90_000;
+      const liveTrafficEstimate = trip && driverLocationIsRecent && trip.status === "in_progress"
+        ? await getLiveTrafficEstimate(trip.id,
+            { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude) },
+            trip.destination_location)
+        : null;
       return { trip: trip ? {
         tripId: trip.id,
         passengerUserId: trip.passenger_user_id,
@@ -432,9 +535,14 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         destinationLabel: trip.destination_label,
         distanceKm: Number(trip.distance_km),
         durationMinutes: Number(trip.duration_minutes),
+        ...(liveTrafficEstimate ?? {}),
+        route: { encodedPolyline: trip.encoded_polyline ?? null, pickup: trip.pickup_location ?? null, destination: trip.destination_location ?? null },
+        driverLocation: trip.driver_latitude == null || !trip.last_seen_at || (Date.now() - new Date(trip.last_seen_at).getTime()) > 90_000 ? null : { latitude: Number(trip.driver_latitude), longitude: Number(trip.driver_longitude), lastSeenAt: trip.last_seen_at },
         passengerFare: Number(trip.quoted_total),
         expectedDriverEarnings: Number(trip.driver_earnings),
         rewardRedemption: trip.reward_redemption === "true",
+        scheduledFor: trip.scheduled_for ?? null,
+        isScheduled: Boolean(trip.scheduled_for),
         acceptedAt: trip.accepted_at,
         startedAt: trip.started_at,
       } : null };
@@ -464,9 +572,9 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
       }
       const result = await pool.query(
         "SELECT t.id, t.pickup_label, t.destination_label, t.distance_km, t.duration_minutes, " +
-        "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, " +
+        "t.quoted_total, t.driver_earnings, t.quote_expires_at, t.requested_at, sr.scheduled_for, " +
         "t.fare_snapshot->>'vehicleCategory' AS vehicle_category " +
-        "FROM trips t JOIN trip_offers o ON o.trip_id = t.id " +
+        "FROM trips t JOIN trip_offers o ON o.trip_id = t.id LEFT JOIN scheduled_rides sr ON sr.trip_id=t.id " +
         "WHERE t.status = 'requested' AND t.driver_user_id IS NULL " +
         "AND o.driver_user_id = $1 AND o.status = 'pending' AND o.expires_at > now() " +
         "AND t.quote_expires_at > now() ORDER BY o.offered_at ASC LIMIT 50",
@@ -516,6 +624,8 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
             estimatedNetEarnings: estimatedNet,
             minimumNetPerTrip: Number(settings.minimum_net_per_trip ?? 0),
             vehicleCategory: row.vehicle_category,
+            scheduledFor: row.scheduled_for ?? null,
+            isScheduled: Boolean(row.scheduled_for),
             expiresAt: row.quote_expires_at,
             requestedAt: row.requested_at,
           };
@@ -542,7 +652,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         }
         if (!driverCheck.rows[0].is_online) throw new AuthError("You must be online to accept a trip", 403);
         const tripResult = await client.query(
-          "SELECT id, status, pickup_label, destination_label, quoted_total, driver_earnings, " +
+          "SELECT id, passenger_user_id, status, pickup_label, destination_label, quoted_total, driver_earnings, " +
           "quote_expires_at, fare_snapshot->>'vehicleCategory' AS vehicle_category " +
           "FROM trips WHERE id = $1 FOR UPDATE",
           [tripId],
@@ -589,8 +699,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         await client.query("COMMIT");
         const accepted = updated.rows[0];
         if (pushService) {
-          const passenger = await pool.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
-          await notify(passenger.rows[0]?.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
+          await notify(trip.passenger_user_id, "Your Chaufr ride is confirmed", "Your driver has accepted your trip.", { type: "trip_accepted", tripId });
         }
         return {
           tripId: accepted.id,
@@ -603,6 +712,76 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           acceptedAt: accepted.accepted_at,
           fareLockedAt: accepted.fare_locked_at,
         };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        if (error?.code === "23505" && error?.constraint === "one_active_trip_per_driver") {
+          throw new AuthError("You already have an active trip. Complete or cancel it before accepting another ride.", 409);
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async markDriverArrived(driver, tripId) {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const result = await pool.query(
+        "UPDATE trips SET status = 'driver_arriving' WHERE id = $1 AND driver_user_id = $2 AND status = 'accepted' RETURNING id, passenger_user_id, pickup_label",
+        [tripId, driver.id],
+      );
+      if (!result.rowCount) throw new AuthError("Only the assigned driver can mark an accepted trip as arrived at pickup", 409);
+      await pool.query(
+        "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'driver_arrived_at_pickup')",
+        [tripId, driver.id],
+      );
+      await notify(result.rows[0].passenger_user_id, "Your Chaufr driver has arrived", "Your driver is waiting at the pickup location.", { type: "driver_arrived", tripId });
+      return { tripId, status: "driver_arriving", pickupLabel: result.rows[0].pickup_label };
+    },
+
+    async cancelAcceptedTrip(driver, tripId, reason = "driver_unavailable") {
+      requireRole(driver, "driver");
+      if (typeof tripId !== "string" || !/^[0-9a-f-]{36}$/i.test(tripId)) throw new AuthError("Trip ID is invalid");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const selected = await client.query(
+          "SELECT id, passenger_user_id, status, fare_snapshot->>'rewardRedemption' AS reward_redemption FROM trips WHERE id = $1 AND driver_user_id = $2 FOR UPDATE",
+          [tripId, driver.id],
+        );
+        const trip = selected.rows[0];
+        if (!trip) throw new AuthError("Trip not found", 404);
+        if (trip.status !== "accepted" && trip.status !== "driver_arriving") {
+          throw new AuthError("A driver can cancel only before the trip has started. Contact support if a trip is already in progress.", 409);
+        }
+        await client.query(
+          "UPDATE trips SET status = 'cancelled', cancelled_at = now() WHERE id = $1",
+          [tripId],
+        );
+        if (trip.reward_redemption === "true") {
+          const redemption = await client.query(
+            "UPDATE passenger_reward_redemptions SET status = 'released', updated_at = now() WHERE trip_id = $1 AND passenger_user_id = $2 AND status = 'reserved' RETURNING tickets_reserved",
+            [tripId, trip.passenger_user_id],
+          );
+          if (redemption.rowCount) {
+            const tickets = Number(redemption.rows[0].tickets_reserved);
+            await client.query(
+              "INSERT INTO passenger_reward_accounts (passenger_user_id, tickets_balance, updated_at) VALUES ($1, $2, now()) ON CONFLICT (passenger_user_id) DO UPDATE SET tickets_balance = passenger_reward_accounts.tickets_balance + EXCLUDED.tickets_balance, updated_at = now()",
+              [trip.passenger_user_id, tickets],
+            );
+            await client.query(
+              "INSERT INTO passenger_reward_ledger (passenger_user_id, trip_id, entry_type, tickets_delta) VALUES ($1, $2, 'released', $3) ON CONFLICT (trip_id, entry_type) DO NOTHING",
+              [trip.passenger_user_id, tripId, tickets],
+            );
+          }
+        }
+        await client.query(
+          "INSERT INTO trip_events (trip_id, actor_user_id, event_type, details) VALUES ($1, $2, 'driver_cancelled', $3::jsonb)",
+          [tripId, driver.id, JSON.stringify({ reason: String(reason).slice(0, 120) })],
+        );
+        await client.query("COMMIT");
+        await notify(trip.passenger_user_id, "Your Chaufr driver cancelled", "Your driver could not complete the pickup. Please request another ride.", { type: "driver_cancelled", tripId });
+        return { tripId, status: "cancelled", message: "Trip cancelled before start. The passenger can request another driver." };
       } catch (error) {
         await client.query("ROLLBACK");
         throw error;
@@ -619,7 +798,7 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         await client.query("BEGIN");
         const result = await client.query(
           "UPDATE trips SET status = 'in_progress', started_at = now() " +
-          "WHERE id = $1 AND driver_user_id = $2 AND status = 'accepted' " +
+          "WHERE id = $1 AND driver_user_id = $2 AND status IN ('accepted', 'driver_arriving') " +
           "RETURNING id, pickup_label, destination_label, quoted_total, driver_earnings, started_at",
           [tripId, driver.id],
         );
@@ -712,6 +891,13 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
         await client.query(
           "INSERT INTO trip_events (trip_id, actor_user_id, event_type) VALUES ($1, $2, 'completed')",
           [tripId, driver.id],
+        );
+        await client.query(
+          "INSERT INTO financial_ledger(trip_id,account_type,direction,amount_minor,source_reference) " +
+          "SELECT id,'driver_earnings','credit',round(driver_earnings * 100)::bigint,'trip-earnings:' || id::text " +
+          "FROM trips WHERE id=$1 AND payment_status='paid' AND COALESCE(fare_snapshot->>'rewardRedemption','false') <> 'true' " +
+          "ON CONFLICT(account_type,source_reference) DO NOTHING",
+          [tripId],
         );
         const passenger = await client.query("SELECT passenger_user_id FROM trips WHERE id = $1", [tripId]);
         const passengerId = passenger.rows[0].passenger_user_id;

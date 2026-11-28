@@ -38,6 +38,23 @@ test("registration, login, session validation and logout work with PostgreSQL", 
     });
     assert.equal(loggedIn.user.id, registered.user.id);
     assert.equal(await auth.authenticate(loggedIn.accessToken) !== null, true);
+    const sessions = await auth.listSessions(registered.user.id, loggedIn.accessToken);
+    assert.equal(sessions.sessions.length, 2);
+    assert.equal(sessions.sessions.filter((session) => session.is_current).length, 1);
+    const oldSession = sessions.sessions.find((session) => !session.is_current);
+    assert.equal(await auth.revokeSession(registered.user.id, oldSession.id, loggedIn.accessToken), true);
+    assert.equal(await auth.authenticate(registered.accessToken), null);
+    assert.equal(await auth.revokeSession(registered.user.id, sessions.sessions.find((session) => session.is_current).id, loggedIn.accessToken), false);
+    const replacementSession = await auth.login({
+      identifier: "passenger@example.com",
+      password: "a-long-test-password-123",
+    });
+    const revokedOthers = await auth.revokeOtherSessions(registered.user.id, replacementSession.accessToken);
+    assert.equal(revokedOthers.revokedCount, 1);
+    assert.equal(await auth.authenticate(loggedIn.accessToken), null);
+    assert.equal(await auth.authenticate(replacementSession.accessToken) !== null, true);
+
+
 
     await assert.rejects(
       () => auth.login({ identifier: "passenger@example.com", password: "wrong-password" }),
@@ -75,7 +92,7 @@ test("registration, login, session validation and logout work with PostgreSQL", 
     const base = `http://127.0.0.1:${server.address().port}`;
     try {
       const me = await fetch(`${base}/v1/auth/me`, {
-        headers: { authorization: `Bearer ${loggedIn.accessToken}` },
+        headers: { authorization: `Bearer ${replacementSession.accessToken}` },
       });
       assert.equal(me.status, 200);
       assert.equal((await me.json()).user.id, registered.user.id);
@@ -90,6 +107,31 @@ test("registration, login, session validation and logout work with PostgreSQL", 
         }),
       });
       assert.equal(createdOverHttp.status, 201);
+      const secondLogin = await fetch(`${base}/v1/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ identifier: "passenger@example.com", password: "a-long-test-password-123" }),
+      });
+      assert.equal(secondLogin.status, 200);
+      const secondAccount = await secondLogin.json();
+      const sessionList = await fetch(`${base}/v1/auth/sessions`, {
+        headers: { authorization: `Bearer ${replacementSession.accessToken}` },
+      });
+      assert.equal(sessionList.status, 200);
+      const listedSessions = await sessionList.json();
+      assert.equal(listedSessions.sessions.length, 2);
+      const secondSessionRecord = listedSessions.sessions.find((session) => session.is_current === false);
+      assert.ok(secondSessionRecord);
+      const sessionDelete = await fetch(`${base}/v1/auth/sessions/${secondSessionRecord.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${replacementSession.accessToken}` },
+      });
+      assert.equal(sessionDelete.status, 200);
+      const secondSessionMe = await fetch(`${base}/v1/auth/me`, {
+        headers: { authorization: `Bearer ${secondAccount.accessToken}` },
+      });
+      assert.equal(secondSessionMe.status, 401);
+
 
       const logoutResponse = await fetch(`${base}/v1/auth/logout`, {
         method: "POST",

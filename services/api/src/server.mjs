@@ -1,5 +1,8 @@
 import { createAppServer, developmentFareConfig } from "./http.mjs";
 import { connectDatabase } from "./database.mjs";
+import { validateProductionEnvironment } from "./production-config.mjs";
+
+validateProductionEnvironment();
 
 const port = Number(process.env.PORT ?? 3000);
 const fareConfig = developmentFareConfig();

@@ -150,6 +150,48 @@ export function createAuthService(pool) {
       return publicUser(row);
     },
 
+    async listSessions(userId, currentAccessToken) {
+      if (typeof userId !== "string" || !userId) throw new AuthError("Invalid account", 400);
+      let currentHash;
+      try { currentHash = hashAccessToken(currentAccessToken); }
+      catch { throw new AuthError("Invalid session", 401); }
+      const result = await pool.query(
+        `SELECT id, created_at, last_used_at, expires_at, revoked_at,
+                (token_hash = $2) AS is_current
+         FROM auth_sessions
+         WHERE user_id = $1 AND expires_at > now() AND revoked_at IS NULL
+         ORDER BY created_at DESC LIMIT 100`,
+        [userId, currentHash],
+      );
+      return { sessions: result.rows };
+    },
+
+    async revokeSession(userId, sessionId, currentAccessToken) {
+      let currentHash;
+      try { currentHash = hashAccessToken(currentAccessToken); }
+      catch { throw new AuthError("Invalid session", 401); }
+      const result = await pool.query(
+        `UPDATE auth_sessions SET revoked_at = now()
+         WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL
+           AND token_hash <> $3 RETURNING id`,
+        [sessionId, userId, currentHash],
+      );
+      return result.rowCount > 0;
+    },
+
+    async revokeOtherSessions(userId, currentAccessToken) {
+      let currentHash;
+      try { currentHash = hashAccessToken(currentAccessToken); }
+      catch { throw new AuthError("Invalid session", 401); }
+      const result = await pool.query(
+        `UPDATE auth_sessions SET revoked_at = now()
+         WHERE user_id = $1 AND revoked_at IS NULL AND expires_at > now() AND token_hash <> $2
+         RETURNING id`,
+        [userId, currentHash],
+      );
+      return { revokedCount: result.rowCount };
+    },
+
     async logout(accessToken) {
       let tokenHash;
       try { tokenHash = hashAccessToken(accessToken); }

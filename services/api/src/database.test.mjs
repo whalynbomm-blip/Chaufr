@@ -22,6 +22,8 @@ test("PostgreSQL migrations create the Chaufr schema and run idempotently", {
     assert.deepEqual(second, first);
     assert.ok(first.includes("0001_initial_schema.sql"));
     assert.ok(first.includes("0003_auth_sessions.sql"));
+    assert.ok(first.includes("0026_manual_driver_approval.sql"));
+    assert.ok(first.includes("0027_driver_selfie_verification.sql"));
 
     const tables = await pool.query(
       "SELECT table_name FROM information_schema.tables WHERE table_schema = $1",

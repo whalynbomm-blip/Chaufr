@@ -33,8 +33,23 @@ object ChaufrApi {
     suspend fun deleteTrustedContact(baseUrl: String, token: String, id: String): JSONObject =
         requestJson(baseUrl, "DELETE", "/v1/driver/trusted-contacts/$id", token = token)
 
+    suspend fun requestTrustedContactVerification(baseUrl: String, token: String, id: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/verify", token = token)
+
+    suspend fun confirmTrustedContactVerification(baseUrl: String, token: String, id: String, code: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/safety/trusted-contacts/$id/confirm", JSONObject().put("code", code), token)
+
+    suspend fun driverEarnings(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/earnings", token = token)
+
     suspend fun currentDriverTrip(baseUrl: String, token: String): JSONObject =
         requestJson(baseUrl, "GET", "/v1/driver/trips/current", token = token)
+
+    suspend fun markArrivedAtPickup(baseUrl: String, token: String, tripId: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/arrive", token = token)
+
+    suspend fun cancelAcceptedTrip(baseUrl: String, token: String, tripId: String, reason: String = "driver_unavailable"): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/cancel", JSONObject().put("reason", reason), token)
 
     suspend fun startTrip(baseUrl: String, token: String, tripId: String): JSONObject =
         requestJson(baseUrl, "POST", "/v1/driver/trips/$tripId/start", token = token)
@@ -91,6 +106,20 @@ object ChaufrApi {
     }
 
 
+    suspend fun submitTripRating(baseUrl: String, token: String, tripId: String, score: Int, comment: String = ""): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/trips/$tripId/rating",
+            JSONObject().put("score", score).put("comment", comment), token)
+
+    suspend fun myRatings(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/me/ratings", token = token)
+
+    suspend fun createSupportTicket(baseUrl: String, token: String, subject: String, message: String, category: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/support/tickets",
+            JSONObject().put("subject", subject).put("message", message).put("category", category), token)
+
+    suspend fun mySupportTickets(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/support/tickets", token = token)
+
     suspend fun registerPushDevice(baseUrl: String, token: String, fcmToken: String, deviceLabel: String): JSONObject =
         requestJson(
             baseUrl, "POST", "/v1/push-devices",
@@ -126,6 +155,24 @@ object ChaufrApi {
     suspend fun logoutAccount(baseUrl: String, token: String) {
         requestJson(baseUrl, "POST", "/v1/auth/logout", token = token)
     }
+
+    suspend fun driverActivation(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/activation", token = token)
+
+    suspend fun createActivationCheckout(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/payments/checkout",
+            JSONObject().put("purpose", "driver_activation"), token)
+
+    suspend fun setPayoutAccount(baseUrl: String, token: String, accountNumber: String, accountHolderName: String, bankCode: String, bankName: String): JSONObject =
+        requestJson(baseUrl, "PUT", "/v1/driver/payout-account",
+            JSONObject().put("accountNumber", accountNumber).put("accountHolderName", accountHolderName).put("bankCode", bankCode).put("bankName", bankName), token)
+
+    suspend fun uploadVerificationDocument(baseUrl: String, token: String, documentType: String, fileName: String, mimeType: String, base64: String, expiryDate: String = ""): JSONObject =
+        requestJson(baseUrl, "POST", "/v1/driver/verification-documents",
+            JSONObject().put("documentType", documentType).put("fileName", fileName).put("mimeType", mimeType).put("base64", base64).put("expiryDate", expiryDate), token)
+
+    suspend fun verificationDocuments(baseUrl: String, token: String): JSONObject =
+        requestJson(baseUrl, "GET", "/v1/driver/verification-documents", token = token)
 
     private suspend fun requestJson(
         baseUrl: String, method: String, path: String,

@@ -80,6 +80,15 @@ test("driver activation gates access and accepted trips retain a locked fare", {
 
     await pool.query("UPDATE driver_profiles SET verification_status = 'verified' WHERE user_id = $1", [account.user.id]);
     await pool.query("UPDATE vehicles SET status = 'approved' WHERE id = $1", [submitted.vehicle.id]);
+    for (const documentType of ["vehicle_roadworthy", "vehicle_operating_licence"]) {
+      await pool.query(
+        "INSERT INTO driver_verification_documents " +
+        "(driver_user_id, document_type, file_name, mime_type, file_size, encrypted_content, encryption_iv, encryption_tag, status, expiry_date) " +
+        "VALUES ($1, $2, $3, 'application/pdf', 128, $4, $5, $6, 'approved', CURRENT_DATE + INTERVAL '1 year')",
+        [account.user.id, documentType, documentType + ".pdf", Buffer.from("encrypted-document"),
+          Buffer.alloc(12, 1), Buffer.alloc(16, 2)],
+      );
+    }
 
     await assert.rejects(
       () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
@@ -114,6 +123,21 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     const activationResponse = await fetch(base + "/v1/driver/activation", { headers: authHeader });
     assert.equal(activationResponse.status, 200);
     assert.equal((await activationResponse.json()).isPaid, true);
+
+    await pool.query(
+      "UPDATE driver_verification_documents SET expiry_date = CURRENT_DATE - INTERVAL '1 day' " +
+      "WHERE driver_user_id = $1 AND document_type = 'vehicle_operating_licence'",
+      [account.user.id],
+    );
+    await assert.rejects(
+      () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
+      (error) => error.status === 403 && /latest roadworthy and operating-licence/.test(error.message),
+    );
+    await pool.query(
+      "UPDATE driver_verification_documents SET expiry_date = CURRENT_DATE + INTERVAL '1 year' " +
+      "WHERE driver_user_id = $1 AND document_type = 'vehicle_operating_licence'",
+      [account.user.id],
+    );
 
     const online = await fetch(base + "/v1/driver/presence", {
       method: "PUT",

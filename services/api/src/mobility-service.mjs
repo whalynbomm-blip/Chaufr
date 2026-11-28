@@ -1,10 +1,16 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes } from "node:crypto";
 import { AuthError } from "./auth-service.mjs";
 import { offerTripToNextDriver } from "./dispatch-service.mjs";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TIERS = new Set(["saver", "standard", "priority"]);
 const hash = (value) => createHash("sha256").update(value).digest("hex");
+const trustedContactCodeHash=(contactId,code)=>{
+  const secret=process.env.SMS_VERIFICATION_SECRET;
+  if(!secret||secret.length<32) throw new AuthError("Trusted-contact verification secret is not configured",503);
+  return createHmac("sha256",secret).update(contactId+":"+code).digest("hex");
+};
+
 const member = (user) => {
   if (!user || !["passenger", "driver"].includes(user.role)) throw new AuthError("Passenger or driver account required", 403);
 };
@@ -48,10 +54,11 @@ function fareSnapshot(payload) {
     passengerTotal: fare.passengerTotal, driverEarnings: fare.breakdown.driverEarnings,
     platformCommission: fare.breakdown.platformCommission, breakdown: { ...fare.breakdown },
     rewardRedemption: payload.redeemReward, pickupLocation: payload.origin,
+    destinationLocation: payload.destination,
   };
 }
 
-export function createMobilityService(pool, routesService, pushService = null) {
+export function createMobilityService(pool, routesService, pushService = null, smsSender = null) {
   const notify = async (userId, title, body, data) => {
     if (pushService && userId) {
       try { await pushService.sendToUser(userId, { title, body, data }); } catch { /* notification failure must not block safety action */ }
@@ -138,6 +145,14 @@ export function createMobilityService(pool, routesService, pushService = null) {
     },
 
     async processDueScheduledRides(limit = 25) {
+      const recovered=await pool.query(
+        "UPDATE scheduled_rides SET status=CASE WHEN scheduled_for>now()+interval '15 minutes' THEN 'scheduled' ELSE 'failed' END,updated_at=now() " +
+        "WHERE status='dispatching' AND updated_at<now()-interval '10 minutes' " +
+        "RETURNING id,passenger_user_id,status",
+      );
+      for(const row of recovered.rows) if(row.status==="failed") {
+        await notify(row.passenger_user_id,"Your Chaufr scheduled ride needs attention","We could not safely recover this scheduled pickup. Please book another ride or contact support.",{type:"scheduled_ride_failed",scheduleId:row.id});
+      }
       await pool.query(
         "INSERT INTO scheduled_rides (passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward,recurring_rule_id) " +
         "SELECT r.passenger_user_id, ((d.day::date + r.local_time) AT TIME ZONE r.timezone), r.pickup_label,r.destination_label,r.origin,r.destination,r.route_quote_token,r.vehicle_category,r.service_tier,r.redeem_reward,r.id " +
@@ -145,6 +160,45 @@ export function createMobilityService(pool, routesService, pushService = null) {
         "WHERE r.status='active' AND EXTRACT(ISODOW FROM d.day)=ANY(r.weekdays) AND ((d.day::date + r.local_time) AT TIME ZONE r.timezone)>now()+interval '15 minutes' " +
         "ON CONFLICT (recurring_rule_id,scheduled_for) WHERE recurring_rule_id IS NOT NULL DO NOTHING"
       );
+      const reminders = await pool.query(
+        "WITH due_reminders AS (SELECT id FROM scheduled_rides WHERE status='scheduled' AND reminder_sent_at IS NULL " +
+        "AND scheduled_for > now() + interval '2 minutes' AND scheduled_for <= now() + interval '32 minutes' " +
+        "ORDER BY scheduled_for LIMIT $1 FOR UPDATE SKIP LOCKED) " +
+        "UPDATE scheduled_rides s SET reminder_sent_at=now(),updated_at=now() FROM due_reminders d WHERE s.id=d.id " +
+        "RETURNING s.id,s.passenger_user_id,s.scheduled_for,s.pickup_label,s.destination_label",
+        [limit],
+      );
+      for (const ride of reminders.rows) {
+        await notify(ride.passenger_user_id,"Your Chaufr pickup is coming up",
+          "Your scheduled pickup is approaching. Please be ready at " + ride.pickup_label + ".",
+          {type:"scheduled_ride_reminder",scheduleId:ride.id,scheduledFor:ride.scheduled_for});
+      }
+      // A scheduled ride can be committed successfully while the dispatch
+      // attempt is interrupted by a process restart or a temporary DB/provider
+      // failure. Retry those still-unassigned trips on subsequent worker ticks.
+      const retryable = await pool.query(
+        "SELECT s.id,s.passenger_user_id,s.trip_id,s.pickup_label,s.origin " +
+        "FROM scheduled_rides s JOIN trips t ON t.id=s.trip_id " +
+        "WHERE s.status='dispatched' AND t.status IN ('requested','offered') " +
+        "AND NOT EXISTS (SELECT 1 FROM trip_offers o WHERE o.trip_id=s.trip_id " +
+        "AND o.status='pending' AND o.expires_at>now()) " +
+        "ORDER BY s.scheduled_for LIMIT $1",
+        [limit],
+      );
+      const retriedDispatches = [];
+      for (const ride of retryable.rows) {
+        try {
+          const dispatch = await offerTripToNextDriver(pool,ride.trip_id,ride.origin,routesService);
+          if (dispatch.driverUserId) {
+            await notify(dispatch.driverUserId,"New Chaufr scheduled ride",ride.pickup_label,{type:"trip_offer",tripId:ride.trip_id});
+          }
+          retriedDispatches.push({scheduleId:ride.id,tripId:ride.trip_id,dispatchStatus:dispatch.status});
+        } catch (error) {
+          // Keep the scheduled ride and trip intact; the next worker tick retries.
+          retriedDispatches.push({scheduleId:ride.id,tripId:ride.trip_id,error:error.message});
+        }
+      }
+
       const due = await pool.query(
         "SELECT id,passenger_user_id,scheduled_for,pickup_label,destination_label,origin,destination,route_quote_token,vehicle_category,service_tier,redeem_reward " +
         "FROM scheduled_rides WHERE status='scheduled' AND scheduled_for <= now() + interval '2 minutes' ORDER BY scheduled_for LIMIT $1",
@@ -176,7 +230,7 @@ export function createMobilityService(pool, routesService, pushService = null) {
           dispatched.push({ scheduleId:row.id,error:error.message });
         } finally { client.release(); }
       }
-      return { processed:dispatched.length,dispatched };
+      return { processed:dispatched.length,remindersSent:reminders.rowCount,recoveredDispatches:recovered.rowCount??recovered.rows.length,retriedDispatches,dispatched };
     },
 
     async addTrustedContact(user,input={}) {
@@ -189,6 +243,35 @@ export function createMobilityService(pool, routesService, pushService = null) {
         "INSERT INTO trusted_contacts(user_id,contact_name,phone_e164,relationship) VALUES($1,$2,$3,$4) ON CONFLICT(user_id,phone_e164) DO UPDATE SET contact_name=EXCLUDED.contact_name,relationship=EXCLUDED.relationship RETURNING id,contact_name,phone_e164,relationship,verified_at,created_at",
         [user.id,name,phone,relationship]);
       return result.rows[0];
+    },
+
+    async requestTrustedContactVerification(user,contactId) {
+      member(user);
+      if (!UUID.test(String(contactId))) throw new AuthError("Contact ID is invalid");
+      if (!smsSender?.isConfigured?.()) throw new AuthError("SMS delivery is not configured. Contact Chaufr support.",503);
+      if (!process.env.SMS_VERIFICATION_SECRET || process.env.SMS_VERIFICATION_SECRET.length < 32) throw new AuthError("Trusted-contact verification secret is not configured",503);
+      const contact=await pool.query("SELECT id,phone_e164 FROM trusted_contacts WHERE id=$1 AND user_id=$2",[contactId,user.id]);
+      if (!contact.rowCount) throw new AuthError("Trusted contact not found",404);
+      const code=String(randomBytes(4).readUInt32BE(0)%1000000).padStart(6,"0");
+      await pool.query("UPDATE trusted_contacts SET verification_code_hash=$3,verification_expires_at=now()+interval '10 minutes',verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id,trustedContactCodeHash(contactId,code)]);
+      try { await smsSender.send(contact.rows[0].phone_e164,"Your Chaufr trusted-contact verification code is "+code+". It expires in 10 minutes. Do not share this code."); }
+      catch { await pool.query("UPDATE trusted_contacts SET verification_code_hash=NULL,verification_expires_at=NULL,verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("We could not deliver the verification SMS. Please try again later.",502); }
+      return {sent:true,expiresInSeconds:600};
+    },
+
+    async confirmTrustedContactVerification(user,contactId,input={}) {
+      member(user);
+      if (!UUID.test(String(contactId))) throw new AuthError("Contact ID is invalid");
+      const code=String(input.code??"").trim();
+      if (!/^\d{6}$/.test(code)) throw new AuthError("Enter the six-digit verification code");
+      const result=await pool.query("SELECT verification_code_hash,verification_expires_at,verification_attempts FROM trusted_contacts WHERE id=$1 AND user_id=$2",[contactId,user.id]);
+      if (!result.rowCount) throw new AuthError("Trusted contact not found",404);
+      const row=result.rows[0];
+      if (!row.verification_code_hash || !row.verification_expires_at || new Date(row.verification_expires_at).getTime()<=Date.now()) throw new AuthError("Verification code expired. Request a new code.",410);
+      if (Number(row.verification_attempts)>=5) throw new AuthError("Too many verification attempts. Request a new code.",429);
+      if (row.verification_code_hash!==trustedContactCodeHash(contactId,code)) { await pool.query("UPDATE trusted_contacts SET verification_attempts=verification_attempts+1 WHERE id=$1 AND user_id=$2",[contactId,user.id]); throw new AuthError("The verification code is incorrect"); }
+      await pool.query("UPDATE trusted_contacts SET verified_at=now(),verification_code_hash=NULL,verification_expires_at=NULL,verification_attempts=0 WHERE id=$1 AND user_id=$2",[contactId,user.id]);
+      return {verified:true,contactId};
     },
 
     async listTrustedContacts(user) {
@@ -212,16 +295,21 @@ export function createMobilityService(pool, routesService, pushService = null) {
       const row=trip.rows[0];
       if (!row) throw new AuthError("Trip not found",404);
       if (!["accepted","in_progress","driver_arriving"].includes(row.status)) throw new AuthError("SOS is available only for an active trip",409);
-      const contacts=await pool.query("SELECT contact_name,phone_e164 FROM trusted_contacts WHERE user_id=$1",[user.id]);
+      const contacts=await pool.query("SELECT contact_name,phone_e164 FROM trusted_contacts WHERE user_id=$1 AND verified_at IS NOT NULL",[user.id]);
       const event=await pool.query("INSERT INTO trip_safety_events(trip_id,actor_user_id,event_type,details) VALUES($1,$2,'sos',$3::jsonb) RETURNING id,created_at",
         [tripId,user.id,JSON.stringify({note:typeof input.note==="string"?input.note.slice(0,300):"",contactCount:contacts.rowCount})]);
       const otherId=user.id===row.passenger_user_id?row.driver_user_id:row.passenger_user_id;
       await notify(otherId,"Chaufr Safety SOS","The other trip participant has triggered an SOS. Follow your emergency procedures.",{type:"safety_sos",tripId});
+      let smsSent=0,smsFailed=0;
       for (const contact of contacts.rows) {
         const linked = await pool.query("SELECT id FROM users WHERE phone_e164=$1 AND status <> 'suspended' AND status <> 'closed' LIMIT 1",[contact.phone_e164]);
         if (linked.rowCount) await notify(linked.rows[0].id,"Chaufr emergency alert","A person who listed you as a trusted contact has triggered an SOS.",{type:"trusted_contact_sos",tripId});
+        if (smsSender) {
+          try { const delivery=await smsSender.send(contact.phone_e164,"CHAUFR EMERGENCY: A trusted contact has triggered an SOS during a Chaufr trip. Route: "+row.pickup_label+" to "+row.destination_label+". Please contact them and call emergency services if needed. Trip reference: "+tripId+"."); if(delivery?.sent)smsSent++;else smsFailed++; }
+          catch { smsFailed++; }
+        }
       }
-      return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,contacts:contacts.rows.map(c=>({name:c.contact_name,phoneE164:c.phone_e164})),message:"SOS recorded and the other trip participant was alerted where push delivery is available. Trusted-contact SMS/calling requires a configured messaging provider; if you are in immediate danger, call local emergency services."};
+      return {eventId:event.rows[0].id,createdAt:event.rows[0].created_at,contacts:contacts.rows.map(c=>({name:c.contact_name,phoneE164:c.phone_e164})),verifiedContacts:contacts.rows.length,smsSent,smsFailed,message:"SOS recorded. The other trip participant and verified trusted contacts are alerted through configured push/SMS channels. If you are in immediate danger, call local emergency services."};
     },
 
     async createTripShare(user,tripId) {

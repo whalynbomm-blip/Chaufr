@@ -75,9 +75,11 @@ test("owner reward payout review only allows requested-to-approved/rejected and 
     () => service.reviewRewardCommissionRequest(owner, "00000000-0000-4000-8000-000000000001", "rejected"),
     (error) => error.status === 409,
   );
-  const paid = await service.reviewRewardCommissionRequest(owner, "00000000-0000-4000-8000-000000000001", "paid");
-  assert.equal(paid.request.status, "paid");
-  assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 2);
+  await assert.rejects(
+    () => service.reviewRewardCommissionRequest(owner, "00000000-0000-4000-8000-000000000001", "paid"),
+    (error) => error.status === 400,
+  );
+  assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 1);
 });
 
 
@@ -142,4 +144,34 @@ test("owner safety report review enforces workflow and audits each transition", 
   const resolved = await service.reviewSafetyReport(owner, "00000000-0000-4000-8000-000000000001", "resolved");
   assert.equal(resolved.report.status, "resolved");
   assert.equal(calls.filter((call) => call.sql.includes("INSERT INTO audit_events")).length, 2);
+});
+
+
+test("owner processing payout reconciliation queue is private and converts cents to ZAR", async () => {
+  const pool = {
+    query: async (sql) => {
+      assert.match(sql, /FROM driver_payouts/);
+      assert.match(sql, /status = 'processing'/);
+      return { rows: [{
+        id: "payout-1",
+        driver_user_id: "driver-1",
+        driver_name: "Test Driver",
+        source_type: "driver_earnings",
+        amount_minor: "12550",
+        currency: "ZAR",
+        status: "processing",
+        provider_reference: "chaufr-payout-test",
+      }] };
+    },
+    connect: async () => { throw new Error("Payout reconciliation reads must not open transactions"); },
+  };
+  const service = createOwnerService(pool, developmentFareConfig());
+  await assert.rejects(
+    () => service.listProcessingPayouts({ id: "driver-1", role: "driver" }),
+    (error) => error.status === 403,
+  );
+  const result = await service.listProcessingPayouts({ id: "owner-1", role: "owner" });
+  assert.equal(result.payouts.length, 1);
+  assert.equal(result.payouts[0].amount, 125.5);
+  assert.equal(result.payouts[0].status, "processing");
 });

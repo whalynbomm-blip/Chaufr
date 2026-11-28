@@ -39,7 +39,7 @@ Configure two separate Google credentials in the API deployment environment:
 
 Do not put either server value in the Android app or commit them to Git. The Android Places/Maps key is separate and must be restricted to the Android package and signing certificate.
 
-The route preview endpoint is limited to 30 requests per source IP per minute. Production deployments should also use a shared rate limiter and provider quota/budget alerts.
+The route preview endpoint is limited to 30 requests per source IP per minute. Authentication registration/login endpoints are limited to 10 attempts per source IP and route per 15-minute window. The process-local rate-limit maps are now bounded and refuse new keys when saturated, preventing unbounded memory growth. These limits reset per API process and are not shared across replicas; production deployments still require a shared rate limiter and provider quota/budget alerts.
 
 ### Fare estimate
 ```sh
@@ -59,9 +59,12 @@ When PostgreSQL is configured, the API exposes:
 - `POST /v1/auth/register` — creates a passenger or driver account and returns a bearer token.
 - `POST /v1/auth/login` — accepts an email address or E.164 phone number and password.
 - `GET /v1/auth/me` — returns the authenticated account; requires `Authorization: Bearer <token>`.
+- `GET /v1/auth/sessions` — lists the account's unexpired sessions and marks the current session.
+- `DELETE /v1/auth/sessions/:sessionId` — revokes another session belonging to the authenticated account; the current session cannot be revoked through this route.
+- `DELETE /v1/auth/sessions` — revokes all other active sessions while keeping the current session signed in.
 - `POST /v1/auth/logout` — revokes the supplied bearer session.
 
-Passwords must be 12–128 characters. Registration requires a display name and either an email address or international-format phone number. Public registration is restricted to passenger and driver roles; owner and operations accounts cannot be self-created. Driver accounts receive a pending driver profile. Access tokens are random opaque values; only their SHA-256 hashes are stored. Sessions expire after 30 days and can be revoked. Registration and login have a basic per-process IP rate limit.
+Passwords must be 12–128 characters. Registration requires a display name and either an email address or international-format phone number. Public registration is restricted to passenger and driver roles; owner and operations accounts cannot be self-created. Driver accounts receive a pending driver profile. Access tokens are random opaque values; only their SHA-256 hashes are stored. Sessions expire after 30 days and can be inspected and revoked by the account owner. Registration and login have a basic per-process IP rate limit.
 
 These endpoints provide the account foundation used by the passenger and driver Android account cards. Production identity hardening still requires email/phone ownership verification, password reset/recovery, stronger distributed rate limiting and secure owner account provisioning. The mobile apps require the production API URL before account and trip features can operate.
 
@@ -69,7 +72,7 @@ These endpoints provide the account foundation used by the passenger and driver 
 
 Authenticated driver accounts can submit a vehicle and licence number through `POST /v1/driver/vehicles`. Vehicle registration and licence identifiers are encrypted with AES-256-GCM before they are stored. This endpoint requires `VEHICLE_DATA_ENCRYPTION_KEY`, a private base64-encoded 32-byte key; generate one with `openssl rand -base64 32` and provide it through the deployment secret manager. Never commit the production key.
 
-Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner-only driver verification and vehicle approval are available in the private owner console. Document image uploads and automated licence/vehicle verification remain outstanding. The driver Android app includes the vehicle and licence submission form and connects its online/offline control to the API when a server URL is configured.
+Drivers can view their non-sensitive profile through `GET /v1/driver/profile` and update availability through `PUT /v1/driver/presence`. Going online is blocked until the driver profile is verified and at least one vehicle is approved. Owner-only driver verification and vehicle approval are available in the private owner console. Encrypted identity, driver-licence, vehicle and bank-confirmation document uploads are implemented with manual owner review. This is not automated Home Affairs or licence-authority verification; document authenticity checks and external verification integrations remain outstanding. The driver Android app includes vehicle/licence submission, document upload and payout-bank onboarding screens.
 
 ## Fare schedule and trip acceptance
 
@@ -77,11 +80,13 @@ The central fare engine supports the owner's initial duration bands, traffic adj
 
 Authenticated passengers can create a trip request with `POST /v1/trips`. The server calculates and stores the fare snapshot and a five-minute request expiry. Authenticated drivers can query `GET /v1/driver/trips/available` and accept through `POST /v1/driver/trips/:tripId/accept`. Acceptance is transactional, records the assigned driver/vehicle and locks the stored fare. Later fare-rule changes do not recalculate an accepted trip.
 
+Drivers can view completed-trip totals and recent history through authenticated `GET /v1/driver/earnings`. It returns today's and lifetime trip counts/earnings plus the latest 20 completed trips. Earnings shown in the test build are indicative until the payment gateway and settlement workflows are enabled.
+
 ## Daily driver activation
 
 A driver must have a successful R30 ZAR activation payment recorded for the current South African operating date before going online or accessing trip requests. The activation is unique per driver and date, and a paid activation is marked non-refundable. Driver-facing responses expose only that driver's activation status and trip earnings, not company revenue totals.
 
-`GET /v1/driver/activation` returns the driver's activation status. The internal `recordVerifiedActivationPayment` service method is designed to be called only after a payment provider verifies the transaction. There is intentionally no client-controlled payment confirmation endpoint. A real payment provider/webhook still needs to be connected before drivers can make payments in production.
+`GET /v1/driver/activation` returns the driver's activation status. The internal `POST /v1/payments/checkout` creates a hosted Paystack checkout for the daily fee when the payment adapter is configured. The driver is activated only after the signed Paystack webhook and server-side transaction verification succeed. No client-controlled payment confirmation endpoint exists. Android payment UI is disabled by default (`chaufrPaymentsEnabled=false`) and is reserved for the final gateway stage. For local end-to-end testing only, set `NODE_ENV=development` and `CHAUFR_TEST_BYPASS_ACTIVATION=true`; this bypass is rejected outside development and must never be enabled in production.
 
 ## Current limitations
 
@@ -89,15 +94,16 @@ A driver must have a successful R30 ZAR activation payment recorded for the curr
 - Google Routes traffic-aware ETA and distance estimation is integrated server-side, but production use requires `GOOGLE_MAPS_SERVER_API_KEY` and `FARE_QUOTE_SIGNING_SECRET`.
 - Driver dispatch offers eligible drivers sequentially with an offer timeout and redispatch after decline/expiry. Driver location is updated by an Android foreground location service; passenger trip status polls for fresh driver coordinates. Real-device testing is still required.
 - FCM device registration and notification delivery are implemented, but require matching Firebase Android configuration values in CI and `FIREBASE_SERVICE_ACCOUNT_JSON` on the API host.
-- Daily R30 activation is enforced server-side, but payment-provider checkout/webhooks are not connected; do not treat the internal verified-payment method as a public payment route.
+- Paystack South Africa hosted checkout, signed webhooks, refunds and transfers are implemented in the adapter but intentionally disabled in the Android build by default. Do not configure `PAYSTACK_SECRET_KEY`, `PAYSTACK_WEBHOOK_SECRET` or payout encryption keys until the final payment gateway stage. Set the Android Gradle property `chaufrPaymentsEnabled=true` only after the core product passes acceptance testing.
 - Safety Shield trip-linked reporting/blocking, SOS event recording, trusted-contact storage, 12-hour live trip-sharing links and GPS-based route-deviation/unusual-stop alerts are implemented. FCM alerts reach the other participant and trusted contacts who have Chaufr accounts. SMS/voice delivery, contact ownership verification, emergency-service integration and field validation remain outstanding; SOS is not an emergency response service.
 - Scheduled one-off rides and weekday recurring commute rules are stored and materialized into dispatchable ride requests by the API's minute worker. Recurring bookings are generated on a rolling 30-day horizon, in Africa/Johannesburg time, with a maximum 180-day rule duration. Reward-ticket redemption is intentionally disabled for future bookings until ticket reservation/refund handling is added.
 - Saver, Standard and Priority choices are available in passenger booking. They change FairMatch weights only; they do not alter approved fare bands, platform commission or driver earnings.
-- Document image uploads, automated identity/vehicle verification, passenger/driver ratings, customer support workflows, refunds and financial reconciliation remain outstanding.
+- Passenger cancellation and support workflows are implemented. Encrypted driver identity-document uploads and manual owner review are implemented. Payment refunds, bank transfers, transfer OTP/approval handling and payout reconciliation remain deferred until the final gateway stage. POPIA review and document-retention controls are required before real identity documents are collected.
+- Driver identity verification supports encrypted ID/passport and driver-licence document uploads with owner review. Automated document authenticity checks, passenger/driver ratings and customer support workflows remain outstanding. POPIA/legal review and retention controls are required before collecting real identity documents.
 - Android debug builds need the deployed `chaufrApiBaseUrl`; passenger map selection also needs an Android-restricted `chaufrGoogleMapsApiKey`.
 - Values in `.env.example` are development placeholders, not approved commercial fares.
 
-See `../../docs/deployment.md` before deploying.
+See `../../docs/deployment.md` and `../../docs/payments-identity.md` before deploying.
 
 
 ## Scheduled rides and recurring commutes
@@ -109,7 +115,7 @@ Authenticated passengers can use:
 - `GET /v1/passenger/scheduled-rides` — list one-off bookings and recurring rules.
 - `DELETE /v1/passenger/scheduled-rides/:id` and `DELETE /v1/passenger/recurring-rides/:id` — cancel future bookings/rules.
 
-The API host materializes recurring occurrences over a rolling 30-day horizon and checks due bookings every minute. At pickup time it creates a normal trip and invokes the existing FairMatch dispatch flow. A scheduled trip still depends on an eligible, online, activated driver being available. Recurring fares use the verified route/fare snapshot captured when the rule is created. Reward-ticket redemption is not enabled for scheduled or recurring rides until reservation, cancellation and refund semantics are implemented.
+The API host materializes recurring occurrences over a rolling 30-day horizon and checks due bookings every minute. Passengers receive a one-time push reminder around 30 minutes before pickup when FCM is configured. At pickup time the worker creates a normal trip and invokes the existing FairMatch dispatch flow; drivers see the scheduled pickup time on the offer and current-trip cards. A scheduled trip still depends on an eligible, online, activated driver being available. Recurring fares use the verified route/fare snapshot captured when the rule is created. Reward-ticket redemption is not enabled for scheduled or recurring rides until reservation, cancellation and refund semantics are implemented.
 
 Saver, Standard and Priority are matching preferences, not different fare products: Saver gives more weight to driver net and pickup burden, Standard uses normal FairMatch weights, and Priority gives more weight to passenger wait time. All three preserve the current fare schedule and commission rules.
 
@@ -120,16 +126,18 @@ Saver, Standard and Priority are matching preferences, not different fare produc
 - `POST /v1/safety/trips/:tripId/share` — creates a random, hashed, 12-hour sharing token. The public `GET /v1/shared-trips/:token` endpoint returns a limited trip status and recent driver location.
 - Driver GPS updates during an active trip are checked against the saved route. More than 800 metres from the route can trigger a route-deviation alert. Three or more recent samples showing less than 40 metres of movement across at least three minutes can trigger an unusual-stop alert, with a ten-minute alert cooldown.
 
-SMS/voice messages to contacts, contact ownership verification, an emergency dispatch centre, and real-world accuracy/safety validation are not connected. Users in immediate danger must contact local emergency services. Location alerts are heuristic and may produce false positives or miss events; they must not be relied on as the sole safety measure.
+SMS/voice messages to contacts, contact ownership verification, an emergency dispatch centre, and real-world accuracy/safety validation are not connected. Trusted contacts without Chaufr accounts do not receive FCM notifications. Users in immediate danger must contact local emergency services. Location alerts are heuristic and may produce false positives or miss events; they must not be relied on as the sole safety measure.
 
 ## Owner operations and reward-ride payouts
 
-The private owner console at `/owner` provides platform overview metrics, central fare controls, driver verification and vehicle approval actions. Owner-only payout endpoints list completed free-reward-ride commission requests and support the audited status sequence `requested → approved → paid` or `requested → rejected`. Mark a request as paid only after the platform has independently confirmed the real payment; this review ledger does not transfer money.
+The private owner console at `/owner` provides platform overview metrics, central fare controls, driver verification and vehicle approval actions. Reward commission requests can be approved/rejected in the existing review workflow. The new Paystack service initiates bank transfers for approved reward payouts and standard completed paid trips; only a signed `transfer.success` webhook marks the transfer as paid.
 
 - `GET /v1/owner/reward-commission-requests` — list payout requests for owner review.
-- `PATCH /v1/owner/reward-commission-requests/:requestId` with `{"status":"approved"}`, `{"status":"rejected"}`, or `{"status":"paid"}` — apply a permitted status transition. Every decision is recorded in `audit_events`.
+- `PATCH /v1/owner/reward-commission-requests/:requestId` with `{"status":"approved"}` or `{"status":"rejected"}` — review the request. Direct manual `paid` status changes are blocked.
+- `POST /v1/owner/reward-commission-requests/:requestId/pay` — initiate the approved 50% reward-ride bank transfer.
+- `POST /v1/owner/driver-earnings/:tripId/pay` — initiate payout of standard completed paid-trip earnings.
 
-The 50% reward-ride payout remains a platform liability until a real payment rail and reconciliation process are connected. This owner workflow records review and settlement status only.
+The 50% reward-ride payout remains a platform liability until Paystack confirms the transfer. Provider settlement reconciliation and transfer OTP/approval handling remain launch tasks.
 
 ## Firebase push notifications
 
@@ -153,9 +161,9 @@ Android 13 and later require notification permission. The passenger app requests
 
 Migration `0012_payment_ledger.sql` adds provider-neutral ZAR payment intents, provider-event idempotency and an append-only financial ledger. Amounts are stored in integer cents. The service supports two inbound purposes: passenger trip payments and the daily driver activation fee. A verified activation payment is linked to the owning driver and marks that day's activation as paid; a verified passenger payment marks the matching passenger trip as paid.
 
-`src/payment-service.mjs` exposes internal `createIntent` and `recordVerifiedInboundPayment` methods. The latter must only be called after a future provider-specific webhook adapter has verified the provider signature, merchant account and event authenticity. Duplicate provider event IDs are ignored, and amount/currency mismatches are rejected. No public payment-confirmation route is exposed, and no card data is stored.
+`src/payment-service.mjs` preserves the provider-neutral ledger primitives. `src/financial-identity-service.mjs` adds the Paystack adapter: server-side hosted checkout initialization, raw-body signature verification (timestamped webhook signing secret and legacy signature), transaction verification, idempotent event handling, refunds and bank transfers. No public payment-confirmation route is exposed, and no card data is stored.
 
-This is a ledger and settlement foundation, not a live checkout integration. Payment-provider selection, hosted checkout creation, signed webhook verification, failed-payment handling, refunds, payout transfers and reconciliation reports remain to be connected. Do not mark reward-ride commission requests as paid until an actual transfer is confirmed.
+The Paystack adapter is implemented but remains inactive until merchant credentials, webhook signing secret, payout capability and production hosting are configured. Do not mark reward-ride commission requests as paid until the signed transfer-success webhook is received.
 
 
 ## Safety Shield
@@ -167,4 +175,4 @@ Authenticated passengers and drivers can report or block the other participant o
 - `GET /v1/owner/safety-reports` — owner-only moderation queue.
 - `PATCH /v1/owner/safety-reports/:reportId` — owner-only status transition.
 
-The current report/block controls are not an emergency response service. SOS calling, trusted contacts, live trip sharing and route-deviation alerts are not yet complete; do not market these as available.
+Report/block controls and SOS event recording are available in the app. SOS sends FCM alerts to the other trip participant and trusted contacts who have Chaufr accounts; it does not call emergency services. Trusted-contact management, expiring live-trip sharing and GPS-based route-deviation/unusual-stop alerts are implemented, but need production FCM configuration and real-world field validation. Do not market Chaufr SOS as an emergency response service.
