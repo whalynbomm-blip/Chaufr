@@ -352,3 +352,35 @@ test("successful trip acceptance uses the passenger ID from the locked trip row"
     else process.env.CHAUFR_TEST_BYPASS_ACTIVATION = previousBypass;
   }
 });
+
+test("passenger cancellation withdraws pending driver offers and notifies offered drivers", async () => {
+  const calls = [];
+  const notifications = [];
+  const tripId = "123e4567-e89b-12d3-a456-426614174000";
+  const client = {
+    async query(sql, params = []) {
+      const query = String(sql);
+      calls.push({ query, params });
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(query)) return { rowCount: 0, rows: [] };
+      if (query.includes("SELECT id, status FROM trips")) {
+        return { rowCount: 1, rows: [{ id: tripId, status: "requested" }] };
+      }
+      if (query.includes("SELECT DISTINCT driver_user_id FROM trip_offers")) {
+        return { rowCount: 2, rows: [{ driver_user_id: "driver-1" }, { driver_user_id: "driver-2" }] };
+      }
+      if (query.includes("UPDATE passenger_reward_redemptions")) return { rowCount: 0, rows: [] };
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  const pool = { connect: async () => client, query: async () => ({ rowCount: 0, rows: [] }) };
+  const service = createTripService(pool, { dailyActivationFee: 30 }, null, {
+    async sendToUser(userId, payload) { notifications.push({ userId, payload }); },
+  });
+  const result = await service.cancelPassengerTrip({ id: "passenger-1", role: "passenger" }, tripId);
+  assert.equal(result.status, "cancelled");
+  const withdrawal = calls.find((call) => call.query.includes("UPDATE trip_offers SET status = 'withdrawn'"));
+  assert.ok(withdrawal, "pending offers must be withdrawn in the cancellation transaction");
+  assert.deepEqual(withdrawal.params, [tripId]);
+  assert.deepEqual(notifications.map((item) => item.userId), ["driver-1", "driver-2"]);
+});
