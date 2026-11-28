@@ -125,6 +125,21 @@ test("driver activation gates access and accepted trips retain a locked fare", {
     assert.equal(activationResponse.status, 200);
     assert.equal((await activationResponse.json()).isPaid, true);
 
+    await pool.query(
+      "UPDATE driver_verification_documents SET expiry_date = CURRENT_DATE - INTERVAL '1 day' " +
+      "WHERE driver_user_id = $1 AND document_type = 'vehicle_operating_licence'",
+      [account.user.id],
+    );
+    await assert.rejects(
+      () => drivers.setPresence(account.user, { isOnline: true, latitude: -33.9, longitude: 18.4 }),
+      (error) => error.status === 403 && /latest roadworthy and operating-licence/.test(error.message),
+    );
+    await pool.query(
+      "UPDATE driver_verification_documents SET expiry_date = CURRENT_DATE + INTERVAL '1 year' " +
+      "WHERE driver_user_id = $1 AND document_type = 'vehicle_operating_licence'",
+      [account.user.id],
+    );
+
     const online = await fetch(base + "/v1/driver/presence", {
       method: "PUT",
       headers: { ...authHeader, "content-type": "application/json" },
