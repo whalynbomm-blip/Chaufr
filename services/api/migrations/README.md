@@ -23,6 +23,7 @@ The API applies pending SQL migrations in filename order at startup when `DATABA
 - `0026` — manual driver approval and document expiry dates.
 - `0027` — driver selfie evidence type for owner-side face comparison.
 - `0028` — database-enforced limit of one active trip per driver.
+- `0029` — idempotently confirms the vehicle-document expiry-date column used by compliance checks.
 
 ### Migration 0028 deployment check
 
