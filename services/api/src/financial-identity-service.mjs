@@ -254,19 +254,26 @@ export function createPaystackService(pool, { secretKey = process.env.PAYSTACK_S
     },
     async requestRefund(owner, refundId) {
       if (owner?.role !== "owner") throw new AuthError("Owner access required", 403);
-      const row = await pool.query(
-        "SELECT r.*,p.provider_reference FROM payment_refunds r JOIN payment_intents p ON p.id=r.payment_intent_id WHERE r.id=$1 AND r.status='requested'",
-        [refundId],
-      );
-      if (!row.rowCount) throw new AuthError("Refund request not found or already processed", 404);
-      const refund = row.rows[0];
       const reference = "chfr_" + randomBytes(16).toString("hex");
+      // Claim the request before contacting Paystack. If the network times out after
+      // Paystack accepts the refund, the row stays processing and cannot be submitted twice.
+      const claimed = await pool.query(
+        "UPDATE payment_refunds SET status='processing',provider_reference=$2,reviewed_by=$3,updated_at=now() " +
+        "WHERE id=$1 AND status='requested' RETURNING id,trip_id,amount_minor,reason,payment_intent_id",
+        [refundId, reference, owner.id],
+      );
+      if (!claimed.rowCount) throw new AuthError("Refund request not found or already processed", 404);
+      const refund = claimed.rows[0];
+      const payment = await pool.query("SELECT provider_reference FROM payment_intents WHERE id=$1", [refund.payment_intent_id]);
+      if (!payment.rowCount || !payment.rows[0].provider_reference) {
+        throw new AuthError("Original payment reference is unavailable; refund remains in reconciliation", 409);
+      }
       const result = await call("/refund", "POST", {
-        transaction: refund.provider_reference, amount: Number(refund.amount_minor),
+        transaction: payment.rows[0].provider_reference, amount: Number(refund.amount_minor),
         currency: "ZAR", customer_note: refund.reason, merchant_note: "Chaufr trip refund " + refund.trip_id, reference,
       });
-      await pool.query("UPDATE payment_refunds SET status='processing',provider_reference=$2,provider_refund_id=$3,reviewed_by=$4,updated_at=now() WHERE id=$1",
-        [refundId, reference, String(result.id ?? ""), owner.id]);
+      await pool.query("UPDATE payment_refunds SET provider_refund_id=$2,updated_at=now() WHERE id=$1 AND provider_reference=$3",
+        [refundId, String(result.id ?? ""), reference]);
       await pool.query("INSERT INTO audit_events(actor_user_id,action,resource_type,resource_id,details) VALUES($1,'refund.initiated','payment_refund',$2,$3::jsonb)",
         [owner.id, refundId, JSON.stringify({ amountMinor: Number(refund.amount_minor), provider: "paystack" })]);
       return { refundId, status: "processing", providerReference: reference };
