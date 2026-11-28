@@ -392,7 +392,7 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
       const allowed = new Set(["drivers_licence","driver_selfie","south_african_id","passport","proof_of_address","saps_criminal_record","pending_investigation_declaration","vehicle_registration","vehicle_roadworthy","vehicle_operating_licence","bank_confirmation"]);
       const expiryRequired = new Set(["vehicle_roadworthy","vehicle_operating_licence"]);
       const expiryDate = input.expiryDate == null || input.expiryDate === "" ? null : String(input.expiryDate);
-      const parsedExpiryDate = expiryDate && /^\\d{4}-\\d{2}-\\d{2}$/.test(expiryDate) ? new Date(expiryDate + "T00:00:00.000Z") : null;
+      const parsedExpiryDate = expiryDate && /^\d{4}-\d{2}-\d{2}$/.test(expiryDate) ? new Date(expiryDate + "T00:00:00.000Z") : null;
       const validExpiryDate = parsedExpiryDate && !Number.isNaN(parsedExpiryDate.getTime()) && parsedExpiryDate.toISOString().slice(0, 10) === expiryDate;
       if (expiryRequired.has(input.documentType) && !validExpiryDate) {
         throw new AuthError("Enter the expiry date for this document");
