@@ -422,6 +422,14 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         await pool.query("UPDATE driver_profiles SET verification_status='in_review' WHERE user_id=$1 AND verification_status<>'suspended'", [driver.id]);
         await pool.query("UPDATE driver_presence SET is_online=false,updated_at=now() WHERE driver_user_id=$1", [driver.id]);
       }
+      if (input.documentType === "bank_confirmation") {
+        // A newly uploaded bank proof invalidates the previous confirmation until
+        // the newest document has been reviewed.
+        await pool.query(
+          "UPDATE driver_payout_accounts SET status='pending',verified_at=NULL,updated_at=now() WHERE driver_user_id=$1",
+          [driver.id],
+        );
+      }
       return { document: result.rows[0] };
     },
     async listForDriver(driver) {
@@ -476,10 +484,16 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
         );
         const doc = { rows: selected.rows };
         if (doc.rows[0].document_type === "bank_confirmation") {
-          await client.query(
-            "UPDATE driver_payout_accounts SET status=$1,verified_at=CASE WHEN $1='verified' THEN now() ELSE NULL END,updated_at=now() WHERE driver_user_id=$2",
-            [status === "approved" ? "verified" : status === "rejected" ? "rejected" : "pending", driverId],
+          const latestBankProof = await client.query(
+            "SELECT id,status FROM driver_verification_documents WHERE driver_user_id=$1 AND document_type='bank_confirmation' ORDER BY created_at DESC,id DESC LIMIT 1",
+            [driverId],
           );
+          if (latestBankProof.rows[0]?.id === documentId) {
+            await client.query(
+              "UPDATE driver_payout_accounts SET status=$1,verified_at=CASE WHEN $1='verified' THEN now() ELSE NULL END,updated_at=now() WHERE driver_user_id=$2",
+              [status === "approved" ? "verified" : status === "rejected" ? "rejected" : "pending", driverId],
+            );
+          }
         }
         const required = await client.query(
           "SELECT " +
