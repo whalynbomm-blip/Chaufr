@@ -124,3 +124,45 @@ test("ambiguous Paystack transfer errors keep driver payout processing to preven
   assert.ok(payoutUpdate, "ambiguous transfer must remain processing");
   assert.equal(calls.some((call) => call.query.includes("SET status=$2") && call.params[1] === "failed"), false);
 });
+
+test("ambiguous Paystack refund submission is claimed once and cannot be retried", async () => {
+  const calls = [];
+  let claimed = false;
+  const pool = {
+    async query(sql, params = []) {
+      const query = String(sql);
+      calls.push({ query, params });
+      if (query.includes("UPDATE payment_refunds SET status='processing'")) {
+        if (claimed) return { rowCount: 0, rows: [] };
+        claimed = true;
+        return { rowCount: 1, rows: [{
+          id: "77777777-7777-4777-8777-777777777777",
+          trip_id: "88888888-8888-4888-8888-888888888888",
+          amount_minor: 5000,
+          reason: "Passenger cancellation",
+          payment_intent_id: "99999999-9999-4999-8999-999999999999",
+        }] };
+      }
+      if (query.includes("SELECT provider_reference FROM payment_intents")) {
+        return { rowCount: 1, rows: [{ provider_reference: "chf_original_payment" }] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+  };
+  const service = createPaystackService(pool, {
+    secretKey: "test_secret",
+    fetchImpl: async () => { throw new Error("network timeout after refund submission"); },
+  });
+  const owner = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", role: "owner" };
+  await assert.rejects(
+    service.requestRefund(owner, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+    /network timeout/,
+  );
+  assert.equal(claimed, true);
+  assert.equal(calls.some((call) => call.query.includes("UPDATE payment_refunds SET status='processing'")), true);
+  await assert.rejects(
+    service.requestRefund(owner, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+    (error) => error.status === 404,
+  );
+  assert.equal(calls.filter((call) => call.query.includes("UPDATE payment_refunds SET status='processing'")).length, 2);
+});
