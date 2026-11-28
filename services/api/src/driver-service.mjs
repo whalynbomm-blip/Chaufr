@@ -213,7 +213,7 @@ export function createDriverService(pool, encryptionKey = process.env.VEHICLE_DA
           "AND d.id=(SELECT latest.id FROM driver_verification_documents latest " +
           "WHERE latest.driver_user_id=$1 AND latest.document_type=required.document_type " +
           "ORDER BY latest.created_at DESC LIMIT 1) " +
-          "AND d.status='approved') LIMIT 1",
+          "AND d.status='approved' AND d.expiry_date IS NOT NULL AND d.expiry_date >= (now() AT TIME ZONE 'Africa/Johannesburg')::date) LIMIT 1",
           [user.id],
         );
         if (missingVehicleDocuments.rowCount > 0) {
