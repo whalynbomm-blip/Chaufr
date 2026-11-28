@@ -193,9 +193,12 @@ test("vehicle compliance upload accepts a real calendar expiry date and persists
   let insertedParams;
   const pool = {
     async query(sql, params) {
-      assert.match(String(sql), /expiry_date/);
-      insertedParams = params;
-      return { rowCount: 1, rows: [{ id: "document-expiry-test", expiry_date: params[8] }] };
+      if (String(sql).includes("INSERT INTO driver_verification_documents")) {
+        assert.match(String(sql), /expiry_date/);
+        insertedParams = params;
+        return { rowCount: 1, rows: [{ id: "document-expiry-test", expiry_date: params[8] }] };
+      }
+      return { rowCount: 1, rows: [] };
     },
   };
   const service = createDriverVerificationService(pool, {
