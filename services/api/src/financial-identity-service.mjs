@@ -456,9 +456,25 @@ export function createDriverVerificationService(pool, { encryptionKey = process.
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
-        const doc = await client.query("UPDATE driver_verification_documents SET status=$1,reviewer_user_id=$2,review_note=$3,reviewed_at=now() WHERE id=$4 RETURNING driver_user_id,document_type", [status,owner.id,note,documentId]);
-        if (!doc.rowCount) throw new AuthError("Document not found",404);
-        const driverId = doc.rows[0].driver_user_id;
+        const selected = await client.query(
+          "SELECT driver_user_id,document_type FROM driver_verification_documents WHERE id=$1 FOR UPDATE",
+          [documentId],
+        );
+        if (!selected.rowCount) throw new AuthError("Document not found",404);
+        const driverId = selected.rows[0].driver_user_id;
+        // Serialize document reviews against uploads: uploads move this same profile
+        // to in_review after inserting, so a concurrent upload cannot be overwritten
+        // by a stale approval decision.
+        const profile = await client.query(
+          "SELECT user_id FROM driver_profiles WHERE user_id=$1 FOR UPDATE",
+          [driverId],
+        );
+        if (!profile.rowCount) throw new AuthError("Driver profile not found",404);
+        await client.query(
+          "UPDATE driver_verification_documents SET status=$1,reviewer_user_id=$2,review_note=$3,reviewed_at=now() WHERE id=$4",
+          [status,owner.id,note,documentId],
+        );
+        const doc = { rows: selected.rows };
         if (doc.rows[0].document_type === "bank_confirmation") {
           await client.query(
             "UPDATE driver_payout_accounts SET status=$1,verified_at=CASE WHEN $1='verified' THEN now() ELSE NULL END,updated_at=now() WHERE driver_user_id=$2",
