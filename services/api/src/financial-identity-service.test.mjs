@@ -215,3 +215,39 @@ test("vehicle compliance upload accepts a real calendar expiry date and persists
   assert.equal(insertedParams[8], "2027-06-30");
   assert.equal(result.document.expiry_date, "2027-06-30");
 });
+
+
+test("owner document review locks the driver profile before applying approval", async () => {
+  const calls = [];
+  const client = {
+    async query(sql, params = []) {
+      const query = String(sql);
+      calls.push({ query, params });
+      if (query.includes("SELECT driver_user_id,document_type")) {
+        return { rowCount: 1, rows: [{ driver_user_id: "driver-1", document_type: "drivers_licence" }] };
+      }
+      if (query.includes("SELECT user_id FROM driver_profiles")) {
+        return { rowCount: 1, rows: [{ user_id: "driver-1" }] };
+      }
+      if (query.includes("SELECT (SELECT status FROM driver_verification_documents")) {
+        return { rowCount: 1, rows: [{ licence_status: "approved", selfie_status: "approved" }] };
+      }
+      return { rowCount: 1, rows: [] };
+    },
+    release() {},
+  };
+  const service = createDriverVerificationService({
+    query: async () => ({ rowCount: 1, rows: [] }),
+    connect: async () => client,
+  }, { encryptionKey: Buffer.alloc(32, 1).toString("base64") });
+
+  const result = await service.review({ id: "owner-1", role: "owner" }, "document-1", "approved");
+  assert.equal(result.status, "approved");
+  const profileLock = calls.findIndex((call) => call.query.includes("SELECT user_id FROM driver_profiles"));
+  const documentUpdate = calls.findIndex((call) => call.query.includes("UPDATE driver_verification_documents SET status"));
+  const latestEvidence = calls.findIndex((call) => call.query.includes("SELECT (SELECT status FROM driver_verification_documents"));
+  assert.ok(profileLock > 0);
+  assert.ok(documentUpdate > profileLock);
+  assert.ok(latestEvidence > documentUpdate);
+  assert.ok(calls.some((call) => call.query === "COMMIT"));
+});
