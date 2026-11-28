@@ -274,6 +274,19 @@ export function createOwnerService(pool, fareConfig) {
         client.release();
       }
     },
+    async listProcessingPayouts(user) {
+      requireOwner(user);
+      const result = await pool.query(
+        "SELECT p.id, p.driver_user_id, u.display_name AS driver_name, u.phone_e164, " +
+        "p.source_type, p.source_id, p.amount_minor, p.currency, p.status, " +
+        "p.provider_reference, p.provider_transfer_code, p.created_at, p.updated_at " +
+        "FROM driver_payouts p JOIN users u ON u.id = p.driver_user_id " +
+        "WHERE p.status = 'processing' ORDER BY p.updated_at ASC LIMIT 250"
+      );
+      return {
+        payouts: result.rows.map((row) => ({ ...row, amount: Number(row.amount_minor) / 100 })),
+      };
+    },
     async listFinancialLedger(user) {
       requireOwner(user);
       const result = await pool.query(
