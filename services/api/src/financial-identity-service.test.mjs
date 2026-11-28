@@ -187,3 +187,28 @@ test("vehicle compliance uploads reject malformed calendar expiry dates before d
   );
   assert.equal(queried, false);
 });
+
+
+test("vehicle compliance upload accepts a real calendar expiry date and persists it", async () => {
+  let insertedParams;
+  const pool = {
+    async query(sql, params) {
+      assert.match(String(sql), /expiry_date/);
+      insertedParams = params;
+      return { rowCount: 1, rows: [{ id: "document-expiry-test", expiry_date: params[8] }] };
+    },
+  };
+  const service = createDriverVerificationService(pool, {
+    encryptionKey: Buffer.alloc(32, 1).toString("base64"),
+  });
+  const base64 = Buffer.from("%PDF-1.7 test document").toString("base64");
+  const result = await service.upload({ id: "driver-expiry-test", role: "driver" }, {
+    documentType: "vehicle_roadworthy",
+    expiryDate: "2027-06-30",
+    mimeType: "application/pdf",
+    base64,
+    fileName: "roadworthy.pdf",
+  });
+  assert.equal(insertedParams[8], "2027-06-30");
+  assert.equal(result.document.expiry_date, "2027-06-30");
+});
