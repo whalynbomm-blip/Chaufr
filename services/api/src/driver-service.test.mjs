@@ -84,7 +84,8 @@ test("driver activation gates access and accepted trips retain a locked fare", {
       await pool.query(
         "INSERT INTO driver_verification_documents " +
         "(driver_user_id, document_type, file_name, mime_type, file_size, encrypted_content, encryption_iv, encryption_tag, status) " +
-        "VALUES ($1, $2, $3, 'application/pdf', 128, $4, $5, $6, 'approved')",
+        "(driver_user_id, document_type, file_name, mime_type, file_size, encrypted_content, encryption_iv, encryption_tag, status, expiry_date) " +
+        "VALUES ($1, $2, $3, 'application/pdf', 128, $4, $5, $6, 'approved', CURRENT_DATE + INTERVAL '1 year')",
         [account.user.id, documentType, documentType + ".pdf", Buffer.from("encrypted-document"),
           Buffer.alloc(12, 1), Buffer.alloc(16, 2)],
       );
