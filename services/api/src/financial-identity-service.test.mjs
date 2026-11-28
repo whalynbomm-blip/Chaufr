@@ -166,3 +166,24 @@ test("ambiguous Paystack refund submission is claimed once and cannot be retried
   );
   assert.equal(calls.filter((call) => call.query.includes("UPDATE payment_refunds SET status='processing'")).length, 2);
 });
+
+
+test("vehicle compliance uploads reject malformed calendar expiry dates before database access", async () => {
+  let queried = false;
+  const service = createDriverVerificationService({ query: async () => { queried = true; throw new Error("Database must not be touched"); } }, {
+    encryptionKey: Buffer.alloc(32, 1).toString("base64"),
+  });
+  const driver = { id: "driver-expiry-test", role: "driver" };
+  const base64 = Buffer.from("%PDF-1.7 test document").toString("base64");
+  await assert.rejects(
+    () => service.upload(driver, {
+      documentType: "vehicle_roadworthy",
+      expiryDate: "2026-02-31",
+      mimeType: "application/pdf",
+      base64,
+      fileName: "roadworthy.pdf",
+    }),
+    (error) => error.status === 400 && /expiry date/i.test(error.message),
+  );
+  assert.equal(queried, false);
+});
