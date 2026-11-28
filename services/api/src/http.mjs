@@ -264,6 +264,9 @@ export function createAppServer({ fareConfig = developmentFareConfig(), database
           const body = await readJson(request);
           return json(response, 200, await ownerService.reviewSafetyReport(user, safetyReportReviewMatch[1], body.status));
         }
+        if (request.method === "GET" && url.pathname === "/v1/owner/driver-payouts/processing") {
+          return json(response, 200, await ownerService.listProcessingPayouts(user));
+        }
         if (request.method === "GET" && url.pathname === "/v1/owner/financial-ledger") {
           return json(response, 200, await ownerService.listFinancialLedger(user));
         }
