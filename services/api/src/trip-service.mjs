@@ -218,6 +218,11 @@ export function createTripService(pool, fareConfig, routesService = null, pushSe
           "UPDATE trips SET status = 'cancelled', cancelled_at = now() WHERE id = $1 AND status = 'requested'",
           [tripId],
         );
+        await client.query(
+          "UPDATE trip_offers SET status = 'withdrawn', responded_at = now() " +
+          "WHERE trip_id = $1 AND status = 'pending'",
+          [tripId],
+        );
         const redemption = await client.query(
           "UPDATE passenger_reward_redemptions SET status = 'released', updated_at = now() " +
           "WHERE trip_id = $1 AND passenger_user_id = $2 AND status = 'reserved' RETURNING tickets_reserved",
